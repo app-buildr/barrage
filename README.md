@@ -2,8 +2,8 @@
 
 Barrage bloque automatiquement sur vos réseaux sociaux les comptes d'une liste collaborative et open source.
 
-- Site et installation : https://barrage-app.github.io/Barrage/
-- Télécharger la dernière version : [barrage.zip](https://github.com/barrage-app/Barrage/releases/latest/download/barrage.zip)
+- Site et installation : https://app-buildr.github.io/barrage/
+- Télécharger la dernière version : [barrage.zip](https://github.com/app-buildr/barrage/releases/latest/download/barrage.zip)
 - Code de l'extension : `extension/`
 - Listes de comptes : `lists/`
 
