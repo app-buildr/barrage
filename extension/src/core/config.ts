@@ -59,7 +59,7 @@ export const AUDIT_INTERVAL_MS = 70_000;
  * "https://raw.githubusercontent.com/<compte>/<dépôt>/main/lists". Vide : pas de
  * téléchargement, seule la liste intégrée à l'extension sert.
  */
-export const LISTS_URL = "https://raw.githubusercontent.com/barrage-app/Barrage/main/lists";
+export const LISTS_URL = "https://raw.githubusercontent.com/app-buildr/barrage/main/lists";
 /** Intervalle entre deux téléchargements. */
 export const LISTS_REFRESH_MINUTES = 6 * 60;
 /** Au-delà, une liste reçue est jugée anormale et ignorée. */
@@ -75,6 +75,6 @@ export const LIST_MAX_REMOVED_SHARE = 0.5;
 // temps que la liste partagée, pour signaler qu'il faut mettre à jour.
 
 /** Dernière version publiée de l'extension. Vide : pas de vérification. */
-export const RELEASES_URL = "https://api.github.com/repos/barrage-app/Barrage/releases/latest";
+export const RELEASES_URL = "https://api.github.com/repos/app-buildr/barrage/releases/latest";
 /** Guide de mise à jour, lien du bandeau des options. */
-export const UPDATE_GUIDE_URL = "https://barrage-app.github.io/Barrage/#mise-a-jour";
+export const UPDATE_GUIDE_URL = "https://app-buildr.github.io/barrage/#mise-a-jour";
