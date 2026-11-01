@@ -1,171 +1,34 @@
-/* Notifications « @user vient d'être bloqué » et « @user a été débloqué », en
-   haut à droite de x.com. Thème corail, voir resources/notification.png.
-   Préfixées par l'identifiant de la pile pour résister aux styles de la page.
+/* Notifications sur x.com, dans le Shadow DOM de mount.tsx : ni les styles de
+   x.com ni ceux-ci ne débordent. Thème corail, voir resources/notification.png.
    Police système : embarquer Inter exposerait l'extension à x.com
-   (web_accessible_resources), qui pourrait alors détecter Barrage. */
-#barrage-toasts {
+   (web_accessible_resources), qui pourrait alors détecter Barrage.
+
+   Dans un Shadow DOM, Chrome ignore les @property de Tailwind : mount.tsx
+   reporte leurs valeurs initiales dans une règle ordinaire, pour que border,
+   outline, shadow-* et les autres utilitaires concernés fonctionnent. */
+@import "tailwindcss" source(none);
+/* Palette commune avec la page d'options. */
+@import "../../ui/palette.css";
+@source "./Toast.tsx";
+@source "./Toaster.tsx";
+
+@theme {
+  /* En px : les rem suivraient la taille de police choisie sur x.com. */
+  --spacing: 4px;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --animate-toast-in: toast-in 0.2s ease-out;
+
+  @keyframes toast-in {
+    from { opacity: 0; transform: translateX(16px); }
+  }
+}
+
+:host {
+  all: initial;
   position: fixed;
   top: 16px;
   right: 16px;
   z-index: 2147483647;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 10px;
+  /* Les espaces entre les notifications laissent passer les clics vers x.com. */
   pointer-events: none;
-}
-
-#barrage-toasts .barrage-toast {
-  position: relative;
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  width: 440px;
-  max-width: calc(100vw - 32px);
-  padding: 14px 14px 16px 16px;
-  overflow: hidden;
-  border: 1px solid #F2E3D8;
-  border-radius: 14px;
-  background: #fff;
-  color: #2A1A14;
-  font: 400 14px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  box-shadow: 0 12px 32px rgba(120, 60, 30, 0.14);
-  text-align: left;
-  pointer-events: auto;
-  animation: barrage-toast-in 0.2s ease-out;
-  transition: opacity 0.3s, transform 0.3s;
-}
-
-#barrage-toasts .barrage-toast-icon {
-  flex: none;
-  display: block;
-  width: 40px;
-  height: 40px;
-}
-
-#barrage-toasts .barrage-toast-icon svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-#barrage-toasts .barrage-toast-body {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-#barrage-toasts .barrage-toast-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: #2A1A14;
-}
-
-#barrage-toasts .barrage-toast-detail {
-  font-size: 13px;
-  color: #6B5A50;
-}
-
-/* Nom du compte : lien vers son profil. */
-#barrage-toasts .barrage-toast-handle {
-  color: #B83A14;
-  font-weight: 700;
-  text-decoration: none;
-}
-
-#barrage-toasts .barrage-toast-handle:hover {
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-/* « Annuler » : un bouton, pour le clavier, habillé en lien. */
-#barrage-toasts .barrage-toast-undo {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: #B83A14;
-  font: inherit;
-  font-weight: 700;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  cursor: pointer;
-}
-
-#barrage-toasts .barrage-toast-undo:hover {
-  color: #8F2C0F;
-}
-
-#barrage-toasts .barrage-toast-close {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: #6B5A50;
-  cursor: pointer;
-}
-
-#barrage-toasts .barrage-toast-close:hover {
-  background: #FFF6EE;
-  color: #2A1A14;
-}
-
-#barrage-toasts .barrage-toast-close svg {
-  width: 18px;
-  height: 18px;
-}
-
-#barrage-toasts .barrage-toast a:focus-visible,
-#barrage-toasts .barrage-toast button:focus-visible {
-  outline: 2px solid #B83A14;
-  outline-offset: 2px;
-  border-radius: 4px;
-}
-
-/* Temps d'affichage restant : barre qui se vide vers la gauche, sur une piste pâle. */
-#barrage-toasts .barrage-toast::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 4px;
-  background: #F2E3D8;
-}
-
-#barrage-toasts .barrage-toast-timer {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 1;
-  height: 4px;
-  transform-origin: left center;
-  background: #F0643C;
-}
-
-#barrage-toasts .barrage-toast.unblocked .barrage-toast-timer {
-  background: #A89B92;
-}
-
-#barrage-toasts .barrage-toast.leaving {
-  opacity: 0;
-  transform: translateX(16px);
-}
-
-@keyframes barrage-toast-in {
-  from { opacity: 0; transform: translateX(16px); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  #barrage-toasts .barrage-toast { animation: none; transition: none; }
 }

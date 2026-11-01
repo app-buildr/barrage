@@ -2,7 +2,7 @@
 // features/. Les styles importés ici forment content.css.
 import { startRunner } from "../features/blocking/runner.ts";
 import { answerPings } from "../features/blocking/x-tab.ts";
-import { watchBlocks } from "../features/notifications/toast.ts";
+import { watchBlocks } from "../features/notifications/watch.ts";
 import { watchTimeline } from "../features/timeline/timeline.ts";
 
 answerPings();
