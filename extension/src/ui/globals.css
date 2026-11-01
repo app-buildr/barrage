@@ -1,0 +1,73 @@
+/* Thème « Corail » de l'extension, voir resources/barrage-theme-corail.md.
+   Thème clair uniquement. Les couleurs de marque alimentent les variables de
+   shadcn/ui : les composants de src/ui/components s'habillent tout seuls. */
+@import "tailwindcss";
+
+/* Composants et fonctionnalités : tout src/ est analysé, quelle que soit la racine du build. */
+@source "../";
+
+@theme inline {
+  /* Couleurs de marque, utilisables en classes : bg-coral, text-sun-soft-ink… */
+  --color-coral: #F0643C;
+  --color-coral-deep: #B83A14;
+  --color-coral-darker: #8F2C0F;
+  --color-coral-soft: #FDE3D8;
+  --color-sun: #FFD23F;
+  --color-sun-ink: #5A1E0A;
+  --color-sun-soft: #FFF1C9;
+  --color-sun-soft-ink: #7A4E00;
+
+  /* Neutres chauds */
+  --color-ink: #2A1A14;
+  --color-muted-ink: #6B5A50;
+  --color-disabled: #A89B92;
+  --color-cream: #FFF6EE;
+  --color-cream-2: #F7EFE8;
+  --color-soon: #EFE4DA;
+  --color-line: #F2E3D8;
+  --color-line-strong: #E2CFC2;
+
+  /* États d'un compte : text-state-blocked, bg-state-problem… */
+  --color-state-blocked: var(--color-coral-deep);
+  --color-state-visible: #E0A100;
+  --color-state-problem: #D7261E;
+  --color-state-disabled: var(--color-disabled);
+
+  /* Variables shadcn/ui */
+  --color-background: var(--color-cream);
+  --color-foreground: var(--color-ink);
+  --color-card: #FFFFFF;
+  --color-card-foreground: var(--color-ink);
+  --color-popover: #FFFFFF;
+  --color-popover-foreground: var(--color-ink);
+  --color-primary: var(--color-coral-deep);
+  --color-primary-foreground: #FFFFFF;
+  --color-secondary: var(--color-cream);
+  --color-secondary-foreground: var(--color-ink);
+  --color-muted: var(--color-cream);
+  --color-muted-foreground: var(--color-muted-ink);
+  --color-accent: var(--color-cream);
+  --color-accent-foreground: var(--color-ink);
+  --color-destructive: var(--color-state-problem);
+  --color-border: var(--color-line);
+  --color-input: var(--color-line-strong);
+  --color-ring: var(--color-coral-deep);
+
+  --radius-step: 14px;
+  --radius-card: 18px;
+  --shadow-soft: 0 12px 32px rgba(120, 60, 30, 0.10);
+  --shadow-cta: 0 10px 24px rgba(120, 40, 10, 0.22);
+
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-display: "Bricolage Grotesque", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+@layer base {
+  * { border-color: var(--color-border); }
+  :root { color-scheme: light; }
+  body {
+    @apply bg-background font-sans text-base text-foreground antialiased;
+  }
+  h1, h2, h3 { @apply font-display font-extrabold tracking-tight text-ink; }
+  :focus-visible { outline: 2px solid var(--color-coral-deep); outline-offset: 2px; }
+}
