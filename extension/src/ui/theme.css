@@ -1,89 +1,96 @@
-/* Jetons de design de la page d'options, relevés sur les maquettes claire et
-   sombre de resources/. Le thème suit celui du système. */
-:root {
-  color-scheme: light;
-  --bg: #ffffff;
-  --surface: #f7f9f9;
-  --text: #0f1419;
-  --text-muted: #536471;
-  --border: #e1e8ed;
-  --line: #eff3f4;
+/* Thème « Corail » de la page d'options, voir resources/barrage-theme-corail.md.
+   Thème clair uniquement. Polices embarquées : aucune requête externe. */
 
-  --blue: #1a6fc4;            /* interrupteurs, onglet actif, bouton Ajouter */
-  --blue-hover: #165fa8;
-  --brand: #f0643c;           /* logo, corail comme le site */
-  --selected-bg: #e8f4fd;
-
-  --green: #00ba7c;
-  --green-hover: #00a36d;
-  --green-text: #00875a;
-  --green-soft: #e0f5ec;
-  --red: #f4212e;
-  --red-hover: #dc1e29;
-  --red-text: #d0202b;
-  --red-soft: #fdecee;
-  --red-border: #f5c2c7;
-  --amber: #d98a00;
-  --amber-text: #9a6100;
-  --amber-soft: #fdf3dc;
-  --grey: #7b8a96;
-
-  --chip-active-bg: #0f1419;
-  --chip-active-text: #ffffff;
-
-  --radius: 12px;
-  --radius-sm: 8px;
-  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+@font-face {
+  font-family: "Inter"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("./fonts/inter-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Inter"; font-style: normal; font-weight: 500; font-display: swap;
+  src: url("./fonts/inter-latin-500-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Inter"; font-style: normal; font-weight: 600; font-display: swap;
+  src: url("./fonts/inter-latin-600-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Inter"; font-style: normal; font-weight: 700; font-display: swap;
+  src: url("./fonts/inter-latin-700-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Bricolage Grotesque"; font-style: normal; font-weight: 800; font-display: swap;
+  src: url("./fonts/bricolage-grotesque-latin-800-normal.woff2") format("woff2");
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --bg: #0e1116;
-    --surface: #090b0e;
-    --text: #e7e9ea;
-    --text-muted: #8b98a5;
-    --border: #2f3336;
-    --line: #22262a;
+:root {
+  color-scheme: light;
 
-    --blue: #1d9bf0;
-    --blue-hover: #1a8cd8;
-    --selected-bg: #0f2133;
+  /* Couleurs de marque */
+  --coral: #F0643C;
+  --coral-deep: #B83A14;
+  --coral-soft: #FDE3D8;
+  --sun: #FFD23F;
+  --sun-ink: #5A1E0A;
+  --sun-soft: #FFF1C9;
+  --sun-soft-ink: #7A4E00;
 
-    --green-text: #00ba7c;
-    --green-soft: #0b2e22;
-    --red-text: #ff5c6a;
-    --red-soft: #2a1216;
-    --red-border: #6b2029;
-    --amber: #f0a020;
-    --amber-text: #ffad1f;
-    --amber-soft: #33270d;
-    --grey: #6e767d;
+  /* Neutres chauds */
+  --ink: #2A1A14;
+  --muted: #6B5A50;
+  --muted-on-dark: #E6DED3;
+  --disabled: #A89B92;
+  --cream: #FFF6EE;
+  --cream-2: #F7EFE8;
+  --surface: #FFFFFF;
+  --line: #F2E3D8;
+  --line-strong: #E2CFC2;
 
-    --chip-active-bg: #e7e9ea;
-    --chip-active-text: #0f1419;
-  }
+  /* États */
+  --state-blocked: var(--coral-deep);
+  --state-visible: #E0A100;
+  --state-problem: #D7261E;
+  --state-disabled: var(--disabled);
+
+  /* Ombres */
+  --shadow-soft: 0 12px 32px rgba(120, 60, 30, 0.10);
+
+  /* Rayons */
+  --radius-pill: 999px;
+  --radius-card: 18px;
+  --radius-step: 14px;
+
+  --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-display: "Bricolage Grotesque", var(--font);
 }
 
 body {
-  background: var(--bg);
-  color: var(--text);
+  background: var(--cream);
+  color: var(--ink);
   margin: 0 auto;
-  padding: 40px 16px 64px;
-  max-width: 776px;
-  font: 15px/1.5 var(--font);
+  padding: 48px 24px 64px;
+  max-width: 860px;
+  font: 16px/1.5 var(--font);
+  -webkit-font-smoothing: antialiased;
 }
 
-h2 { font-size: 20px; font-weight: 800; margin: 36px 0 14px; }
-h3 { font-size: 17px; font-weight: 800; margin: 0 0 12px; }
-.hint { margin: 10px 0 0; font-size: 14px; color: var(--text-muted); }
+/* Blocs empilés : en-tête, bandeau de mise à jour, notifications, comptes, pied. */
+body, main { display: flex; flex-direction: column; gap: 36px; }
+/* Sans quoi le tableau, large, élargirait toute la page au lieu de défiler. */
+body > *, main > * { min-width: 0; }
+/* Section sans contenu visible (bandeau de mise à jour masqué) : pas d'espace réservé. */
+main > section:empty, main > section:not(:has(> :not([hidden]))) { display: none; }
+
+h1, h2, h3 { font-family: var(--font-display); font-weight: 800; letter-spacing: -0.02em; color: var(--ink); }
+h2 { font-size: 24px; line-height: 1.2; margin: 0 0 16px; }
+h3 { font-size: 24px; line-height: 1.2; margin: 0 0 16px; }
+.hint { margin: 12px 0 0; font-size: 14px; color: var(--muted); }
 a { color: inherit; }
 
-.ok { color: var(--green-text); }
-.error { color: var(--red-text); }
-.warn { color: var(--amber-text); }
-.muted { color: var(--text-muted); }
+.ok { color: var(--coral-deep); }
+.error { color: var(--state-problem); }
+.warn { color: var(--sun-soft-ink); }
+.muted { color: var(--muted); }
 
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
-:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--coral-deep); outline-offset: 2px; }

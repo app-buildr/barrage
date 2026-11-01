@@ -1,7 +1,6 @@
 // Réseaux sociaux affichés en onglets dans les options. X est le seul pris en
 // charge aujourd'hui ; les autres sont listés pour préparer leur arrivée.
-// Ajouter un réseau : une entrée ici et son logo dans logos.ts ; l'onglet et
-// son panneau sont générés.
+// Ajouter un réseau : une entrée ici ; l'onglet et son panneau sont générés.
 
 import instagram from "../../../../lists/instagram.json" with { type: "json" };
 import tiktok from "../../../../lists/tiktok.json" with { type: "json" };
@@ -21,21 +20,27 @@ export type Network = {
    * lists/<réseau>.json. Ceux de X passent par accounts/defaults.ts.
    */
   defaults: readonly string[];
+  /**
+   * Onglet ouvrable. Faux : onglet grisé « Bientôt », sans panneau consultable.
+   */
+  available: boolean;
 };
 
 export const NETWORKS: readonly Network[] = [
-  { id: "x", label: "X", profileUrl: (h) => `https://x.com/${h}`, defaults: [] },
+  { id: "x", label: "X", profileUrl: (h) => `https://x.com/${h}`, defaults: [], available: true },
   {
     id: "instagram",
     label: "Instagram",
     profileUrl: (h) => `https://www.instagram.com/${h}/`,
     defaults: instagram,
+    available: true,
   },
   {
     id: "tiktok",
     label: "TikTok",
     profileUrl: (h) => `https://www.tiktok.com/@${h}`,
     defaults: tiktok,
+    available: false,
   },
   {
     id: "youtube",
@@ -44,6 +49,7 @@ export const NETWORKS: readonly Network[] = [
     profileUrl: (h) => (h.startsWith("@") ? `https://www.youtube.com/${h}` : `https://www.youtube.com/channel/${h}`),
     display: (h) => h,
     defaults: youtube,
+    available: false,
   },
   {
     id: "facebook",
@@ -51,6 +57,7 @@ export const NETWORKS: readonly Network[] = [
     profileUrl: (h) => `https://www.facebook.com/${h}`,
     display: (h) => h,
     defaults: facebook,
+    available: false,
   },
 ];
 
