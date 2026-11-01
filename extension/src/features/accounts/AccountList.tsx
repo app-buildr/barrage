@@ -1,6 +1,6 @@
 // Liste des comptes d'un réseau pris en charge : encart info, alerte de fond,
 // progression, recherche, filtres par état et tableau.
-import { useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { unblockQueue, type State } from "@/core/state.ts";
 import { resultOf } from "../blocking/queue.ts";
 import type { Network } from "../networks/networks.ts";
@@ -17,7 +17,8 @@ import { Tip } from "./Tip.tsx";
 export function AccountList({ state, network }: { state: State; network: Network }) {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<Category | null>(null);
-  const query = normalizeQuery(search);
+  // Le champ suit la frappe ; le tableau (jusqu'à ~1 400 lignes) suit dès que possible.
+  const query = useDeferredValue(normalizeQuery(search));
 
   const lines = useMemo(() => {
     const queued = new Set(state.seen);

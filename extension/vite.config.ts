@@ -5,7 +5,7 @@
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import { defineConfig, type InlineConfig, type Plugin } from "vite";
+import { defineConfig, type InlineConfig } from "vite";
 
 const src = fileURLToPath(new URL("./src", import.meta.url));
 const dist = fileURLToPath(new URL("./dist", import.meta.url));
@@ -32,14 +32,14 @@ const shared = (watch: boolean): InlineConfig => ({
   },
 });
 
-export function surfaceConfig(surface: Surface, watch = false, plugins: Plugin[] = []): InlineConfig {
+export function surfaceConfig(surface: Surface, watch = false): InlineConfig {
   const base = shared(watch);
   if (surface === "options") {
     return {
       ...base,
       root: `${src}/entries`,
       base: "./",
-      plugins: [react(), tailwindcss(), ...plugins],
+      plugins: [react(), tailwindcss()],
       build: {
         ...base.build,
         rollupOptions: {
@@ -54,6 +54,14 @@ export function surfaceConfig(surface: Surface, watch = false, plugins: Plugin[]
       },
     };
   }
+  const lib = {
+    entry: `${src}/entries/${surface}.ts`,
+    formats: ["iife" as const],
+    name: `barrage_${surface}`,
+    fileName: () => `${surface}.js`,
+  };
+  // Service worker : ni JSX ni Tailwind, aucun plugin.
+  if (surface === "background") return { ...base, build: { ...base.build, lib } };
   return {
     ...base,
     // Content script, injecté dans chaque onglet x.com : Preact (preact/compat)
@@ -68,17 +76,11 @@ export function surfaceConfig(surface: Surface, watch = false, plugins: Plugin[]
         { find: /^react$/, replacement: "preact/compat" },
       ],
     },
-    plugins: [react(), tailwindcss(), ...plugins],
+    plugins: [react(), tailwindcss()],
     build: {
       ...base.build,
-      lib: {
-        entry: `${src}/entries/${surface}.ts`,
-        formats: ["iife"],
-        name: `barrage_${surface}`,
-        fileName: () => `${surface}.js`,
-        // Styles injectés dans les pages x.com, déclarés dans le manifest.
-        cssFileName: surface,
-      },
+      // Styles injectés dans les pages x.com, déclarés dans le manifest.
+      lib: { ...lib, cssFileName: surface },
     },
   };
 }

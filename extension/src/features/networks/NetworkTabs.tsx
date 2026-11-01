@@ -65,7 +65,9 @@ export function NetworkTabs({ count, panel }: Props) {
         ))}
       </TabsList>
       {NETWORKS.filter((n) => n.available).map((network) => (
-        <TabsContent key={network.id} value={network.id}>
+        // Panneau inactif caché mais gardé : recherche, filtre et saisie en
+        // cours sont retrouvés en revenant sur l'onglet.
+        <TabsContent key={network.id} value={network.id} forceMount className="data-[state=inactive]:hidden">
           {panel(network)}
         </TabsContent>
       ))}

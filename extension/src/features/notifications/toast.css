@@ -3,10 +3,12 @@
    Police système : embarquer Inter exposerait l'extension à x.com
    (web_accessible_resources), qui pourrait alors détecter Barrage.
 
-   Dans un Shadow DOM, les @property de Tailwind ne s'appliquent pas : pas
-   d'utilitaires shadow-*, ring-*, translate-* ou scale-* (leurs variables
-   resteraient vides), mais des propriétés arbitraires [box-shadow:…]. */
+   Dans un Shadow DOM, Chrome ignore les @property de Tailwind : mount.tsx
+   reporte leurs valeurs initiales dans une règle ordinaire, pour que border,
+   outline, shadow-* et les autres utilitaires concernés fonctionnent. */
 @import "tailwindcss" source(none);
+/* Palette commune avec la page d'options. */
+@import "../../ui/palette.css";
 @source "./Toast.tsx";
 @source "./Toaster.tsx";
 
@@ -14,14 +16,6 @@
   /* En px : les rem suivraient la taille de police choisie sur x.com. */
   --spacing: 4px;
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --color-coral: #F0643C;
-  --color-coral-deep: #B83A14;
-  --color-coral-darker: #8F2C0F;
-  --color-ink: #2A1A14;
-  --color-muted-ink: #6B5A50;
-  --color-disabled: #A89B92;
-  --color-cream: #FFF6EE;
-  --color-line: #F2E3D8;
   --animate-toast-in: toast-in 0.2s ease-out;
 
   @keyframes toast-in {
@@ -35,4 +29,6 @@
   top: 16px;
   right: 16px;
   z-index: 2147483647;
+  /* Les espaces entre les notifications laissent passer les clics vers x.com. */
+  pointer-events: none;
 }
