@@ -1,7 +1,8 @@
 // Une notification : icône, « @nom » et titre, détail avec « Annuler », bouton
 // « Fermer » et barre du temps restant.
 import { useEffect, useLayoutEffect, useRef } from "react";
-import { cn } from "@/ui/lib/utils";
+// clsx plutôt que cn : aucune classe en conflit ici, et tailwind-merge alourdirait le content script.
+import { clsx as cn } from "clsx";
 import { TOAST_MS, type ToastItem, type ToastStore } from "./toasts.ts";
 
 /** Logo Barrage : disque corail barré de blanc. */

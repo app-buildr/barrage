@@ -17,4 +17,4 @@ npm run typecheck
 - `src/entries/` : points d'entrée (service worker, content script x.com, page d'options), assemblage seulement.
 - `src/features/<fonctionnalité>/` : composants `.tsx` pour l'affichage, fichiers `.ts` pour la logique pure et testée.
 - `src/ui/components/` : composants shadcn/ui (`npx shadcn@latest add <composant>`), habillés du thème Corail de `src/ui/globals.css`.
-- Les notifications sur x.com sont rendues dans un Shadow DOM fermé (`features/notifications/mount.tsx`), avec la police système.
+- Les notifications sur x.com sont rendues dans un Shadow DOM fermé (`features/notifications/mount.tsx`), avec la police système. Le content script remplace React par Preact (`preact/compat`, voir `vite.config.ts`) pour rester léger : n'y utiliser que l'API React courante.

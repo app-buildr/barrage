@@ -56,6 +56,18 @@ export function surfaceConfig(surface: Surface, watch = false, plugins: Plugin[]
   }
   return {
     ...base,
+    // Content script, injecté dans chaque onglet x.com : Preact (preact/compat)
+    // remplace React pour le toast, une fraction du poids pour la même API.
+    resolve: {
+      alias: [
+        { find: "@", replacement: src },
+        { find: /^react-dom\/client$/, replacement: "preact/compat/client" },
+        { find: /^react-dom$/, replacement: "preact/compat" },
+        { find: /^react\/jsx-runtime$/, replacement: "preact/jsx-runtime" },
+        { find: /^react\/jsx-dev-runtime$/, replacement: "preact/jsx-dev-runtime" },
+        { find: /^react$/, replacement: "preact/compat" },
+      ],
+    },
     plugins: [react(), tailwindcss(), ...plugins],
     build: {
       ...base.build,
