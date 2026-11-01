@@ -37,20 +37,25 @@ export function StatusLabel({ status }: { status: Status }) {
 
 type Props = { network: NetworkId; handle: string; enabled: boolean; status: Status };
 
-function Row({ network, handle, enabled, status }: Props) {
-  // Bouton cliqué : désactivé jusqu'au prochain changement d'état.
-  const statusKey = JSON.stringify(status);
+/** Ce qu'affiche la ligne : une seule notion d'égalité, pour le memo et pour le bouton. */
+const rowKey = ({ enabled, status }: Props) => JSON.stringify([enabled, status]);
+
+function Row(props: Props) {
+  const { network, handle, enabled, status } = props;
+  // Bouton cliqué : désactivé jusqu'au prochain changement de la ligne, ou
+  // jusqu'à l'échec de l'écriture.
+  const key = rowKey(props);
   const [clicked, setClicked] = useState(false);
-  const [shownKey, setShownKey] = useState(statusKey);
-  if (shownKey !== statusKey) {
-    setShownKey(statusKey);
+  const [shownKey, setShownKey] = useState(key);
+  if (shownKey !== key) {
+    setShownKey(key);
     setClicked(false);
   }
   const action = status.action;
   const label = action === "block" ? "Bloquer" : "Débloquer";
 
   return (
-    <TableRow className={cn("border-line", !enabled && "disabled")}>
+    <TableRow className="border-line">
       <TableCell className={cn(CELL, "w-[1%] pr-2")}>
         <Switch
           checked={enabled}
@@ -76,7 +81,7 @@ function Row({ network, handle, enabled, status }: Props) {
             disabled={clicked}
             onClick={() => {
               setClicked(true);
-              void (action === "block" ? blockNow : unblockNow)(handle);
+              (action === "block" ? blockNow : unblockNow)(handle).catch(() => setClicked(false));
             }}
           >
             {label}
@@ -87,10 +92,4 @@ function Row({ network, handle, enabled, status }: Props) {
   );
 }
 
-const sameStatus = (a: Status, b: Status) =>
-  a.label === b.label && a.className === b.className && a.action === b.action && a.tag === b.tag && a.note === b.note;
-
-export const AccountRow = memo(
-  Row,
-  (a, b) => a.network === b.network && a.handle === b.handle && a.enabled === b.enabled && sameStatus(a.status, b.status),
-);
+export const AccountRow = memo(Row, (a, b) => a.network === b.network && a.handle === b.handle && rowKey(a) === rowKey(b));

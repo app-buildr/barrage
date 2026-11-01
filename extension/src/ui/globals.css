@@ -2,31 +2,13 @@
    Thème clair uniquement. Les couleurs de marque alimentent les variables de
    shadcn/ui : les composants de src/ui/components s'habillent tout seuls. */
 @import "tailwindcss";
+/* Couleurs de marque, partagées avec la notification de x.com. */
+@import "./palette.css";
 
 /* Composants et fonctionnalités : tout src/ est analysé, quelle que soit la racine du build. */
 @source "../";
 
 @theme inline {
-  /* Couleurs de marque, utilisables en classes : bg-coral, text-sun-soft-ink… */
-  --color-coral: #F0643C;
-  --color-coral-deep: #B83A14;
-  --color-coral-darker: #8F2C0F;
-  --color-coral-soft: #FDE3D8;
-  --color-sun: #FFD23F;
-  --color-sun-ink: #5A1E0A;
-  --color-sun-soft: #FFF1C9;
-  --color-sun-soft-ink: #7A4E00;
-
-  /* Neutres chauds */
-  --color-ink: #2A1A14;
-  --color-muted-ink: #6B5A50;
-  --color-disabled: #A89B92;
-  --color-cream: #FFF6EE;
-  --color-cream-2: #F7EFE8;
-  --color-soon: #EFE4DA;
-  --color-line: #F2E3D8;
-  --color-line-strong: #E2CFC2;
-
   /* États d'un compte : text-state-blocked, bg-state-problem… */
   --color-state-blocked: var(--color-coral-deep);
   --color-state-visible: #E0A100;

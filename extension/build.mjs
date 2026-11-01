@@ -9,20 +9,16 @@ const watch = process.argv.includes("--watch");
 rmSync("dist", { recursive: true, force: true });
 mkdirSync("dist");
 
-function copyStatic() {
-  cpSync("manifest.json", "dist/manifest.json");
-  cpSync("icons", "dist/icons", { recursive: true });
-  // Licence OFL des polices : elle accompagne les fichiers redistribués.
-  for (const license of ["LICENSE-inter.txt", "LICENSE-bricolage-grotesque.txt"]) {
-    cpSync(`src/ui/fonts/${license}`, `dist/fonts/${license}`);
-  }
+// Fichiers statiques, copiés une fois : aucun build ne les modifie.
+cpSync("manifest.json", "dist/manifest.json");
+cpSync("icons", "dist/icons", { recursive: true });
+// Licence OFL des polices : elle accompagne les fichiers redistribués.
+for (const license of ["LICENSE-inter.txt", "LICENSE-bricolage-grotesque.txt"]) {
+  cpSync(`src/ui/fonts/${license}`, `dist/fonts/${license}`);
 }
 
-/** Recopie aussi à chaque reconstruction en mode surveillance. */
-const copyStaticPlugin = { name: "copy-static", closeBundle: copyStatic };
-
 for (const surface of ["background", "content", "options"]) {
-  await build(surfaceConfig(surface, watch, [copyStaticPlugin]));
+  await build(surfaceConfig(surface, watch));
 }
 
 if (watch) console.log("Barrage : surveillance des fichiers, Ctrl+C pour arrêter.");

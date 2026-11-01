@@ -33,13 +33,12 @@ const CANCELLED: Content = {
 };
 
 /** Pile dessinée à la première notification seulement : rien dans la page avant. */
-let mounted = false;
+let host: HTMLElement | null = null;
 
 function show(handle: string, content: Content): void {
-  if (!mounted) {
-    mountToaster(toasts);
-    mounted = true;
-  }
+  if (!host) host = mountToaster(toasts);
+  // Retirée par x.com ou une autre extension : on la remet, avec son état.
+  else if (!host.isConnected) document.body.append(host);
   toasts.show(handle, content);
 }
 
