@@ -1,7 +1,6 @@
-// Carte de progression : comptes bloqués sur le total, barre segmentée par
-// catégorie.
-import { element, part } from "../../ui/dom.ts";
-import { CATEGORIES, totalCount, type Counts } from "./status.ts";
+// Carte de progression : comptes bloqués sur le total, barre de remplissage.
+import { part } from "../../ui/dom.ts";
+import { totalCount, type Counts } from "./status.ts";
 
 export function renderProgress(root: HTMLElement, counts: Counts): void {
   const total = totalCount(counts);
@@ -13,11 +12,5 @@ export function renderProgress(root: HTMLElement, counts: Counts): void {
     "aria-label",
     `${counts.blocked} bloqués, ${counts.visible} visibles, ${counts.problem} problèmes, ${counts.disabled} désactivés`,
   );
-  bar.replaceChildren(
-    ...CATEGORIES.filter((c) => counts[c] > 0).map((c) => {
-      const segment = element("span", { className: `segment ${c}` });
-      segment.style.flexGrow = String(counts[c]);
-      return segment;
-    }),
-  );
+  part(root, "fill").style.width = `${total ? (counts.blocked / total) * 100 : 0}%`;
 }

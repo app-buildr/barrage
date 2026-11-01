@@ -69,8 +69,18 @@ const seenBatch = new Batch("addSeen");
 /** Comptes de la liste vus comme déjà bloqués sur X. */
 const knownBatch = new Batch("markAlreadyBlocked");
 
+/**
+ * Un compte débloqué par Barrage depuis le chargement de la page peut encore y
+ * figurer bloqué : X garde en mémoire le profil tel qu'il l'a chargé, avec son
+ * bouton « Débloquer ». Ce bouton-là ne prouve rien.
+ */
+function unblockedSinceLoad(handle: string): boolean {
+  const result = resultOf(results, handle);
+  return result?.state === "unblocked" && result.at >= performance.timeOrigin;
+}
+
 function noteAlreadyBlocked(handle: string): void {
-  if (listed.has(handle) && isPending(resultOf(results, handle))) knownBatch.add(handle);
+  if (listed.has(handle) && isPending(resultOf(results, handle)) && !unblockedSinceLoad(handle)) knownBatch.add(handle);
 }
 
 /** Profil affiché : celui que l'utilisateur est venu voir, lui seul n'est pas masqué. */

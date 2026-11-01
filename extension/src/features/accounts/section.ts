@@ -1,6 +1,6 @@
 // Section « Comptes » des options : un onglet par réseau. X, seul réseau pris
-// en charge, affiche la liste de l'état et le formulaire d'ajout ; les autres,
-// leur liste à venir.
+// en charge, affiche la liste de l'état et le formulaire d'ajout ; les autres
+// réseaux disponibles, leur liste à venir.
 import { fromTemplate, type View } from "../../ui/dom.ts";
 import { NETWORKS } from "../networks/networks.ts";
 import { mountTabs } from "../networks/tabs.ts";
@@ -18,7 +18,7 @@ export function mountAccounts(container: HTMLElement): View {
     if (network.id === "x") {
       x = mountAccountList(panel, network);
       mountAddForm(panel);
-    } else {
+    } else if (network.available) {
       mountUpcoming(panel, network);
       tabs.setCount(network.id, network.defaults.length);
     }

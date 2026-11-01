@@ -19,8 +19,9 @@ const ctx = await esbuild.context({
     options: "src/entries/options.ts",
   },
   // Gabarits des fonctionnalités embarqués comme texte ; les CSS importés
-  // donnent content.css et options.css.
-  loader: { ".html": "text" },
+  // donnent content.css et options.css, les polices sont copiées dans fonts/.
+  loader: { ".html": "text", ".woff2": "file" },
+  assetNames: "fonts/[name]",
   outdir: "dist",
   bundle: true,
   format: "iife",

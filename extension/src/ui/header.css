@@ -1,15 +1,14 @@
 /* En-tête de la page d'options : logo, titre, état de la connexion à x.com. */
-.page-header { display: flex; align-items: center; gap: 16px; }
-.logo { width: 48px; height: 48px; flex: none; }
+.page-header { display: flex; align-items: flex-start; gap: 20px; }
+.logo { width: 64px; height: 64px; flex: none; border-radius: 50%; box-shadow: var(--shadow-soft); }
 .page-title { flex: 1; min-width: 0; }
-.page-title h1 { font-size: 28px; font-weight: 800; line-height: 1.15; margin: 0; }
-.page-title p { margin: 2px 0 0; color: var(--text-muted); }
-.page-header > .connection { align-self: flex-start; }
+.page-title h1 { font-size: 36px; line-height: 1.1; margin: 0; }
+.page-title p { margin: 6px 0 0; color: var(--muted); font-size: 16px; }
 
 .connection {
   display: inline-flex; align-items: center; gap: 7px; flex: none; white-space: nowrap;
-  padding: 4px 12px; border-radius: 9999px; font-size: 13px; font-weight: 700;
-  background: var(--green-soft); color: var(--green-text);
+  padding: 4px 12px; border-radius: var(--radius-pill); font-size: 13px; font-weight: 700;
+  background: var(--coral-soft); color: var(--coral-deep);
 }
 .connection::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .connection:empty { visibility: hidden; }
