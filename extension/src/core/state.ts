@@ -276,12 +276,17 @@ export type StateChanges = { [key: string]: chrome.storage.StorageChange };
  * n'importe quelle clé si la liste est omise. Un champ propre à un compte X
  * déclenche l'appel quel que soit le compte.
  */
-export function onStateChange(listener: (changes: StateChanges) => void, keys?: readonly StateKey[]): void {
-  chrome.storage.onChanged.addListener((changes, area) => {
+export function onStateChange(
+  listener: (changes: StateChanges) => void,
+  keys?: readonly StateKey[],
+): () => void {
+  const onChanged = (changes: StateChanges, area: string) => {
     if (area !== "local") return;
     const fields = new Set(Object.keys(changes).map(fieldOf));
     if (!keys || keys.some((key) => fields.has(key))) listener(changes);
-  });
+  };
+  chrome.storage.onChanged.addListener(onChanged);
+  return () => chrome.storage.onChanged.removeListener(onChanged);
 }
 
 /**
