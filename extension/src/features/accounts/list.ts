@@ -1,4 +1,4 @@
-// Liste des comptes d'un réseau pris en charge : alerte de fond, progression,
+// Liste des comptes d'un réseau pris en charge : encart info, alerte de fond, progression,
 // recherche, filtres par état et tableau.
 import { unblockQueue, type State } from "../../core/state.ts";
 import { element, fromTemplate, part, type View } from "../../ui/dom.ts";
@@ -9,6 +9,7 @@ import { mountChips } from "./chips.ts";
 import { createFilter } from "./filter.ts";
 import { renderProgress } from "./progress.ts";
 import { accountRow } from "./row.ts";
+import { mountTip } from "./tip.ts";
 import { countCategories, describe, describeDisabled } from "./status.ts";
 import template from "./list.html";
 
@@ -24,6 +25,7 @@ function renderAccount(root: HTMLElement, state: State): void {
 
 export function mountAccountList(container: HTMLElement, network: Network): View {
   container.append(fromTemplate(template));
+  mountTip(container);
   const alert = part(container, "alert");
   const progress = part(container, "progress");
   const account = part(container, "account");
