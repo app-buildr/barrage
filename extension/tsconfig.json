@@ -10,15 +10,24 @@
       "DOM.Iterable"
     ],
     "types": [
-      "chrome"
+      "chrome",
+      "vite/client",
+      "node"
     ],
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "allowImportingTsExtensions": true
+    "allowImportingTsExtensions": true,
+    "jsx": "react-jsx",
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ]
+    }
   },
   "include": [
-    "src"
+    "src",
+    "vite.config.ts"
   ]
 }

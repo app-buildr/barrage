@@ -3,7 +3,7 @@ import { element, fromTemplate, part } from "../../ui/dom.ts";
 import type { Network } from "../networks/networks.ts";
 import { profileLink } from "./row.ts";
 import { createFilter } from "./filter.ts";
-import template from "./upcoming.html";
+import template from "./upcoming.html?raw";
 
 export function mountUpcoming(container: HTMLElement, network: Network): void {
   container.append(fromTemplate(template));
