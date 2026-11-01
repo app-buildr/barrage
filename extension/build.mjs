@@ -10,6 +10,10 @@ function copyStatic() {
   cpSync("manifest.json", "dist/manifest.json");
   cpSync("src/entries/options.html", "dist/options.html");
   cpSync("icons", "dist/icons", { recursive: true });
+  // Licence OFL des polices : elle accompagne les fichiers redistribués.
+  for (const license of ["LICENSE-inter.txt", "LICENSE-bricolage-grotesque.txt"]) {
+    cpSync(`src/ui/fonts/${license}`, `dist/fonts/${license}`);
+  }
 }
 
 const ctx = await esbuild.context({
