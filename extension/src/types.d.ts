@@ -1,7 +1,5 @@
-// Fichiers importés par esbuild : les gabarits HTML comme texte, les feuilles
-// de style regroupées dans le CSS de chaque point d'entrée.
-declare module "*.html?raw" {
-  const html: string;
-  export default html;
+// Feuilles de style importées en texte (?inline) : celle du Shadow DOM des notifications.
+declare module "*.css?inline" {
+  const css: string;
+  export default css;
 }
-declare module "*.css" {}
