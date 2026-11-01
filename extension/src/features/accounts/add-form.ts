@@ -3,7 +3,7 @@
 import { fromTemplate, part } from "../../ui/dom.ts";
 import { parseInput } from "./handles.ts";
 import { write } from "../../core/write.ts";
-import template from "./add-form.html";
+import template from "./add-form.html?raw";
 
 /** « @a, @b et @c », tronqué au-delà de quelques noms. */
 function names(handles: readonly string[], prefix = "@"): string {

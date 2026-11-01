@@ -2,7 +2,7 @@
 // publiée, avec le lien vers le guide de mise à jour du site.
 import { UPDATE_GUIDE_URL } from "../../core/config.ts";
 import { fromTemplate, part, type View } from "../../ui/dom.ts";
-import template from "./banner.html";
+import template from "./banner.html?raw";
 import "./updates.css";
 import { updateAvailable } from "./version.ts";
 

@@ -11,7 +11,7 @@ import { renderProgress } from "./progress.ts";
 import { accountRow } from "./row.ts";
 import { mountTip } from "./tip.ts";
 import { countCategories, describe, describeDisabled } from "./status.ts";
-import template from "./list.html";
+import template from "./list.html?raw";
 
 /**
  * Compte X dont les états sont affichés : chaque compte a ses propres
