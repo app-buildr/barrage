@@ -190,8 +190,11 @@ async function block(state: State, handle: string): Promise<Next> {
   if (isGlobal(outcome)) return handleGlobal(state, outcome);
 
   const at = Date.now();
-  if (outcome.kind === "ok") await setResults(state.prefix, { [handle]: { state: "blocked", at } }, recovered(state));
-  else if (outcome.kind === "not_found") {
+  if (outcome.kind === "ok") {
+    await setResults(state.prefix, { [handle]: { state: "blocked", at } }, recovered(state));
+    // Le blocage a eu lieu : un badge manqué ne doit pas arrêter le traitement.
+    await write("recordBlockSuccess", state.account).catch((err: unknown) => console.warn("[Barrage]", err));
+  } else if (outcome.kind === "not_found") {
     const result: Result = { state: "not_found", at, message: outcome.message };
     await setResults(state.prefix, { [handle]: result }, recovered(state));
   } else await write("recordBlockFailure", handle, outcome.message, at, state.account);

@@ -3,6 +3,16 @@
 // viennent (onglets x.com, options, service worker lui-même). Sans cela, deux
 // écritures simultanées liraient le même état et la seconde effacerait la
 // première.
+import { dismissBadge, recordBlockSuccess, setNotifyBadges } from "../features/badges/store.ts";
+import {
+  addList,
+  completeOnboarding,
+  removeList,
+  renameList,
+  setListActive,
+  setListNetworks,
+  updateListHandles,
+} from "../features/lists/store.ts";
 import { addHandles, requestBlock, requestUnblock, setEnabled } from "../features/accounts/store.ts";
 import {
   finishUnblock,
@@ -17,15 +27,25 @@ import { isWriteRequest, type WriteReply } from "./messages.ts";
 
 const WRITES = {
   addHandles,
+  addList,
   addSeen,
+  completeOnboarding,
+  dismissBadge,
   finishUnblock,
   markAlreadyBlocked,
   recordAudit,
   recordBlockFailure,
+  recordBlockSuccess,
   refuseUnblock,
+  removeList,
+  renameList,
   requestBlock,
   requestUnblock,
   setEnabled,
+  setListActive,
+  setListNetworks,
+  setNotifyBadges,
+  updateListHandles,
   useAccount,
 };
 

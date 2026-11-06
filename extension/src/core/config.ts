@@ -1,5 +1,12 @@
 // Réglages techniques, volontairement absents des options.
 
+/** Dépôt du projet. */
+export const REPO_URL = "https://github.com/app-buildr/barrage";
+/** Site public. */
+export const SITE_URL = "https://app-buildr.github.io/barrage";
+/** Adresse des demandes de retrait de la liste collaborative. */
+export const CONTACT_EMAIL = "barrage.app@protonmail.com";
+
 /**
  * Délai entre deux blocages. X limite le nombre d'actions par compte et peut
  * restreindre un compte trop rapide : la valeur reste prudente.
@@ -52,7 +59,7 @@ export const LOOKUP_BATCH = 100;
  */
 export const AUDIT_INTERVAL_MS = 70_000;
 
-// Liste partagée, publiée sur GitHub (dossier lists/ du dépôt, un fichier par réseau).
+// Liste collaborative, publiée sur GitHub (dossier lists/ du dépôt, un fichier par réseau).
 
 /**
  * Dossier en ligne des listes, sans barre finale, par exemple
@@ -64,6 +71,16 @@ export const LISTS_URL = "https://raw.githubusercontent.com/app-buildr/barrage/m
 export const LISTS_REFRESH_MINUTES = 6 * 60;
 /** Au-delà, une liste reçue est jugée anormale et ignorée. */
 export const LIST_MAX_SIZE = 5000;
+/** Seuls hôtes acceptés pour une liste importée : ils répondent avec CORS ouvert, sans nouvelle permission. */
+export const LIST_HOSTS: readonly string[] = ["raw.githubusercontent.com", "gist.githubusercontent.com"];
+/** Hôtes acceptés, tels qu'ils s'affichent dans les textes. */
+export const LIST_HOSTS_TEXT = LIST_HOSTS.join(" ou ");
+/** Extensions acceptées pour un fichier local. */
+export const LIST_FILE_EXTENSIONS: readonly string[] = [".txt", ".csv"];
+/** Taille maximale d'une liste importée, fichier ou adresse. */
+export const LIST_MAX_BYTES = 1_000_000;
+/** Longueur maximale du nom d'une liste. */
+export const LIST_NAME_MAX = 40;
 /**
  * Part maximale de comptes retirés d'un coup. Au-delà, la liste reçue est
  * ignorée : un fichier vidé par erreur ou piraté ne débloque pas tout le monde.
@@ -72,9 +89,9 @@ export const LIST_MAX_REMOVED_SHARE = 0.5;
 
 // Mises à jour : Barrage est chargé en mode développeur, sans mise à jour
 // automatique. La dernière version publiée sur GitHub est relevée en même
-// temps que la liste partagée, pour signaler qu'il faut mettre à jour.
+// temps que les listes, pour signaler qu'il faut mettre à jour.
 
 /** Dernière version publiée de l'extension. Vide : pas de vérification. */
 export const RELEASES_URL = "https://api.github.com/repos/app-buildr/barrage/releases/latest";
 /** Guide de mise à jour, lien du bandeau des options. */
-export const UPDATE_GUIDE_URL = "https://app-buildr.github.io/barrage/#mise-a-jour";
+export const UPDATE_GUIDE_URL = `${SITE_URL}/#mise-a-jour`;

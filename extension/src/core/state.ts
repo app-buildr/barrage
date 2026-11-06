@@ -4,8 +4,10 @@
 //
 // chrome.storage.local plutôt que sync : sync plafonne chaque valeur à 8 Ko,
 // trop peu pour une longue liste.
-import { DEFAULT_HANDLES } from "../features/accounts/defaults.ts";
-import { activeHandles, eligible, resultOf, type Result, type Results } from "../features/blocking/queue.ts";
+import { DEFAULT_HANDLES } from "../features/lists/defaults.ts";
+import type { Earned } from "../features/badges/badges.ts";
+import { activeHandles, eligible, isBlocked, resultOf, type Result, type Results } from "../features/blocking/queue.ts";
+import { effectiveHandles, readLists, type ListDef } from "../features/lists/lists.ts";
 
 export type ErrorReason = "auth" | "network" | "other";
 
@@ -36,17 +38,18 @@ export type State = {
   accounts: Record<string, Account>;
   /** Préfixe des clés de stockage du compte, voir scopePrefix. */
   prefix: string;
-  /**
-   * Liste complète : liste partagée (celle de GitHub une fois reçue, sinon
-   * celle intégrée à l'extension), puis comptes ajoutés par l'utilisateur.
-   */
+  /** Listes de comptes, communes à tous les comptes X. La collaborative est toujours présente. */
+  lists: ListDef[];
+  /** Liste effective de X : union des listes actives qui couvrent ce réseau. */
   handles: string[];
-  /** Comptes ajoutés par l'utilisateur, jamais retirés par une mise à jour de la liste partagée. */
-  added: string[];
+  /** Comptes de la liste collaborative : celle de GitHub une fois reçue, sinon celle intégrée. */
+  official: readonly string[];
+  /** Accueil terminé. */
+  onboarded: boolean;
   /** Dernière liste X reçue de GitHub, ou null tant qu'aucune n'a été reçue. */
   remote: string[] | null;
   /**
-   * Comptes retirés de la liste partagée alors que Barrage les avait bloqués :
+   * Comptes retirés de la liste collaborative alors que Barrage les avait bloqués :
    * à débloquer sur X, voir unblockQueue.
    */
   retired: string[];
@@ -63,6 +66,14 @@ export type State = {
   seen: string[];
   /** Notification sur x.com à chaque compte bloqué par Barrage. */
   notify: boolean;
+  /** Notification sur x.com à chaque nouveau badge. */
+  notifyBadges: boolean;
+  /** Blocages réussis par Barrage pour ce compte X, jamais décrémenté. */
+  blockCount: number;
+  /** Badges obtenus par ce compte X. */
+  badges: Earned;
+  /** Paliers obtenus dont la notification n'a pas encore été fermée ou partagée. */
+  badgeQueue: number[];
   /** Fin de la limite imposée par X, en millisecondes. 0 si aucune. */
   pauseUntil: number;
   error: BlockingError | null;
@@ -75,9 +86,9 @@ export type State = {
   latestVersion: string | null;
 };
 
-// En stockage, `handles` ne contient que les comptes ajoutés par l'utilisateur.
-// La liste partagée est fusionnée à la lecture : la modifier sur GitHub, ou
-// dans lists/x.json avant un build, la met à jour chez tous les utilisateurs.
+// La liste collaborative n'est pas copiée dans `lists` : elle est lue dans
+// `remote`, ou dans lists/x.json intégré au build, pour que la modifier sur
+// GitHub la mette à jour chez tous les utilisateurs.
 //
 // Les résultats sont stockés un par compte, sous `result:<identifiant>` : un
 // blocage n'écrit que sa propre clé, sans réécrire ni écraser ceux des autres.
@@ -92,7 +103,17 @@ const RESULT_PREFIX = "result:";
 const ACCOUNT_PREFIX_RE = /^acct:\d+\//;
 
 /** Champs de l'état propres à chaque compte X. La liste et les réglages sont communs. */
-const ACCOUNT_FIELDS = ["retired", "unblock", "seen", "pauseUntil", "error", "audit"] as const;
+const ACCOUNT_FIELDS = [
+  "retired",
+  "unblock",
+  "seen",
+  "pauseUntil",
+  "error",
+  "audit",
+  "blockCount",
+  "badges",
+  "badgeQueue",
+] as const;
 
 type AccountField = (typeof ACCOUNT_FIELDS)[number];
 
@@ -130,6 +151,9 @@ export function resultEntries(results: Results, prefix = ""): Record<string, unk
   return Object.fromEntries(Object.entries(results).map(([handle, result]) => [resultKey(handle, prefix), result]));
 }
 
+/** Clé de stockage d'un champ propre à un compte X. */
+export const accountKey = (prefix: string, field: AccountField): string => prefix + field;
+
 /**
  * Valeurs à écrire, les champs propres à un compte X sous les clés de ce
  * compte. Les autres clés (liste, réglages) sont écrites telles quelles.
@@ -137,7 +161,7 @@ export function resultEntries(results: Results, prefix = ""): Record<string, unk
 export function scoped(prefix: string, values: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(
     Object.entries(values).map(([key, value]) => [
-      (ACCOUNT_FIELDS as readonly string[]).includes(key) ? prefix + (key as AccountField) : key,
+      (ACCOUNT_FIELDS as readonly string[]).includes(key) ? accountKey(prefix, key as AccountField) : key,
       value,
     ]),
   );
@@ -150,7 +174,7 @@ export type StateKey = keyof State;
  * dans le fil ou blocage demandé à la main.
  */
 export const QUEUE_KEYS: readonly StateKey[] = [
-  "handles",
+  "lists",
   "remote",
   "retired",
   "disabled",
@@ -182,7 +206,7 @@ export function queueOrder(state: State): string[] {
 /**
  * Comptes à débloquer sur X : demandes à la main encore sur Off (ou sorties
  * de la liste depuis, la demande reste due), puis tout
- * compte sur Off ou retiré de la liste partagée que Barrage a bloqué. Calculée
+ * compte sur Off ou retiré de la liste collaborative que Barrage a bloqué. Calculée
  * plutôt que stockée, la file ne peut pas manquer un blocage qui aboutit juste
  * après le passage sur Off. Un déblocage refusé par X n'est relancé que par
  * une nouvelle demande.
@@ -202,6 +226,19 @@ export function unblockQueue(state: State): string[] {
       ...state.retired.filter((h) => !listed.has(h) && blockedByUs(h)),
     ]),
   ];
+}
+
+/**
+ * Comptes bloqués sortis de la liste effective (liste désactivée, supprimée ou
+ * mise à jour) : ils restent bloqués et déblocables. Ceux retirés de la liste
+ * collaborative n'en sont pas : Barrage les débloque de lui-même.
+ */
+export function offListHandles(state: State): string[] {
+  const listed = new Set(state.handles);
+  const retired = new Set(state.retired);
+  return Object.keys(state.results).filter(
+    (h) => !listed.has(h) && !retired.has(h) && isBlocked(resultOf(state.results, h)),
+  );
 }
 
 /** Tout le contenu du stockage, à lire avec readState. */
@@ -226,16 +263,21 @@ export function readState(stored: Record<string, unknown>, account?: string | nu
     if (handle !== null && isRecord(value)) results[handle] = value as Result;
   }
   const own = (field: AccountField) => stored[prefix + field];
-  const added = strings(stored.handles);
   const remote = Array.isArray(stored.remote) ? strings(stored.remote) : null;
+  const official = remote ?? DEFAULT_HANDLES;
+  const lists = readLists(stored.lists);
+  const blockCount = own("blockCount");
+  const badges = own("badges");
   const pauseUntil = own("pauseUntil");
   const error = own("error");
   return {
     account: current,
     accounts: accountsOf(stored),
     prefix,
-    handles: [...new Set([...(remote ?? DEFAULT_HANDLES), ...added])],
-    added,
+    lists,
+    handles: effectiveHandles(lists, "x", official),
+    official,
+    onboarded: stored.onboarded === true,
     remote,
     retired: strings(own("retired")),
     disabled: strings(stored.disabled),
@@ -243,6 +285,10 @@ export function readState(stored: Record<string, unknown>, account?: string | nu
     results,
     seen: strings(own("seen")),
     notify: stored.notify !== false,
+    notifyBadges: stored.notifyBadges !== false,
+    blockCount: typeof blockCount === "number" ? blockCount : 0,
+    badges: isRecord(badges) ? Object.assign(Object.create(null), badges) : Object.create(null),
+    badgeQueue: Array.isArray(own("badgeQueue")) ? (own("badgeQueue") as unknown[]).filter((p) => typeof p === "number") : [],
     pauseUntil: typeof pauseUntil === "number" ? pauseUntil : 0,
     error: isRecord(error) ? (error as BlockingError) : null,
     audit: strings(own("audit")),

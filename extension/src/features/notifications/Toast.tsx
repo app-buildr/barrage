@@ -3,6 +3,8 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 // clsx plutôt que cn : aucune classe en conflit ici, et tailwind-merge alourdirait le content script.
 import { clsx as cn } from "clsx";
+import { CORAL_LINK } from "../../ui/classes.ts";
+import { CloseButton, FOCUS, TOAST_CARD } from "./ToastParts.tsx";
 import { TOAST_MS, type ToastItem, type ToastStore } from "./toasts.ts";
 
 /** Logo Barrage : disque corail barré de blanc. */
@@ -27,14 +29,6 @@ const UndoIcon = () => (
     />
   </svg>
 );
-
-const CloseIcon = () => (
-  <svg viewBox="0 0 24 24" aria-hidden="true" className="size-[18px]">
-    <path d="M7 7l10 10M17 7 7 17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-  </svg>
-);
-
-const FOCUS = "focus-visible:rounded-[4px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-coral-deep";
 
 export function Toast({ toast, store }: { toast: ToastItem; store: ToastStore }) {
   const { id, handle, content, revision, leaving } = toast;
@@ -98,26 +92,29 @@ export function Toast({ toast, store }: { toast: ToastItem; store: ToastStore })
       onBlur={() => setTimeout(resume)}
       onTransitionEnd={() => leaving && store.remove(id)}
       className={cn(
-        "pointer-events-auto relative box-border flex w-[440px] max-w-[calc(100vw-32px)] items-center gap-3.5 overflow-hidden",
-        "rounded-[14px] border border-line bg-white pt-3.5 pr-3.5 pb-4 pl-4 text-left text-[14px] leading-[1.35] text-ink",
-        "animate-toast-in [box-shadow:0_12px_32px_rgba(120,60,30,0.14)] [transition:opacity_.3s,transform_.3s]",
-        "motion-reduce:animate-none motion-reduce:[transition:none]",
+        TOAST_CARD,
+        "flex items-center gap-3.5 overflow-hidden pt-3.5 pr-3.5 pb-4 pl-4 text-[14px] leading-[1.35] text-ink",
+        "[transition:opacity_.3s,transform_.3s] motion-reduce:[transition:none]",
         leaving && "opacity-0 [transform:translateX(16px)]",
       )}
     >
       <span className="block size-10 flex-none">{content.kind === "blocked" ? <BlockIcon /> : <UndoIcon />}</span>
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="text-[16px] font-bold text-ink">
+        {/* Le titre tient sur une ligne : seul le nom est raccourci, jamais la fin de la phrase. */}
+        <span className="flex min-w-0 text-[16px] font-bold text-ink">
           {/* Le nom ouvre le profil dans un nouvel onglet. */}
           <a
             href={`https://x.com/${encodeURIComponent(handle)}`}
             target="_blank"
             rel="noopener"
-            className={cn("font-bold text-coral-deep no-underline hover:underline hover:underline-offset-2", FOCUS)}
+            className={cn(
+              "min-w-0 truncate font-bold text-coral-deep no-underline hover:underline hover:underline-offset-2",
+              FOCUS,
+            )}
           >
             @{handle}
           </a>
-          {content.title}
+          <span className="flex-none whitespace-pre">{content.title}</span>
         </span>
         <span className="text-[13px] text-muted-ink">
           {content.detail}
@@ -126,10 +123,7 @@ export function Toast({ toast, store }: { toast: ToastItem; store: ToastStore })
               {" · "}
               <button
                 type="button"
-                className={cn(
-                  "m-0 cursor-pointer border-0 bg-transparent p-0 font-bold text-coral-deep underline underline-offset-2 hover:text-coral-darker",
-                  FOCUS,
-                )}
+                className={cn("m-0 cursor-pointer border-0 bg-transparent p-0", CORAL_LINK, FOCUS)}
                 onClick={(event) => {
                   focusClose.current = event.currentTarget.matches(":focus-visible");
                   content.undo?.();
@@ -141,18 +135,7 @@ export function Toast({ toast, store }: { toast: ToastItem; store: ToastStore })
           ) : null}
         </span>
       </span>
-      <button
-        ref={close}
-        type="button"
-        aria-label="Fermer"
-        onClick={() => store.leave(id)}
-        className={cn(
-          "m-0 grid size-8 flex-none cursor-pointer place-items-center rounded-full border-0 bg-transparent p-0 text-muted-ink hover:bg-cream hover:text-ink",
-          FOCUS,
-        )}
-      >
-        <CloseIcon />
-      </button>
+      <CloseButton buttonRef={close} onClick={() => store.leave(id)} />
       {/* Temps d'affichage restant : barre qui se vide vers la gauche, sur une piste pâle. */}
       <span className="absolute inset-x-0 bottom-0 h-1 bg-line" />
       <span

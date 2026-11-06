@@ -35,13 +35,17 @@ export type ParsedInput = { handles: string[]; invalid: string[] };
  * virgules, points-virgules, retours à la ligne, pour un copier-coller).
  */
 export function parseInput(text: string): ParsedInput {
-  const handles: string[] = [];
+  const handles = new Set<string>();
   const invalid: string[] = [];
-  for (const token of text.split(/[\s,;]+/)) {
-    if (!token) continue;
+  for (const token of splitEntries(text)) {
     const handle = parseHandle(token);
     if (handle === null) invalid.push(token);
-    else if (!handles.includes(handle)) handles.push(handle);
+    else handles.add(handle);
   }
-  return { handles, invalid };
+  return { handles: [...handles], invalid };
+}
+
+/** Entrées d'une saisie ou d'un fichier, sans les vides. */
+export function splitEntries(text: string): string[] {
+  return text.split(/[\s,;]+/).filter(Boolean);
 }

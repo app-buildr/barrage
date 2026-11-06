@@ -4,22 +4,33 @@
 // demandé à la main vise le compte X affiché, le dernier connecté sur x.com.
 import { accountStates, getState, readStorage, resultKey, scoped } from "../../core/state.ts";
 import { resultOf } from "../blocking/queue.ts";
+import { MANUAL_ID, coversNetwork, manualList, uniqueName } from "../lists/lists.ts";
 
-export type AddResult = { added: string[]; existing: string[] };
+/** `inactive` : « Ma liste perso » ne couvre pas X, ces comptes ne seront pas bloqués. */
+export type AddResult = { added: string[]; existing: string[]; inactive: boolean };
 
 /**
- * Ajoute des comptes, déjà normalisés par parseHandle, à la fin de la liste.
- * Ceux qui y sont déjà, ou en double dans la saisie, ne sont ajoutés qu'une fois.
+ * Ajoute des comptes, déjà normalisés par parseHandle, à « Ma liste perso »,
+ * créée au premier ajout. Ceux déjà couverts, ou en double dans la saisie, ne
+ * sont ajoutés qu'une fois.
  */
 export async function addHandles(handles: readonly string[]): Promise<AddResult> {
-  const state = await getState();
-  const known = new Set(state.handles);
-  const result: AddResult = { added: [], existing: [] };
+  const { lists, handles: effective } = await getState();
+  const manual = lists.find((list) => list.id === MANUAL_ID);
+  const known = new Set([...effective, ...(manual?.handles ?? [])]);
+  const result: AddResult = { added: [], existing: [], inactive: manual !== undefined && !coversNetwork(manual, "x") };
   for (const handle of new Set(handles)) {
     (known.has(handle) ? result.existing : result.added).push(handle);
   }
-  // En stockage, `handles` ne contient que les ajouts de l'utilisateur, voir getState.
-  if (result.added.length) await chrome.storage.local.set({ handles: [...state.added, ...result.added] });
+  if (!result.added.length) return result;
+  if (manual) {
+    const next = { ...manual, handles: [...manual.handles, ...result.added] };
+    await chrome.storage.local.set({ lists: lists.map((l) => (l === manual ? next : l)) });
+  } else {
+    const fresh = manualList(result.added, Date.now());
+    const name = uniqueName(fresh.name, lists.map((list) => list.name));
+    await chrome.storage.local.set({ lists: [...lists, { ...fresh, name }] });
+  }
   return result;
 }
 

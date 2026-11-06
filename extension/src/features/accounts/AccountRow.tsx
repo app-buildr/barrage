@@ -25,7 +25,7 @@ const TAG_COLORS = {
   visible: "bg-sun-soft text-sun-soft-ink",
 } as const;
 
-export function StatusLabel({ status }: { status: Status }) {
+function StatusLabel({ status }: { status: Status }) {
   if (!status.tag) return <>{status.label}</>;
   return (
     <>
@@ -35,13 +35,20 @@ export function StatusLabel({ status }: { status: Status }) {
   );
 }
 
-type Props = { network: NetworkId; handle: string; enabled: boolean; status: Status };
+type Props = {
+  network: NetworkId;
+  handle: string;
+  enabled: boolean;
+  status: Status;
+  /** Bloqué mais sorti de la liste effective, voir offListHandles. */
+  offList?: boolean;
+};
 
 /** Ce qu'affiche la ligne : une seule notion d'égalité, pour le memo et pour le bouton. */
-const rowKey = ({ enabled, status }: Props) => JSON.stringify([enabled, status]);
+const rowKey = ({ enabled, status, offList }: Props) => JSON.stringify([enabled, status, offList]);
 
 function Row(props: Props) {
-  const { network, handle, enabled, status } = props;
+  const { network, handle, enabled, status, offList } = props;
   // Bouton cliqué : désactivé jusqu'au prochain changement de la ligne, ou
   // jusqu'à l'échec de l'écriture.
   const key = rowKey(props);
@@ -67,8 +74,12 @@ function Row(props: Props) {
         <ProfileLink
           network={network}
           handle={handle}
-          className={cn("text-base font-bold text-ink", !enabled && "font-semibold text-muted-foreground")}
+          className={cn(
+            "text-base font-bold text-ink underline underline-offset-2",
+            !enabled && "font-semibold text-muted-foreground",
+          )}
         />
+        {offList ? <p className="m-0 text-[13px] text-muted-foreground">Hors liste · sa liste est désactivée</p> : null}
       </TableCell>
       <TableCell className={cn(CELL, "whitespace-normal", TEXT_COLORS[status.className])}>
         <StatusLabel status={status} />
