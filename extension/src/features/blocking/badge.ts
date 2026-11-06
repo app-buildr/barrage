@@ -4,12 +4,14 @@ import { QUEUE_KEYS, getState, onStateChange, queueOrder } from "../../core/stat
 import { updateAvailable } from "../updates/version.ts";
 import { pendingIn } from "./queue.ts";
 
-const BLUE = "#1d9bf0";
+const CORAL_DEEP = "#B83A14";
 const RED = "#f4212e";
+const WHITE = "#ffffff";
 const TITLE = "Barrage : liste et suivi";
 
 async function refreshBadge(): Promise<void> {
   const state = await getState();
+  await chrome.action.setBadgeTextColor({ color: WHITE });
   if (updateAvailable(state.latestVersion)) {
     await chrome.action.setBadgeBackgroundColor({ color: RED });
     await chrome.action.setBadgeText({ text: "!" });
@@ -18,7 +20,7 @@ async function refreshBadge(): Promise<void> {
   }
   // Seuls les comptes vus dans le fil ou demandés à la main sont en file.
   const pending = pendingIn(queueOrder(state), state.results).length;
-  await chrome.action.setBadgeBackgroundColor({ color: BLUE });
+  await chrome.action.setBadgeBackgroundColor({ color: CORAL_DEEP });
   await chrome.action.setBadgeText({ text: pending > 999 ? "999+" : pending ? String(pending) : "" });
   await chrome.action.setTitle({ title: TITLE });
 }

@@ -243,7 +243,7 @@ function onQueueChange(changes: StateChanges): void {
 export function watchTimeline(): void {
   void loadList();
   // Premier compte X vu : ses clés de stockage peuvent changer de préfixe.
-  onStateChange(() => void loadList(), ["handles", "remote", "disabled", "account"]);
+  onStateChange(() => void loadList(), ["lists", "remote", "disabled", "account"]);
   onStateChange(onQueueChange, ["results", "seen"]);
   // Le fil est virtualisé : les tweets entrent et sortent du DOM au défilement.
   const observer = new MutationObserver((records) => {

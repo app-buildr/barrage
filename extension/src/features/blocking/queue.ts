@@ -101,6 +101,9 @@ export function isBlocked(result: Result | undefined): boolean {
   return result?.state === "blocked" || result?.state === "already_blocked";
 }
 
+/** Nombre de comptes bloqués sur X, par Barrage ou déjà avant lui. */
+export const blockedCount = (results: Results): number => Object.values(results).filter(isBlocked).length;
+
 /**
  * Comptes bloqués par Barrage parmi ceux donnés. Un compte que l'utilisateur
  * bloquait avant Barrage n'en fait pas partie : il n'est jamais débloqué.

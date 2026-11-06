@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createToastStore, MAX_TOASTS, type Content } from "../src/features/notifications/toasts.ts";
+import { createBadgeStore, createToastStore, MAX_TOASTS, type Content } from "../src/features/notifications/toasts.ts";
 
 const blocked: Content = { kind: "blocked", title: " vient d'être bloqué", detail: "par Barrage" };
 const unblocked: Content = { kind: "unblocked", title: " a été débloqué.", detail: "" };
@@ -42,4 +42,17 @@ test("les abonnés sont prévenus, et plus après désabonnement", () => {
   store.show("b", blocked);
   store.clear();
   assert.equal(calls, 2);
+});
+
+test("la notification de badge ne prévient que si le palier change", () => {
+  const store = createBadgeStore();
+  let calls = 0;
+  const unsubscribe = store.subscribe(() => calls++);
+  store.set(10);
+  store.set(10);
+  assert.equal(store.getSnapshot(), 10);
+  assert.equal(calls, 1);
+  unsubscribe();
+  store.set(null);
+  assert.equal(calls, 1);
 });

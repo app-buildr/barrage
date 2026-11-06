@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseHandle, parseInput } from "../src/features/accounts/handles.ts";
+import { parseHandle, parseInput } from "../src/features/lists/handles.ts";
 
 test("les trois formats donnent le même identifiant minuscule", () => {
   assert.equal(parseHandle("@Exemple_1"), "exemple_1");

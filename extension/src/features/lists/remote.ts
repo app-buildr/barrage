@@ -1,7 +1,7 @@
-// Lecture d'une liste partagée reçue de GitHub et calcul de ce qui change.
+// Lecture de la liste collaborative reçue de GitHub et calcul de ce qui change.
 // Fonctions pures, testées dans tests/lists.test.ts.
 import { LIST_MAX_REMOVED_SHARE, LIST_MAX_SIZE } from "../../core/config.ts";
-import { parseHandle } from "../accounts/handles.ts";
+import { parseHandle } from "./handles.ts";
 
 export type Parsed = { ok: true; handles: string[] } | { ok: false; reason: string };
 
@@ -24,11 +24,11 @@ export type Update = { ok: true; removed: string[] } | { ok: false; reason: stri
 
 /**
  * Compare la liste en place à la nouvelle. `removed` : comptes qui en sortent,
- * sauf ceux que l'utilisateur a ajoutés lui-même. Ceux que Barrage a bloqués
- * sont à débloquer, voir blockedByBarrage.
+ * sauf ceux encore couverts par une autre liste active (`covered`). Ceux que
+ * Barrage a bloqués sont à débloquer, voir blockedByBarrage.
  */
-export function compareLists(current: readonly string[], next: readonly string[], added: readonly string[]): Update {
-  const kept = new Set([...next, ...added]);
+export function compareLists(current: readonly string[], next: readonly string[], covered: readonly string[]): Update {
+  const kept = new Set([...next, ...covered]);
   const removed = current.filter((h) => !kept.has(h));
   if (current.length && removed.length / current.length > LIST_MAX_REMOVED_SHARE) {
     return { ok: false, reason: `${removed.length} comptes retirés d'un coup sur ${current.length}` };

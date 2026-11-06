@@ -1,12 +1,18 @@
 // Pile des notifications, en haut à droite de x.com.
 import { useSyncExternalStore } from "react";
+import { BadgeToast } from "./BadgeToast.tsx";
 import { Toast } from "./Toast.tsx";
-import type { ToastStore } from "./toasts.ts";
+import type { BadgeStore, ToastStore } from "./toasts.ts";
 
-export function Toaster({ store }: { store: ToastStore }) {
+type Props = { store: ToastStore; badges: BadgeStore; onDismissBadge: (palier: number) => void };
+
+export function Toaster({ store, badges, onDismissBadge }: Props) {
   const toasts = useSyncExternalStore(store.subscribe, store.getSnapshot);
+  const palier = useSyncExternalStore(badges.subscribe, badges.getSnapshot);
   return (
     <div role="status" aria-live="polite" className="pointer-events-none flex flex-col items-end gap-2.5 font-sans">
+      {/* Au-dessus de la pile, et hors de sa limite : elle ne l'évince jamais. */}
+      {palier !== null ? <BadgeToast key={palier} palier={palier} onDismiss={onDismissBadge} /> : null}
       {toasts.map((toast) => (
         <Toast key={toast.id} toast={toast} store={store} />
       ))}

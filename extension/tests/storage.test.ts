@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
-import { DEFAULT_HANDLES } from "../src/features/accounts/defaults.ts";
-import { parseHandle } from "../src/features/accounts/handles.ts";
+import { installChrome } from "./helpers/chrome.ts";
+import { DEFAULT_HANDLES } from "../src/features/lists/defaults.ts";
+import { parseHandle } from "../src/features/lists/handles.ts";
 import { active, getState, resultChanges, resultHandle, resultKey, unblockQueue } from "../src/core/state.ts";
 import { addHandles, requestBlock, requestUnblock, setEnabled } from "../src/features/accounts/store.ts";
 import {
@@ -12,13 +13,9 @@ import {
   useAccount,
 } from "../src/features/blocking/store.ts";
 import { setNotify } from "../src/features/notifications/store.ts";
+import { officialList } from "../src/features/lists/lists.ts";
 import { addSeen } from "../src/features/timeline/store.ts";
 
-/**
- * Faux chrome.storage.local. Le vrai `get` prend un objet de valeurs par défaut
- * et ne renvoie la valeur stockée que si la clé existe : le stub reproduit ce
- * contrat, c'est lui que le code sous test exerce.
- */
 let store: Record<string, unknown>;
 
 /** Remplace les résultats enregistrés, stockés un par compte. */
@@ -27,42 +24,40 @@ function putResults(results: Record<string, unknown>): void {
   for (const [handle, result] of Object.entries(results)) store[resultKey(handle)] = result;
 }
 
+/** Comptes de « Ma liste perso », à côté de la liste collaborative active. */
+function setManual(handles: unknown[]): void {
+  store.lists = [
+    officialList(true),
+    { id: "manual", name: "Ma liste perso", source: "manual", handles, active: true, networks: ["x"], addedAt: 0 },
+  ];
+}
+
 beforeEach(() => {
+  // État d'une installation dont l'accueil est terminé, sur la liste collaborative.
+  store = { lists: [officialList(true)], onboarded: true };
+  installChrome(() => store);
+});
+
+test("une installation neuve ne bloque rien avant le choix de l'accueil", async () => {
   store = {};
-  (globalThis as any).chrome = {
-    storage: {
-      local: {
-        get: async (defaults: Record<string, unknown> | null) =>
-          defaults === null
-            ? { ...store }
-            : Object.fromEntries(Object.entries(defaults).map(([k, v]) => [k, k in store ? store[k] : v])),
-        set: async (values: Record<string, unknown>) => {
-          Object.assign(store, values);
-        },
-        remove: async (keys: string | string[]) => {
-          for (const key of [keys].flat()) delete store[key];
-        },
-      },
-    },
-  };
+  const state = await getState();
+  assert.deepEqual(state.handles, []);
+  assert.equal(state.onboarded, false);
+  assert.deepEqual(state.official, DEFAULT_HANDLES);
 });
 
-test("une installation neuve part de la liste par défaut", async () => {
-  assert.deepEqual((await getState()).handles, DEFAULT_HANDLES);
-});
-
-test("les comptes par défaut s'ajoutent à une liste déjà enregistrée", async () => {
+test("les comptes de la liste collaborative s'ajoutent à une liste perso, sans doublon", async () => {
   // Cas réel : installation antérieure, liste enregistrée avant l'ajout de
   // nouveaux comptes par défaut. Ils doivent apparaître sans réinstaller.
-  store.handles = ["ancien", DEFAULT_HANDLES[0]];
+  setManual(["ancien", DEFAULT_HANDLES[0]]);
   const { handles } = await getState();
   assert.deepEqual(handles, [...DEFAULT_HANDLES, "ancien"]);
 });
 
 test("des comptes ajoutés rejoignent la fin de la liste, une seule fois", async () => {
   const first = await addHandles(["un", "deux", "un", DEFAULT_HANDLES[0] ?? ""]);
-  assert.deepEqual(first, { added: ["un", "deux"], existing: [DEFAULT_HANDLES[0]] });
-  assert.deepEqual(await addHandles(["deux", "trois"]), { added: ["trois"], existing: ["deux"] });
+  assert.deepEqual(first, { added: ["un", "deux"], existing: [DEFAULT_HANDLES[0]], inactive: false });
+  assert.deepEqual(await addHandles(["deux", "trois"]), { added: ["trois"], existing: ["deux"], inactive: false });
   const { handles } = await getState();
   assert.deepEqual(handles.slice(-3), ["un", "deux", "trois"]);
   assert.equal(handles.length, DEFAULT_HANDLES.length + 3);
@@ -74,7 +69,7 @@ test("la liste par défaut est déjà normalisée et sans doublon", () => {
 });
 
 test("la file des comptes vus ne garde que des comptes de la liste encore à bloquer", async () => {
-  store.handles = ["a", "b", "c"];
+  setManual(["a", "b", "c"]);
   putResults({ b: { state: "blocked", at: 1 } });
   await addSeen(["a", "b", "hors_liste", "a"]);
   assert.deepEqual((await getState()).seen, ["a"]);
@@ -168,7 +163,7 @@ test("un déblocage terminé sort de la file et enregistre le résultat", async 
 });
 
 test("un compte désactivé vu dans le fil n'entre pas dans la file", async () => {
-  store.handles = ["a"];
+  setManual(["a"]);
   store.disabled = ["a"];
   await addSeen(["a"]);
   assert.deepEqual((await getState()).seen, []);
@@ -226,7 +221,7 @@ test("chaque résultat est stocké sous sa propre clé", async () => {
 });
 
 test("un compte introuvable depuis longtemps qui réapparaît dans le fil est retenté", async () => {
-  store.handles = ["a", "b"];
+  setManual(["a", "b"]);
   putResults({ a: { state: "not_found", at: 0 }, b: { state: "not_found", at: Date.now() } });
   await addSeen(["a", "b"]);
   assert.deepEqual((await getState()).seen, ["a"]);

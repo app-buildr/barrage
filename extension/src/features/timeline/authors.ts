@@ -1,6 +1,6 @@
 // Lecture de l'identifiant d'un auteur dans le DOM de X. Fonctions pures sur
 // des chaînes, couvertes par les tests.
-import { RESERVED_PATHS } from "../accounts/handles.ts";
+import { RESERVED_PATHS } from "../lists/handles.ts";
 
 const PROFILE_HREF_RE = /^\/([A-Za-z0-9_]{1,15})$/;
 const AT_HANDLE_RE = /@([A-Za-z0-9_]{1,15})(?![A-Za-z0-9_])/g;

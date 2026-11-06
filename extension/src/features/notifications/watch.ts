@@ -1,14 +1,18 @@
-// Notifications « @user vient d'être bloqué » et « @user a été débloqué » sur x.com. Chaque onglet X
-// surveille les résultats : le blocage a pu être fait par un autre onglet, et
-// c'est dans celui que l'utilisateur regarde que la notification doit paraître.
-import { onStateChange, prefixFor, resultChanges, type StateChanges } from "../../core/state.ts";
+// Notifications « @user vient d'être bloqué », « @user a été débloqué » et
+// « nouveau badge » sur x.com. Chaque onglet X surveille le stockage : le
+// blocage a pu être fait par un autre onglet, et c'est dans celui que
+// l'utilisateur regarde que la notification doit paraître.
+import { contextAlive } from "../../core/context.ts";
+import { accountKey, onStateChange, prefixFor, resultChanges, type StateChanges } from "../../core/state.ts";
 import { write } from "../../core/write.ts";
+import { pendingBadge, type Earned } from "../badges/badges.ts";
 import { accountId } from "../blocking/api.ts";
 import { newlyBlocked, newlyUnblocked } from "../blocking/queue.ts";
 import { mountToaster } from "./mount.tsx";
-import { CONFIRM_MS, createToastStore, type Content } from "./toasts.ts";
+import { CONFIRM_MS, createBadgeStore, createToastStore, type Content } from "./toasts.ts";
 
 const toasts = createToastStore();
+const badges = createBadgeStore();
 
 /**
  * Comptes dont le blocage vient d'être annulé dans cet onglet : la
@@ -35,11 +39,35 @@ const CANCELLED: Content = {
 /** Pile dessinée à la première notification seulement : rien dans la page avant. */
 let host: HTMLElement | null = null;
 
-function show(handle: string, content: Content): void {
-  if (!host) host = mountToaster(toasts);
+function ensureHost(): void {
+  if (!host) host = mountToaster(toasts, badges, dismissBadge);
   // Retirée par x.com ou une autre extension : on la remet, avec son état.
   else if (!host.isConnected) document.body.append(host);
+}
+
+function show(handle: string, content: Content): void {
+  ensureHost();
   toasts.show(handle, content);
+}
+
+/** Fermée ou partagée : elle ne revient plus, voir pendingBadge. */
+function dismissBadge(palier: number): void {
+  badges.set(null);
+  // Extension rechargée : cet onglet orphelin ne peut plus écrire, le badge reviendra.
+  if (contextAlive()) void write("dismissBadge", palier, accountId());
+}
+
+/** Badge à notifier du compte X connecté, dans l'onglet visible. */
+async function showBadge(): Promise<void> {
+  const account = accountId();
+  if (!contextAlive() || !account || document.visibilityState !== "visible") return;
+  const prefix = await prefixFor(account);
+  const earned = accountKey(prefix, "badges");
+  const notified = accountKey(prefix, "badgeNotified");
+  const stored = await chrome.storage.local.get({ [earned]: {}, [notified]: 0, notifyBadges: true });
+  const palier = stored.notifyBadges === false ? null : pendingBadge(stored[earned] as Earned, stored[notified] as number);
+  if (palier !== null) ensureHost();
+  badges.set(palier);
 }
 
 /** Seuls les blocages du compte X connecté sont annoncés. */
@@ -73,11 +101,16 @@ export function watchBlocks(): void {
   // Onglet caché : ses animations s'arrêtent, le décompte aussi. Une
   // notification laissée là réapparaîtrait au retour, périmée : on les retire.
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") toasts.clear();
+    if (document.visibilityState === "hidden") {
+      toasts.clear();
+      badges.set(null);
+    } else void showBadge();
   });
   onStateChange((changes) => {
     // Inutile de dessiner dans un onglet que personne ne regarde.
     if (document.visibilityState !== "visible") return;
     void announce(changes);
   }, ["results"]);
+  onStateChange(() => void showBadge(), ["badges", "badgeNotified", "notifyBadges", "account"]);
+  void showBadge();
 }

@@ -12,12 +12,19 @@
   --color-sun-soft: #FFF1C9;
   --color-sun-soft-ink: #7A4E00;
 
+  /* Ombre des notifications */
+  --shadow-toast: 0 16px 40px rgba(120, 60, 30, 0.18);
+
+  /* Coche des badges obtenus */
+  --color-obtained: #1F9D63;
+
   /* Neutres chauds */
   --color-ink: #2A1A14;
   --color-muted-ink: #6B5A50;
   --color-disabled: #A89B92;
   --color-cream: #FFF6EE;
   --color-cream-2: #F7EFE8;
+  --color-list-off: #FFFCF9;
   --color-soon: #EFE4DA;
   --color-line: #F2E3D8;
   --color-line-strong: #E2CFC2;

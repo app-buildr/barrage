@@ -1,5 +1,7 @@
 // Carte de progression : comptes bloqués sur le total, barre de remplissage, et
 // compte X dont les états sont affichés (le dernier connecté sur x.com).
+import { percent, plural } from "@/core/format.ts";
+import { PROGRESS_BAR } from "@/ui/classes.ts";
 import { Progress } from "@/ui/components/progress";
 import { Panel } from "@/ui/layout/Section";
 import { totalCount, type Counts } from "./status.ts";
@@ -13,7 +15,7 @@ export function ProgressCard({ counts, handle }: { counts: Counts; handle: strin
           {counts.blocked}
         </span>
         <span className="flex-1 text-lg text-muted-foreground">
-          bloqués sur {total} compte{total > 1 ? "s" : ""}
+          bloqués sur {plural(total, "compte")}
         </span>
         <span
           className="text-sm text-muted-foreground"
@@ -27,9 +29,9 @@ export function ProgressCard({ counts, handle }: { counts: Counts; handle: strin
         </span>
       </div>
       <Progress
-        value={total ? (counts.blocked / total) * 100 : 0}
+        value={percent(counts.blocked, total)}
         aria-label={`${counts.blocked} bloqués, ${counts.visible} visibles, ${counts.problem} problèmes, ${counts.disabled} désactivés`}
-        className="h-3 bg-line [&>[data-slot=progress-indicator]]:rounded-full [&>[data-slot=progress-indicator]]:bg-coral"
+        className={`h-3 ${PROGRESS_BAR}`}
       />
     </Panel>
   );

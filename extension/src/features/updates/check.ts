@@ -1,5 +1,5 @@
 // Service worker : relève la dernière version publiée de l'extension, aux
-// mêmes moments que la liste partagée (voir features/lists/sync.ts).
+// mêmes moments que les listes (voir features/lists/sync.ts).
 import { RELEASES_URL } from "../../core/config.ts";
 import { parseVersion } from "./version.ts";
 
