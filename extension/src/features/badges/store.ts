@@ -1,5 +1,6 @@
 // Écritures des badges, appliquées une à la fois par le service worker.
-import { accountStates, getState, readStorage, scoped } from "../../core/state.ts";
+import { accountStates, getState, readStorage, scoped, type State } from "../../core/state.ts";
+import { blockedCount } from "../blocking/queue.ts";
 import { awardBadges } from "./badges.ts";
 
 /**
@@ -7,23 +8,35 @@ import { awardBadges } from "./badges.ts";
  * paliers atteints sont attribués. Il n'est jamais décrémenté.
  */
 export async function recordBlockSuccess(account?: string | null): Promise<void> {
-  const { blockCount, badges, badgeQueue, notifyBadges, prefix } = await getState(account);
+  const { blockCount, badges, prefix } = await getState(account);
   const count = blockCount + 1;
-  const award = awardBadges(count, badges, badgeQueue, notifyBadges, Date.now());
-  await chrome.storage.local.set(scoped(prefix, { blockCount: count, ...award }));
+  await chrome.storage.local.set(scoped(prefix, { blockCount: count, badges: awardBadges(count, badges, Date.now()) }));
 }
 
-/** Notification de badge fermée ou partagée : le palier quitte la file. */
+/** Rattrape le compteur sur les comptes bloqués sur X, y compris avant Barrage. */
+function caughtUp({ blockCount, badges, prefix, results }: State, at: number): Record<string, unknown> {
+  const count = Math.max(blockCount, blockedCount(results));
+  return scoped(prefix, { blockCount: count, badges: awardBadges(count, badges, at) });
+}
+
+/** Comptes reconnus comme bloqués sur X : les badges suivent. */
+export async function syncBadges(account?: string | null): Promise<void> {
+  await chrome.storage.local.set(caughtUp(await getState(account), Date.now()));
+}
+
+/** Installation ou mise à jour : les badges de chaque compte X sont rattrapés. */
+export async function syncAllBadges(): Promise<void> {
+  const at = Date.now();
+  await chrome.storage.local.set(Object.assign({}, ...accountStates(await readStorage()).map((state) => caughtUp(state, at))));
+}
+
+/** Notification de badge fermée ou partagée : ce palier et les inférieurs ne reviennent plus. */
 export async function dismissBadge(palier: number, account?: string | null): Promise<void> {
-  const { badgeQueue, prefix } = await getState(account);
-  await chrome.storage.local.set(scoped(prefix, { badgeQueue: badgeQueue.filter((p) => p !== palier) }));
+  const { badgeNotified, prefix } = await getState(account);
+  await chrome.storage.local.set(scoped(prefix, { badgeNotified: Math.max(badgeNotified, palier) }));
 }
 
-/** Réglage des notifications de badge. Le couper vide la file de chaque compte X. */
+/** Réglage des notifications de badge, commun à tous les comptes X. */
 export async function setNotifyBadges(notifyBadges: boolean): Promise<void> {
-  const values: Record<string, unknown> = { notifyBadges };
-  if (!notifyBadges) {
-    for (const { prefix } of accountStates(await readStorage())) Object.assign(values, scoped(prefix, { badgeQueue: [] }));
-  }
-  await chrome.storage.local.set(values);
+  await chrome.storage.local.set({ notifyBadges });
 }

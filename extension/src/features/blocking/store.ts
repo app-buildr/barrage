@@ -16,6 +16,7 @@ import {
   type BlockingError,
   type ErrorReason,
 } from "../../core/state.ts";
+import { syncBadges } from "../badges/store.ts";
 import { failure, isBlocked, isPending, resultOf, type Result, type Results } from "./queue.ts";
 
 /**
@@ -112,6 +113,7 @@ export async function markAlreadyBlocked(handles: readonly string[], account?: s
   const marked = new Set(Object.keys(entries));
   if (!marked.size) return;
   await setResults(state.prefix, entries, { seen: state.seen.filter((h) => !marked.has(h)) });
+  await syncBadges(account);
 }
 
 /**
@@ -188,6 +190,7 @@ export async function recordAudit(
   const done = new Set(batch);
   if (stale.length) await chrome.storage.local.remove(stale.map((h) => resultKey(h, state.prefix)));
   await setResults(state.prefix, entries, { audit: state.audit.filter((h) => !done.has(h)), ...extra });
+  await syncBadges(account);
 }
 
 /**

@@ -5,6 +5,7 @@
 import { contextAlive } from "../../core/context.ts";
 import { accountKey, onStateChange, prefixFor, resultChanges, type StateChanges } from "../../core/state.ts";
 import { write } from "../../core/write.ts";
+import { pendingBadge, type Earned } from "../badges/badges.ts";
 import { accountId } from "../blocking/api.ts";
 import { newlyBlocked, newlyUnblocked } from "../blocking/queue.ts";
 import { mountToaster } from "./mount.tsx";
@@ -49,20 +50,22 @@ function show(handle: string, content: Content): void {
   toasts.show(handle, content);
 }
 
-/** Fermée ou partagée : le prochain palier en attente apparaît, voir showBadge. */
+/** Fermée ou partagée : elle ne revient plus, voir pendingBadge. */
 function dismissBadge(palier: number): void {
   badges.set(null);
   // Extension rechargée : cet onglet orphelin ne peut plus écrire, le badge reviendra.
   if (contextAlive()) void write("dismissBadge", palier, accountId());
 }
 
-/** Premier badge en attente du compte X connecté, dans l'onglet visible. */
+/** Badge à notifier du compte X connecté, dans l'onglet visible. */
 async function showBadge(): Promise<void> {
   const account = accountId();
   if (!contextAlive() || !account || document.visibilityState !== "visible") return;
-  const key = accountKey(await prefixFor(account), "badgeQueue");
-  const queue = (await chrome.storage.local.get({ [key]: [] }))[key] as unknown;
-  const palier = Array.isArray(queue) && typeof queue[0] === "number" ? queue[0] : null;
+  const prefix = await prefixFor(account);
+  const earned = accountKey(prefix, "badges");
+  const notified = accountKey(prefix, "badgeNotified");
+  const stored = await chrome.storage.local.get({ [earned]: {}, [notified]: 0, notifyBadges: true });
+  const palier = stored.notifyBadges === false ? null : pendingBadge(stored[earned] as Earned, stored[notified] as number);
   if (palier !== null) ensureHost();
   badges.set(palier);
 }
@@ -108,6 +111,6 @@ export function watchBlocks(): void {
     if (document.visibilityState !== "visible") return;
     void announce(changes);
   }, ["results"]);
-  onStateChange(() => void showBadge(), ["badgeQueue", "account"]);
+  onStateChange(() => void showBadge(), ["badges", "badgeNotified", "notifyBadges", "account"]);
   void showBadge();
 }

@@ -68,12 +68,12 @@ export type State = {
   notify: boolean;
   /** Notification sur x.com à chaque nouveau badge. */
   notifyBadges: boolean;
-  /** Blocages réussis par Barrage pour ce compte X, jamais décrémenté. */
+  /** Comptes bloqués sur X par ce compte, avant Barrage compris. Jamais décrémenté. */
   blockCount: number;
   /** Badges obtenus par ce compte X. */
   badges: Earned;
-  /** Paliers obtenus dont la notification n'a pas encore été fermée ou partagée. */
-  badgeQueue: number[];
+  /** Plus haut palier dont la notification a été fermée ou partagée, 0 si aucun. */
+  badgeNotified: number;
   /** Fin de la limite imposée par X, en millisecondes. 0 si aucune. */
   pauseUntil: number;
   error: BlockingError | null;
@@ -112,7 +112,7 @@ const ACCOUNT_FIELDS = [
   "audit",
   "blockCount",
   "badges",
-  "badgeQueue",
+  "badgeNotified",
 ] as const;
 
 type AccountField = (typeof ACCOUNT_FIELDS)[number];
@@ -268,6 +268,7 @@ export function readState(stored: Record<string, unknown>, account?: string | nu
   const lists = readLists(stored.lists);
   const blockCount = own("blockCount");
   const badges = own("badges");
+  const badgeNotified = own("badgeNotified");
   const pauseUntil = own("pauseUntil");
   const error = own("error");
   return {
@@ -288,7 +289,7 @@ export function readState(stored: Record<string, unknown>, account?: string | nu
     notifyBadges: stored.notifyBadges !== false,
     blockCount: typeof blockCount === "number" ? blockCount : 0,
     badges: isRecord(badges) ? Object.assign(Object.create(null), badges) : Object.create(null),
-    badgeQueue: Array.isArray(own("badgeQueue")) ? (own("badgeQueue") as unknown[]).filter((p) => typeof p === "number") : [],
+    badgeNotified: typeof badgeNotified === "number" ? badgeNotified : 0,
     pauseUntil: typeof pauseUntil === "number" ? pauseUntil : 0,
     error: isRecord(error) ? (error as BlockingError) : null,
     audit: strings(own("audit")),

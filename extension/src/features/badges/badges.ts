@@ -33,23 +33,22 @@ export const nextBadge = (count: number): Badge | undefined => BADGES.find((b) =
 
 export const earnedCount = (earned: Earned): number => BADGES.filter((b) => hasBadge(earned, b.palier)).length;
 
-/**
- * Inscrit les paliers atteints par `count` et pas encore obtenus. Seul le plus
- * haut entre dans la file des notifications : plusieurs paliers franchis d'un
- * coup n'arrivent qu'à la migration.
- */
-export function awardBadges(
-  count: number,
-  earned: Earned,
-  queue: readonly number[],
-  notify: boolean,
-  now: number,
-): { badges: Earned; badgeQueue: number[] } {
+/** Inscrit les paliers atteints par `count` et pas encore obtenus. */
+export function awardBadges(count: number, earned: Earned, now: number): Earned {
   const badges: Earned = { ...earned };
-  const reached = BADGES.filter((b) => b.palier <= count && !hasBadge(earned, b.palier));
-  for (const { palier } of reached) badges[palier] = now;
-  const highest = reached.at(-1)?.palier;
-  return { badges, badgeQueue: notify && highest !== undefined ? [...queue, highest] : [...queue] };
+  for (const { palier } of BADGES) {
+    if (palier <= count && !hasBadge(earned, palier)) badges[palier] = now;
+  }
+  return badges;
+}
+
+/**
+ * Badge à notifier : le plus haut obtenu, s'il ne l'a pas encore été. Les
+ * paliers inférieurs ne le sont jamais, même franchis sans notification.
+ */
+export function pendingBadge(earned: Earned, notified: number): number | null {
+  const highest = BADGES.filter((b) => hasBadge(earned, b.palier)).at(-1)?.palier;
+  return highest !== undefined && highest > notified ? highest : null;
 }
 
 /** Texte du tweet de partage. */

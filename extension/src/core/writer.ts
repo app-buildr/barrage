@@ -3,7 +3,7 @@
 // viennent (onglets x.com, options, service worker lui-même). Sans cela, deux
 // écritures simultanées liraient le même état et la seconde effacerait la
 // première.
-import { dismissBadge, recordBlockSuccess, setNotifyBadges } from "../features/badges/store.ts";
+import { dismissBadge, recordBlockSuccess, setNotifyBadges, syncBadges } from "../features/badges/store.ts";
 import {
   addList,
   completeOnboarding,
@@ -45,6 +45,7 @@ const WRITES = {
   setListActive,
   setListNetworks,
   setNotifyBadges,
+  syncBadges,
   updateListHandles,
   useAccount,
 };

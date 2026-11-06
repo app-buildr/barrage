@@ -8,6 +8,8 @@ import { listDetails } from "../src/features/lists/details.ts";
 import { analyzeList, checkListFile, describeReport, looksLikeTable, validateListUrl, BAD_HOST_MESSAGE, TABLE_MESSAGE } from "../src/features/lists/import.ts";
 import { cleanName, effectiveHandles, officialList, readLists, uniqueName, type ListDef } from "../src/features/lists/lists.ts";
 import { migrate } from "../src/features/lists/migrate.ts";
+import { pendingBadge } from "../src/features/badges/badges.ts";
+import { syncAllBadges } from "../src/features/badges/store.ts";
 import {
   addList,
   completeOnboarding,
@@ -335,6 +337,7 @@ const seed = () => {
 test("la migration crée les listes et les badges de chaque compte X", async () => {
   seed();
   await migrate("1.3.0");
+  await syncAllBadges();
   const state = await getState("1");
   assert.equal(state.onboarded, true);
   assert.equal(state.notify, false);
@@ -345,12 +348,12 @@ test("la migration crée les listes et les badges de chaque compte X", async () 
     ["manual", true, ["perso"]],
   ]);
   assert.deepEqual(state.handles, ["a", "b", "perso"]);
-  assert.equal(state.blockCount, 12);
+  assert.equal(state.blockCount, 13);
   assert.deepEqual(Object.keys(state.badges), ["1", "10"]);
-  assert.deepEqual(state.badgeQueue, [10]);
+  assert.equal(pendingBadge(state.badges, state.badgeNotified), 10);
   const second = await getState("2");
   assert.equal(second.blockCount, 1);
-  assert.deepEqual(second.badgeQueue, [1]);
+  assert.equal(pendingBadge(second.badges, second.badgeNotified), 1);
 });
 
 test("sans compte perso, la migration ne crée que la collaborative", async () => {

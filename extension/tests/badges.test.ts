@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
 import { installChrome } from "./helpers/chrome.ts";
-import { getState } from "../src/core/state.ts";
-import { awardBadges, earnedCount, hasBadge, nextBadge, nextStepText, shareText, shareUrl, BADGES } from "../src/features/badges/badges.ts";
-import { dismissBadge, recordBlockSuccess, setNotifyBadges } from "../src/features/badges/store.ts";
+import { getState, resultKey } from "../src/core/state.ts";
+import { awardBadges, earnedCount, nextBadge, nextStepText, pendingBadge, shareText, shareUrl, BADGES } from "../src/features/badges/badges.ts";
+import { dismissBadge, recordBlockSuccess, setNotifyBadges, syncAllBadges } from "../src/features/badges/store.ts";
+import { markAlreadyBlocked } from "../src/features/blocking/store.ts";
+import { manualList } from "../src/features/lists/lists.ts";
 
 let store: Record<string, unknown>;
 
@@ -13,24 +15,18 @@ beforeEach(() => {
 });
 
 test("un palier est attribué une fois, à son franchissement", () => {
-  const first = awardBadges(1, {}, [], true, 5);
-  assert.deepEqual({ ...first.badges }, { "1": 5 });
-  assert.deepEqual(first.badgeQueue, [1]);
-  const again = awardBadges(2, first.badges, [], true, 9);
-  assert.deepEqual({ ...again.badges }, { "1": 5 });
-  assert.deepEqual(again.badgeQueue, []);
+  const first = awardBadges(1, {}, 5);
+  assert.deepEqual({ ...first }, { "1": 5 });
+  assert.deepEqual({ ...awardBadges(2, first, 9) }, { "1": 5 });
 });
 
-test("plusieurs paliers franchis d'un coup : seul le plus haut est notifié", () => {
-  const { badges, badgeQueue } = awardBadges(60, {}, [], true, 5);
-  assert.equal(earnedCount(badges), 4);
-  assert.deepEqual(badgeQueue, [50]);
-});
-
-test("sans notification de badge, le palier est attribué mais pas mis en file", () => {
-  const { badges, badgeQueue } = awardBadges(1, {}, [], false, 5);
-  assert.ok(hasBadge(badges, 1));
-  assert.deepEqual(badgeQueue, []);
+test("seul le plus haut badge obtenu est à notifier, tant qu'il ne l'a pas été", () => {
+  const badges = awardBadges(255, {}, 5);
+  assert.equal(earnedCount(badges), 6);
+  assert.equal(pendingBadge(badges, 0), 250);
+  assert.equal(pendingBadge(badges, 100), 250);
+  assert.equal(pendingBadge(badges, 250), null);
+  assert.equal(pendingBadge({}, 0), null);
 });
 
 test("le compteur et les badges sont propres à chaque compte X", async () => {
@@ -40,25 +36,30 @@ test("le compteur et les badges sont propres à chaque compte X", async () => {
   const first = await getState("1");
   const second = await getState("2");
   assert.equal(first.blockCount, 2);
-  assert.deepEqual(first.badgeQueue, [1]);
+  assert.equal(pendingBadge(first.badges, first.badgeNotified), 1);
   assert.equal(second.blockCount, 1);
   assert.equal(store["acct:2/blockCount"], 1);
 });
 
-test("le dixième blocage ajoute le palier suivant à la file", async () => {
-  for (let i = 0; i < 10; i++) await recordBlockSuccess("1");
-  assert.deepEqual((await getState("1")).badgeQueue, [1, 10]);
+test("une notification fermée ne revient plus, le palier suivant si", async () => {
+  await recordBlockSuccess("1");
   await dismissBadge(1, "1");
-  assert.deepEqual((await getState("1")).badgeQueue, [10]);
+  let state = await getState("1");
+  assert.equal(pendingBadge(state.badges, state.badgeNotified), null);
+  for (let i = 0; i < 9; i++) await recordBlockSuccess("1");
+  state = await getState("1");
+  assert.equal(pendingBadge(state.badges, state.badgeNotified), 10);
+  assert.equal((await getState("2")).badgeNotified, 0);
 });
 
-test("couper les notifications de badge vide la file de chaque compte X", async () => {
-  await recordBlockSuccess("1");
-  await recordBlockSuccess("2");
+test("fermer une notification dépassée ne fait pas redescendre le palier notifié", async () => {
+  await dismissBadge(25, "1");
+  await dismissBadge(10, "1");
+  assert.equal((await getState("1")).badgeNotified, 25);
+});
+
+test("le réglage des notifications de badge est enregistré", async () => {
   await setNotifyBadges(false);
-  assert.deepEqual((await getState("1")).badgeQueue, []);
-  assert.deepEqual((await getState("2")).badgeQueue, []);
-  await recordBlockSuccess("1");
   assert.equal((await getState("1")).notifyBadges, false);
 });
 
@@ -83,4 +84,30 @@ test("le texte de partage suit la spec, palier 1 compris", () => {
   const url = new URL(shareUrl(fifth!));
   assert.equal(url.origin + url.pathname, "https://x.com/intent/post");
   assert.equal(url.searchParams.get("text"), shareText(fifth!));
+});
+
+test("le rattrapage ne fait jamais baisser le compteur", async () => {
+  store["acct:2/blockCount"] = 12;
+  store[resultKey("a", "acct:2/")] = { state: "already_blocked", at: 1 };
+  await syncAllBadges();
+  assert.equal((await getState("2")).blockCount, 12);
+});
+
+test("une installation déjà en 1.4.0 rattrape ses badges à la mise à jour", async () => {
+  store["acct:2/blockCount"] = 7;
+  store["acct:2/badges"] = { "1": 3 };
+  for (let i = 0; i < 25; i++) store[resultKey(`c${i}`, "acct:2/")] = { state: "already_blocked", at: 1 };
+  await syncAllBadges();
+  const state = await getState("2");
+  assert.equal(state.blockCount, 25);
+  assert.deepEqual(Object.keys(state.badges), ["1", "10", "25"]);
+  assert.equal(pendingBadge(state.badges, state.badgeNotified), 25);
+});
+
+test("un compte repéré comme déjà bloqué compte pour les badges", async () => {
+  store.lists = [manualList(["a"], 1)];
+  await markAlreadyBlocked(["a"], "2");
+  const state = await getState("2");
+  assert.equal(state.blockCount, 1);
+  assert.equal(pendingBadge(state.badges, state.badgeNotified), 1);
 });

@@ -176,7 +176,13 @@ async function check(state: State, batch: string[]): Promise<Next> {
     } else checked.set(handle, at);
   }
   await setResults(state.prefix, entries, recovered(state));
+  await updateBadges("syncBadges", state);
   return now();
+}
+
+/** Le résultat est enregistré : un badge manqué ne doit pas arrêter le traitement. */
+async function updateBadges(name: "recordBlockSuccess" | "syncBadges", state: State): Promise<void> {
+  await write(name, state.account).catch((err: unknown) => console.warn("[Barrage]", err));
 }
 
 /** L'appel a abouti : une erreur affichée n'est plus d'actualité. */
@@ -192,8 +198,7 @@ async function block(state: State, handle: string): Promise<Next> {
   const at = Date.now();
   if (outcome.kind === "ok") {
     await setResults(state.prefix, { [handle]: { state: "blocked", at } }, recovered(state));
-    // Le blocage a eu lieu : un badge manqué ne doit pas arrêter le traitement.
-    await write("recordBlockSuccess", state.account).catch((err: unknown) => console.warn("[Barrage]", err));
+    await updateBadges("recordBlockSuccess", state);
   } else if (outcome.kind === "not_found") {
     const result: Result = { state: "not_found", at, message: outcome.message };
     await setResults(state.prefix, { [handle]: result }, recovered(state));
