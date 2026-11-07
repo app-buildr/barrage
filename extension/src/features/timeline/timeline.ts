@@ -26,7 +26,6 @@ import {
   USER_CELL_SELECTOR,
   USER_NAME_SELECTOR,
 } from "./selectors.ts";
-import "./timeline.css";
 
 let listed = new Set<string>();
 let results: Results = Object.create(null);
@@ -40,8 +39,11 @@ let prefix = "";
 class Batch {
   readonly sent = new Set<string>();
   private pending = new Set<string>();
+  private readonly name: "addSeen" | "markAlreadyBlocked";
 
-  constructor(private readonly name: "addSeen" | "markAlreadyBlocked") {}
+  constructor(name: "addSeen" | "markAlreadyBlocked") {
+    this.name = name;
+  }
 
   add(handle: string): void {
     if (!this.sent.has(handle)) this.pending.add(handle);
