@@ -11,7 +11,7 @@ import { serial, serveWrites } from "../core/writer.ts";
 chrome.runtime.onInstalled.addListener(({ reason, previousVersion }) => {
   if (reason === "update") void serial(() => migrate(previousVersion));
   // Une mise à jour de l'extension répare l'état laissé par la 1.1.0.
-  void serial(repairInheritedBlocks);
+  if (reason === "update") void serial(() => repairInheritedBlocks(previousVersion));
   void serial(syncAllBadges);
 });
 servePages();

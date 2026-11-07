@@ -17,6 +17,7 @@ import {
   type ErrorReason,
 } from "../../core/state.ts";
 import { syncBadges } from "../badges/store.ts";
+import { isNewer } from "../updates/version.ts";
 import { automationPause, resumable } from "./plan.ts";
 import { MAX_ATTEMPTS, failure, isBlocked, isPending, resultOf, type Result, type Results } from "./queue.ts";
 
@@ -168,16 +169,25 @@ export async function useAccount(account: string, handle: string | null): Promis
   if (Object.keys(values).length) await chrome.storage.local.set(values);
 }
 
+/** Publication de la 1.1.0, première à séparer les comptes X. */
+const MULTI_ACCOUNT_AT = Date.UTC(2026, 9, 29, 14, 51, 31);
+
 /**
  * Compte bloqué par Barrage d'après l'état commun d'avant la prise en charge
  * de plusieurs comptes, repris sans préfixe par le premier compte X vu. Avant,
  * Barrage bloquait la liste sur chaque compte du navigateur : un compte qu'il
  * y notait bloqué l'a très probablement été par lui sur les autres aussi.
+ * Seul un blocage daté d'avant compte : ces clés sont aussi celles du premier
+ * compte aujourd'hui, et un blocage récent n'y prouve rien pour les autres. Un
+ * doute laisse le compte à l'utilisateur : Barrage ne le débloquera pas.
  * Lecture d'une seule clé par compte : pas de parcours de tout le stockage.
  */
 function inheritedBlock(stored: Record<string, unknown>): (handle: string) => boolean {
   if (typeof stored.legacy !== "string") return () => false;
-  return (handle) => (stored[resultKey(handle)] as Result | undefined)?.state === "blocked";
+  return (handle) => {
+    const result = stored[resultKey(handle)] as Result | undefined;
+    return result?.state === "blocked" && result.at < MULTI_ACCOUNT_AT;
+  };
 }
 
 /**
@@ -218,14 +228,19 @@ export async function recordAudit(
   await syncBadges(account);
 }
 
+/** Première version dont les vérifications ne sont plus à réparer. */
+const REPAIRED_VERSION = "1.1.1";
+
 /**
  * Répare les vérifications faites par la version 1.1.0, qui comptaient comme
  * « bloqué avant Barrage » tous les blocages d'un compte X autre que le
  * premier vu : ceux que l'état commun d'avant attribuait à Barrage lui
  * reviennent, pour être débloqués au passage sur Off. Sans requête à X, et
- * sans effet une fois appliquée.
+ * seulement en quittant une version concernée : plus tard, un « déjà bloqué »
+ * est un vrai blocage de l'utilisateur, que Barrage ne doit pas s'attribuer.
  */
-export async function repairInheritedBlocks(): Promise<void> {
+export async function repairInheritedBlocks(previousVersion: string | undefined): Promise<void> {
+  if (!previousVersion || !isNewer(REPAIRED_VERSION, previousVersion)) return;
   const stored = await readStorage();
   const inherited = inheritedBlock(stored);
   const values: Record<string, unknown> = {};

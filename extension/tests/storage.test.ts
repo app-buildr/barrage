@@ -333,12 +333,53 @@ test("la réparation rend à Barrage les blocages hérités marqués « avant Ba
   await useAccount("2", null);
   store[resultKey("a", "acct:2/")] = { state: "already_blocked", at: 5 };
   store[resultKey("b", "acct:2/")] = { state: "already_blocked", at: 5 };
-  await repairInheritedBlocks();
+  await repairInheritedBlocks("1.1.0");
   const second = await getState("2");
   assert.deepEqual(second.results.a, { state: "blocked", at: 5 });
   assert.equal(second.results.b?.state, "already_blocked");
   // Le premier compte n'est pas touché.
   assert.equal((await getState("1")).results.a?.state, "blocked");
+});
+
+test("la réparation ne concerne que les versions qui en ont besoin", async () => {
+  store.remote = ["a"];
+  await useAccount("1", null);
+  putResults({ a: { state: "blocked", at: 1 } });
+  await useAccount("2", null);
+  const key = resultKey("a", "acct:2/");
+  for (const version of ["1.1.1", "1.3.0", "1.4.0", undefined, "illisible"]) {
+    store[key] = { state: "already_blocked", at: 5 };
+    await repairInheritedBlocks(version);
+    assert.equal((store[key] as { state: string }).state, "already_blocked");
+  }
+  store[key] = { state: "already_blocked", at: 5 };
+  await repairInheritedBlocks("1.0.2");
+  assert.equal((store[key] as { state: string }).state, "blocked");
+});
+
+test("une seconde réparation ne s'attribue pas un blocage récent de l'utilisateur", async () => {
+  store.remote = ["a", "b"];
+  await useAccount("1", null);
+  // Bloqué par Barrage après la séparation des comptes, sur le premier compte seulement.
+  putResults({ a: { state: "blocked", at: 1 }, b: { state: "blocked", at: Date.now() } });
+  await useAccount("2", null);
+  store[resultKey("b", "acct:2/")] = { state: "already_blocked", at: 5 };
+  await repairInheritedBlocks("1.1.0");
+  await repairInheritedBlocks("1.1.0");
+  const second = await getState("2");
+  assert.equal(second.results.b?.state, "already_blocked");
+  store.disabled = ["b"];
+  store["acct:2/retired"] = ["b"];
+  assert.deepEqual(unblockQueue(await getState("2")), []);
+});
+
+test("la vérification d'un compte X vu après coup ne s'attribue pas un blocage récent", async () => {
+  store.remote = ["a"];
+  await useAccount("1", null);
+  putResults({ a: { state: "blocked", at: Date.now() } });
+  await useAccount("2", null);
+  await recordAudit(["a"], ["a"], ["a"], {}, "2");
+  assert.equal((await getState("2")).results.a?.state, "already_blocked");
 });
 
 test("réactiver un compte annule son déblocage en attente sur chaque compte X", async () => {
