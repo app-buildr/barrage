@@ -1,6 +1,7 @@
 // État de l'extension, partagé par les trois surfaces (service worker, onglets
 // x.com, options). Chaque fonctionnalité écrit sa part dans son propre store.ts ;
-// ce fichier ne fait que décrire la forme de l'état et le lire.
+// ce fichier décrit la forme de l'état, le lit et en dérive ce que toutes les
+// surfaces partagent (files de blocage et de déblocage, comptes hors liste).
 //
 // chrome.storage.local plutôt que sync : sync plafonne chaque valeur à 8 Ko,
 // trop peu pour une longue liste.
@@ -69,7 +70,7 @@ export type State = {
    * voir unblockQueue.
    */
   unblock: string[];
-  /** Comptes de la liste vus dans le fil et pas encore bloqués, à traiter en priorité. */
+  /** Comptes de la liste vus dans le fil ou demandés à la main, pas encore bloqués : la file de blocage. */
   seen: string[];
   /** Notification sur x.com à chaque compte bloqué par Barrage. */
   notify: boolean;
@@ -205,7 +206,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export function strings(value: unknown): string[] {
+/** Les chaînes d'un tableau stocké, ou rien si ce n'en est pas un. */
+export function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
 }
 
@@ -265,7 +267,8 @@ export async function readStorage(): Promise<Record<string, unknown>> {
 }
 
 /**
- * Tout l'état en une lecture, valeurs corrompues ramenées aux défauts.
+ * Tout l'état en une lecture. Les valeurs corrompues sont ramenées aux défauts,
+ * sauf `results` et `accounts`, dont seule la forme générale est contrôlée.
  * @param account compte X à lire ; par défaut, le dernier connecté sur x.com
  */
 export async function getState(account?: string | null): Promise<State> {
@@ -281,7 +284,7 @@ export function readState(stored: Record<string, unknown>, account?: string | nu
     if (handle !== null && isRecord(value)) results[handle] = value as Result;
   }
   const own = (field: AccountField) => stored[prefix + field];
-  const remote = Array.isArray(stored.remote) ? strings(stored.remote) : null;
+  const remote = Array.isArray(stored.remote) ? stringArray(stored.remote) : null;
   const official = remote ?? DEFAULT_HANDLES;
   const lists = readLists(stored.lists);
   const blockCount = own("blockCount");
@@ -300,13 +303,13 @@ export function readState(stored: Record<string, unknown>, account?: string | nu
     official,
     onboarded: stored.onboarded === true,
     remote,
-    retired: strings(own("retired")),
+    retired: stringArray(own("retired")),
     retiredAt: isRecord(retiredAt) ? Object.assign(Object.create(null), retiredAt) : Object.create(null),
     listGuards: readGuards(stored.listGuards),
-    disabled: strings(stored.disabled),
-    unblock: strings(own("unblock")),
+    disabled: stringArray(stored.disabled),
+    unblock: stringArray(own("unblock")),
     results,
-    seen: strings(own("seen")),
+    seen: stringArray(own("seen")),
     notify: stored.notify !== false,
     notifyBadges: stored.notifyBadges !== false,
     blockCount: typeof blockCount === "number" ? blockCount : 0,
@@ -314,9 +317,9 @@ export function readState(stored: Record<string, unknown>, account?: string | nu
     badgeNotified: typeof badgeNotified === "number" ? badgeNotified : 0,
     pauseUntil: typeof pauseUntil === "number" ? pauseUntil : 0,
     strikes: typeof strikes === "number" ? strikes : 0,
-    failures: strings(own("failures")),
+    failures: stringArray(own("failures")),
     error: isRecord(error) ? (error as BlockingError) : null,
-    audit: strings(own("audit")),
+    audit: stringArray(own("audit")),
     latestVersion: typeof stored.latestVersion === "string" ? stored.latestVersion : null,
   };
 }

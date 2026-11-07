@@ -1,6 +1,8 @@
 // Réseaux sociaux affichés en onglets dans les options. X est le seul pris en
 // charge aujourd'hui ; les autres sont listés pour préparer leur arrivée.
-// Ajouter un réseau : une entrée ici ; l'onglet et son panneau sont générés.
+// Une entrée suffit pour un onglet grisé « Bientôt ». L'état et le blocage restent
+// propres à X : `available` ne peut passer à vrai pour un autre réseau qu'avec un
+// moteur de blocage et un état par réseau, voir ENGINE_NETWORK.
 
 export type NetworkId = "x" | "instagram" | "tiktok" | "youtube" | "facebook";
 
@@ -46,6 +48,12 @@ export const NETWORKS: readonly Network[] = [
     available: false,
   },
 ];
+
+/** Réseaux ouvrables, ceux que peut viser une liste. */
+export const AVAILABLE_NETWORKS: readonly Network[] = NETWORKS.filter((n) => n.available);
+
+/** Seul réseau doté d'un moteur de blocage : les comptes des options sont les siens. */
+export const ENGINE_NETWORK: NetworkId = "x";
 
 export function toNetworkId(value: unknown): NetworkId {
   return NETWORKS.some((n) => n.id === value) ? (value as NetworkId) : "x";

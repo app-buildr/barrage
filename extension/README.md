@@ -19,6 +19,7 @@ npm run check            # après le build : listes, versions, manifest et dist/
 
 La CI (`.github/workflows/ci.yml`) lance ces commandes sur chaque pull request. Le format des listes et les procédures d'ajout, de retrait et de retour arrière sont dans [`lists/README.md`](../lists/README.md).
 
+- Imports : `@/` est réservé aux `.tsx` et aux hooks de la page d'options. La logique lue par `node --test` et le content script utilisent des chemins relatifs : Node ne connaît pas cet alias. L'extension du fichier est toujours écrite, sauf dans `src/ui/components/`, généré par shadcn/ui.
 - `src/entries/` : points d'entrée (service worker, content script x.com, page d'options), assemblage seulement.
 - `src/features/<fonctionnalité>/` : composants `.tsx` pour l'affichage, et trois sortes de fichiers `.ts` : des modèles purs et testés (`queue.ts`, `outcome.ts`, `status.ts`), des stores (`store.ts`) et des orchestrateurs liés à une surface, qui font des entrées-sorties (`runner.ts`, `timeline.ts`, `watch.ts`, `sync.ts`).
 - `src/features/lists/` : listes de comptes (`lists.ts`), import (`import.ts`), synchronisation et migration depuis la 1.3.0 (`migrate.ts`). `State.handles` est la liste effective de X : l'union des listes actives.

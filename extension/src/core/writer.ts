@@ -1,8 +1,9 @@
-// Service worker : seul contexte qui modifie l'état. Les écritures qui lisent
-// l'état puis le réécrivent s'y appliquent une à la fois, d'où qu'elles
-// viennent (onglets x.com, options, service worker lui-même). Sans cela, deux
-// écritures simultanées liraient le même état et la seconde effacerait la
-// première.
+// Service worker : sérialise les écritures qui lisent l'état puis le réécrivent.
+// Elles s'y appliquent une à la fois, d'où qu'elles viennent (onglets x.com,
+// options, service worker lui-même). Sans cela, deux écritures simultanées
+// liraient le même état et la seconde effacerait la première. Les écritures de
+// clés indépendantes (résultats, pause, erreur) restent directes, voir
+// features/blocking/store.ts.
 import { restoreBackup } from "../features/backup/store.ts";
 import { dismissBadge, recordBlockSuccess, setNotifyBadges, syncBadges } from "../features/badges/store.ts";
 import {

@@ -1,13 +1,13 @@
 // Formulaire « Ajouter des comptes » : un ou plusieurs comptes séparés par
 // des espaces, virgules ou points-virgules, ajoutés à « Ma liste perso ».
 import { useState, type FormEvent } from "react";
-import { Button } from "@/ui/components/button";
-import { Input } from "@/ui/components/input";
+import { Button } from "@/ui/components/button.tsx";
+import { Input } from "@/ui/components/input.tsx";
 import { PILL_INPUT } from "@/ui/classes.ts";
-import { Hint, Panel, StatusMessage, type StatusKind } from "@/ui/layout/Section";
-import { cn } from "@/ui/lib/utils";
+import { Hint, Panel, StatusMessage, type StatusKind } from "@/ui/layout/Section.tsx";
+import { cn } from "@/ui/lib/utils.ts";
 import { plural } from "@/core/format.ts";
-import { WRITE_ERROR } from "@/core/use-safe-write.ts";
+import { WRITE_ERROR } from "@/ui/use-safe-write.ts";
 import { write } from "@/core/write.ts";
 import { parseInput } from "../lists/handles.ts";
 

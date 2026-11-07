@@ -1,7 +1,7 @@
 // Barre d'onglets principale : Comptes, Badges, Réglages. Clavier géré par
 // Radix. La pastille de l'onglet actif glisse d'un onglet à l'autre.
 import { type FocusEvent, useLayoutEffect, useRef, useState } from "react";
-import { TabsList, TabsTrigger } from "@/ui/components/tabs";
+import { TabsList, TabsTrigger } from "@/ui/components/tabs.tsx";
 import type { MainTab } from "./main-tab.ts";
 
 type Pill = { left: number; width: number };

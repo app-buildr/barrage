@@ -1,8 +1,8 @@
 // Tableau de comptes dans une carte : en-tête figé, défilement vertical, message
 // quand le filtre ne laisse rien.
 import type { ReactNode } from "react";
-import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/ui/components/table";
-import { cn } from "@/ui/lib/utils";
+import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/ui/components/table.tsx";
+import { cn } from "@/ui/lib/utils.ts";
 
 /** Cellules : mêmes marges partout, réduites sur petit écran. */
 export const CELL = "px-6 py-3.5 max-[560px]:px-3 max-[560px]:py-2.5";

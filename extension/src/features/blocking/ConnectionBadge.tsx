@@ -1,7 +1,7 @@
 // Pastille d'en-tête des options, affichée quand un onglet x.com est prêt à
 // bloquer, c'est-à-dire ouvert et connecté à X.
-import { Badge } from "@/ui/components/badge";
-import { cn } from "@/ui/lib/utils";
+import { Badge } from "@/ui/components/badge.tsx";
+import { cn } from "@/ui/lib/utils.ts";
 import { useXConnection } from "./use-connection.ts";
 
 export function ConnectionBadge() {

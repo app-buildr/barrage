@@ -14,10 +14,13 @@ export const X_ACCOUNT = "@BarrageApp";
  * Délai entre deux blocages. X limite le nombre d'actions par compte et peut
  * restreindre un compte trop rapide : la valeur reste prudente.
  */
-export const DELAY_SECONDS = 8;
+export const BLOCK_DELAY_MS = 8_000;
 
 /** Variation aléatoire appliquée au délai, pour ne pas frapper à cadence fixe. */
 export const DELAY_JITTER = 0.3;
+
+/** Au-delà, un compte en échec n'est plus retenté sans action de l'utilisateur. */
+export const MAX_ATTEMPTS = 3;
 
 /** Attente par défaut quand X signale une limite sans dire jusqu'à quand. */
 export const RATE_LIMIT_FALLBACK_MS = 15 * 60_000;

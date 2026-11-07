@@ -1,6 +1,6 @@
 // Puces de filtre par état : Tous, Bloqués, Visibles, Problèmes, Désactivés.
-import { ToggleGroup, ToggleGroupItem } from "@/ui/components/toggle-group";
-import { cn } from "@/ui/lib/utils";
+import { ToggleGroup, ToggleGroupItem } from "@/ui/components/toggle-group.tsx";
+import { cn } from "@/ui/lib/utils.ts";
 import { CATEGORIES, totalCount, type Category, type Counts } from "./status.ts";
 
 const LABELS: Record<Category, string> = {

@@ -13,9 +13,9 @@
 import {
   AUDIT_INTERVAL_MS,
   AUTH_RETRY_MS,
+  BLOCK_DELAY_MS,
   CHECK_RETRY_MS,
   DELAY_JITTER,
-  DELAY_SECONDS,
   MAX_CONSECUTIVE_FAILURES,
   MAX_PAUSE_MS,
   NETWORK_RETRY_MS,
@@ -86,14 +86,15 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function jittered(seconds: number): number {
-  return seconds * 1000 * (1 + (Math.random() * 2 - 1) * DELAY_JITTER);
+function jittered(ms: number): number {
+  return ms * (1 + (Math.random() * 2 - 1) * DELAY_JITTER);
 }
 
 type Next = { stop: true } | { stop: false; waitMs: number };
 
 const STOP: Next = { stop: true };
-const now = (waitMs = 0): Next => ({ stop: false, waitMs });
+/** Le traitement continue, après cette attente. */
+const continueIn = (waitMs = 0): Next => ({ stop: false, waitMs });
 
 /** Issue qui concerne tout le traitement, pas le compte visé. */
 type GlobalOutcome = Extract<Outcome, { kind: "rate_limited" | "automation" | "broken" | "auth" | "network" }>;
@@ -111,8 +112,8 @@ async function handleGlobal(state: State, outcome: GlobalOutcome): Promise<Next>
     case "rate_limited":
       // Stocké, pour qu'un autre onglet qui reprendrait le verrou attende aussi.
       // La variation évite de reprendre à la seconde annoncée, jamais avant.
-      await setPauseUntil(state.prefix, Math.min(outcome.until, Date.now() + MAX_PAUSE_MS) + jittered(DELAY_SECONDS));
-      return now();
+      await setPauseUntil(state.prefix, Math.min(outcome.until, Date.now() + MAX_PAUSE_MS) + jittered(BLOCK_DELAY_MS));
+      return continueIn();
     case "automation":
       await recordAutomation(state.prefix, state.strikes, outcome.message);
       return STOP;
@@ -125,7 +126,7 @@ async function handleGlobal(state: State, outcome: GlobalOutcome): Promise<Next>
       return STOP;
     case "network":
       await setError(state.prefix, `${outcome.message} Nouvel essai dans une minute.`, "network", NETWORK_RETRY_MS);
-      return now(NETWORK_RETRY_MS);
+      return continueIn(NETWORK_RETRY_MS);
   }
 }
 
@@ -135,7 +136,7 @@ async function handleGlobal(state: State, outcome: GlobalOutcome): Promise<Next>
  * pour tout le traitement. Un autre refus renvoie `failed`, à traiter par l'appelant.
  */
 async function lookup(state: State, batch: string[]): Promise<Lookup | Next | { failed: string }> {
-  if (switched(state)) return now();
+  if (switched(state)) return continueIn();
   const reply = await lookupBlocking(batch);
   if (!("kind" in reply)) return reply;
   if (isGlobal(reply)) return handleGlobal(state, reply);
@@ -161,12 +162,12 @@ async function audit(state: State, batch: string[]): Promise<Next> {
   if ("failed" in reply) {
     console.warn("[Barrage] vérification du compte X abandonnée pour un paquet :", reply.failed);
     await write("recordAudit", batch, [], [], {}, state.account);
-    return now();
+    return continueIn();
   }
   const at = Date.now();
   for (const handle of batch) if (reply.found.has(handle) && !reply.blocking.has(handle)) checked.set(handle, at);
   await write("recordAudit", batch, [...reply.found], [...reply.blocking], recovered(state), state.account);
-  return now();
+  return continueIn();
 }
 
 /** Décision du moment pour cet état, voir plan.ts. */
@@ -193,7 +194,7 @@ async function check(state: State, batch: string[]): Promise<Next> {
   }
   await setResults(state.prefix, entries, recovered(state));
   await updateBadges("syncBadges", state);
-  return now();
+  return continueIn();
 }
 
 /** Le résultat est enregistré : un badge manqué ne doit pas arrêter le traitement. */
@@ -226,7 +227,7 @@ async function tripped(state: State, handle: string, message: string): Promise<b
 }
 
 async function block(state: State, handle: string): Promise<Next> {
-  if (switched(state)) return now();
+  if (switched(state)) return continueIn();
   const outcome = await blockUser(handle);
   if (isGlobal(outcome)) return handleGlobal(state, outcome);
 
@@ -242,12 +243,12 @@ async function block(state: State, handle: string): Promise<Next> {
     await write("recordBlockFailure", handle, outcome.message, at, state.account);
   }
   // Le délai entre deux blocages ne se raccourcit pas quand la liste change.
-  return now(jittered(DELAY_SECONDS));
+  return continueIn(jittered(BLOCK_DELAY_MS));
 }
 
 /** Débloque un compte désactivé par l'utilisateur après que Barrage l'a bloqué. */
 async function unblock(state: State, handle: string): Promise<Next> {
-  if (switched(state)) return now();
+  if (switched(state)) return continueIn();
   const outcome = await unblockUser(handle);
   if (isGlobal(outcome)) return handleGlobal(state, outcome);
 
@@ -260,7 +261,7 @@ async function unblock(state: State, handle: string): Promise<Next> {
       outcome.kind === "ok" ? { state: "unblocked", at } : { state: "not_found", at, message: outcome.message };
     await write("finishUnblock", handle, result, outcome.kind === "ok" ? succeeded(state) : answered(state), state.account);
   }
-  return now(jittered(DELAY_SECONDS));
+  return continueIn(jittered(BLOCK_DELAY_MS));
 }
 
 /** Un tour : l'action décidée par nextAction, voir plan.ts. */
@@ -280,7 +281,7 @@ async function step(): Promise<Next> {
     case "stop":
       return STOP;
     case "wait":
-      return now(action.ms);
+      return continueIn(action.ms);
     case "audit":
       return audit(state, action.batch);
     case "unblock":
@@ -301,7 +302,7 @@ async function run(): Promise<void> {
       // Contexte invalidé en cours de route : on rend le verrou à un onglet sain.
       if (!contextAlive()) return;
       console.error("[Barrage]", err);
-      next = now(NETWORK_RETRY_MS);
+      next = continueIn(NETWORK_RETRY_MS);
     }
     if (next.stop) return;
     await sleep(next.waitMs);

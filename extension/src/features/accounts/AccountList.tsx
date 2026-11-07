@@ -3,7 +3,7 @@
 import { useDeferredValue, useMemo, useState } from "react";
 import type { State } from "@/core/state.ts";
 import { CORAL_LINK } from "@/ui/classes.ts";
-import { Panel } from "@/ui/layout/Section";
+import { Panel } from "@/ui/layout/Section.tsx";
 import { coversNetwork } from "../lists/lists.ts";
 import type { Network } from "../networks/networks.ts";
 import { AccountRow } from "./AccountRow.tsx";
@@ -70,7 +70,7 @@ export function AccountList({ state, network }: { state: State; network: Network
             {shown.map((line) => (
               <AccountRow
                 key={line.handle}
-                network={network.id}
+                network={network}
                 handle={line.handle}
                 enabled={line.enabled}
                 status={line.status}

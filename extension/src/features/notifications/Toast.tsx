@@ -43,7 +43,7 @@ export function Toast({ toast, store }: { toast: ToastItem; store: ToastStore })
   // Décompte suspendu tant que la souris ou le focus clavier sont dessus, pas
   // de notification qui disparaît au moment de cliquer « Annuler ». Le focus
   // laissé par un clic de souris ne compte pas, sinon le décompte resterait figé.
-  const hovered = () =>
+  const holdsCountdown = () =>
     pausable && !!root.current && (root.current.matches(":hover") || root.current.querySelector(":focus-visible") !== null);
 
   // La barre donne le rythme : la notification part quand elle est vide.
@@ -64,7 +64,7 @@ export function Toast({ toast, store }: { toast: ToastItem; store: ToastStore })
     if (!animation) return;
     animation.effect?.updateTiming({ duration: content.duration ?? TOAST_MS });
     animation.currentTime = 0;
-    if (hovered()) animation.pause();
+    if (holdsCountdown()) animation.pause();
     else animation.play();
     if (focusClose.current) {
       focusClose.current = false;
@@ -80,14 +80,14 @@ export function Toast({ toast, store }: { toast: ToastItem; store: ToastStore })
   }, [leaving, id, store]);
 
   const resume = () => {
-    if (!hovered()) countdown.current?.play();
+    if (!holdsCountdown()) countdown.current?.play();
   };
 
   return (
     <div
       ref={root}
       onMouseEnter={() => pausable && countdown.current?.pause()}
-      onFocus={() => hovered() && countdown.current?.pause()}
+      onFocus={() => holdsCountdown() && countdown.current?.pause()}
       onMouseLeave={resume}
       onBlur={() => setTimeout(resume)}
       onTransitionEnd={() => leaving && store.remove(id)}

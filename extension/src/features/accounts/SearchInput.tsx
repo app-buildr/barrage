@@ -1,6 +1,6 @@
 // Champ de recherche d'une liste de comptes.
 import { Search } from "lucide-react";
-import { Input } from "@/ui/components/input";
+import { Input } from "@/ui/components/input.tsx";
 
 export function SearchInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return (

@@ -2,8 +2,8 @@
 // compte X dont les états sont affichés (le dernier connecté sur x.com).
 import { percent, plural } from "@/core/format.ts";
 import { PROGRESS_BAR } from "@/ui/classes.ts";
-import { Progress } from "@/ui/components/progress";
-import { Panel } from "@/ui/layout/Section";
+import { Progress } from "@/ui/components/progress.tsx";
+import { Panel } from "@/ui/layout/Section.tsx";
 import { totalCount, type Counts } from "./status.ts";
 
 export function ProgressCard({ counts, handle }: { counts: Counts; handle: string | undefined }) {

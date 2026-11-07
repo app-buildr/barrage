@@ -1,4 +1,4 @@
-/* Thème « Corail » de l'extension, voir resources/barrage-theme-corail.md.
+/* Thème « Corail » de l'extension.
    Thème clair uniquement. Les couleurs de marque alimentent les variables de
    shadcn/ui : les composants de src/ui/components s'habillent tout seuls. */
 @import "tailwindcss";

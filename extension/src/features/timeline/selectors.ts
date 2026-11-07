@@ -22,5 +22,8 @@ export const PROFILE_NAME_SELECTOR = '[data-testid="UserName"]';
 /** Colonne centrale, celle du profil visité. */
 export const PRIMARY_COLUMN_SELECTOR = '[data-testid="primaryColumn"]';
 
+/** Bouton de compte de la barre latérale : « Nom @identifiant ». */
+export const ACCOUNT_BUTTON_SELECTOR = '[data-testid="SideNav_AccountSwitcher_Button"]';
+
 /** Attribut posé sur ce que Barrage masque, voir timeline.css. */
 export const HIDDEN_ATTR = "data-barrage-hidden";

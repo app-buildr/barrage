@@ -1,7 +1,7 @@
 // Écran affiché par la page d'options : l'accueil tant qu'il n'est pas terminé,
 // sinon l'onglet porté par le hash. Tout changement passe par une transition.
 import { useEffect, useState } from "react";
-import { tabFromHash } from "@/ui/layout/main-tab.ts";
+import { tabFromHash } from "./main-tab.ts";
 import { withTransition } from "@/ui/transition.ts";
 
 /** @param onboarded undefined le temps de la première lecture de l'état */

@@ -1,11 +1,10 @@
 // Lien vers un profil, ouvert dans un nouvel onglet.
-import { NETWORKS, type NetworkId } from "../networks/networks.ts";
+import type { Network } from "../networks/networks.ts";
 
-export function ProfileLink({ network, handle, className }: { network: NetworkId; handle: string; className?: string }) {
-  const entry = NETWORKS.find((n) => n.id === network);
+export function ProfileLink({ network, handle, className }: { network: Network; handle: string; className?: string }) {
   return (
-    <a href={entry?.profileUrl(handle) ?? "#"} target="_blank" rel="noopener" className={className}>
-      {entry?.display?.(handle) ?? `@${handle}`}
+    <a href={network.profileUrl(handle)} target="_blank" rel="noopener" className={className}>
+      {network.display?.(handle) ?? `@${handle}`}
     </a>
   );
 }

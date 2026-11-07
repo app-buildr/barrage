@@ -1,8 +1,8 @@
 // Carte « Notifications » de Réglages : activer ou couper les notifications sur x.com.
-import { useSafeWrite } from "@/core/use-safe-write.ts";
+import { useSafeWrite } from "@/ui/use-safe-write.ts";
 import { write } from "@/core/write.ts";
-import { Switch } from "@/ui/components/switch";
-import { Hint, Panel, StatusMessage } from "@/ui/layout/Section";
+import { Switch } from "@/ui/components/switch.tsx";
+import { Hint, Panel, StatusMessage } from "@/ui/layout/Section.tsx";
 import { setNotify } from "./store.ts";
 
 export function NotificationSettings({ notify, notifyBadges }: { notify: boolean; notifyBadges: boolean }) {

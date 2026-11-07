@@ -1,9 +1,6 @@
 // État de traitement de la liste : quels comptes restent à bloquer. Fonctions
 // pures, couvertes par les tests.
-import { NOT_FOUND_RETRY_MS } from "../../core/config.ts";
-
-/** Au-delà, un compte en échec n'est plus retenté sans action de l'utilisateur. */
-export const MAX_ATTEMPTS = 3;
+import { MAX_ATTEMPTS, NOT_FOUND_RETRY_MS } from "../../core/config.ts";
 
 /**
  * "blocked" : bloqué par Barrage. "already_blocked" : X a indiqué que le compte

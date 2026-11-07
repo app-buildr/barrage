@@ -2,7 +2,7 @@
 // par X et erreur bloquante. Toutes visent un compte X : celles qui reçoivent
 // un préfixe de clés l'exigent ; celles qui reçoivent un compte visent par
 // défaut le dernier connecté sur x.com.
-import { RUNNER_GRACE_MS } from "../../core/config.ts";
+import { MAX_ATTEMPTS, RUNNER_GRACE_MS } from "../../core/config.ts";
 import {
   accountStates,
   accountsOf,
@@ -19,7 +19,7 @@ import {
 import { syncBadges } from "../badges/store.ts";
 import { isNewer } from "../updates/version.ts";
 import { automationPause, resumable } from "./plan.ts";
-import { MAX_ATTEMPTS, failure, isBlocked, isPending, resultOf, type Result, type Results } from "./queue.ts";
+import { failure, isBlocked, isPending, resultOf, type Result, type Results } from "./queue.ts";
 
 /**
  * Enregistre des résultats en une écriture, avec d'autres champs à écrire en
@@ -195,7 +195,7 @@ function inheritedBlock(stored: Record<string, unknown>): (handle: string) => bo
  * compte que X montre bloqué l'est, un compte que X montre non bloqué ne l'est
  * pas, quoi que Barrage ait enregistré. X ne dit pas qui a bloqué : un blocage
  * inconnu de Barrage compte comme fait par l'utilisateur, sauf s'il figure
- * dans l'état commun d'avant (voir inheritedBlocks). Les comptes vérifiés
+ * dans l'état commun d'avant (voir inheritedBlock). Les comptes vérifiés
  * sortent de la liste.
  * @param blocking comptes bloqués d'après X, parmi `found`
  * @param found comptes que X connaît ; les autres gardent leur état

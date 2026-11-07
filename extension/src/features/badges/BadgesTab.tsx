@@ -3,9 +3,9 @@ import { Check } from "lucide-react";
 import type { State } from "@/core/state.ts";
 import { percent } from "@/core/format.ts";
 import { CORAL_LINK, PROGRESS_BAR, TO_REACH } from "@/ui/classes.ts";
-import { Progress } from "@/ui/components/progress";
-import { Panel } from "@/ui/layout/Section";
-import { cn } from "@/ui/lib/utils";
+import { Progress } from "@/ui/components/progress.tsx";
+import { Panel } from "@/ui/layout/Section.tsx";
+import { cn } from "@/ui/lib/utils.ts";
 import { BADGES, earnedCount, hasBadge, nextBadge, shareUrl, type Badge } from "./badges.ts";
 import { BadgeDisc } from "./BadgeDisc.tsx";
 

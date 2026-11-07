@@ -1,5 +1,5 @@
 /* Notifications sur x.com, dans le Shadow DOM de mount.tsx : ni les styles de
-   x.com ni ceux-ci ne débordent. Thème corail, voir resources/notification.png.
+   x.com ni ceux-ci ne débordent. Thème corail.
    Police système : embarquer Inter exposerait l'extension à x.com
    (web_accessible_resources), qui pourrait alors détecter Barrage.
 

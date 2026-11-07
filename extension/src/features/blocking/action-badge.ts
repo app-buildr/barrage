@@ -25,7 +25,7 @@ export async function refreshBadge(): Promise<void> {
   await chrome.action.setTitle({ title });
 }
 
-export function watchBadge(): void {
+export function watchActionBadge(): void {
   // La version publiée ne fait pas partie de la file : écoutée à part, pour ne
   // pas réveiller le traitement des onglets x.com.
   onStateChange(() => void refreshBadge(), [...QUEUE_KEYS, "latestVersion"]);

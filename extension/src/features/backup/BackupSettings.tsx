@@ -3,10 +3,10 @@
 import { useRef, useState } from "react";
 import { Download, Upload } from "lucide-react";
 import { readStorage } from "@/core/state.ts";
-import { useSafeWrite } from "@/core/use-safe-write.ts";
+import { useSafeWrite } from "@/ui/use-safe-write.ts";
 import { write } from "@/core/write.ts";
-import { Button } from "@/ui/components/button";
-import { Hint, Panel, StatusMessage, type StatusKind } from "@/ui/layout/Section";
+import { Button } from "@/ui/components/button.tsx";
+import { Hint, Panel, StatusMessage, type StatusKind } from "@/ui/layout/Section.tsx";
 import { BACKUP_INVALID, BACKUP_MAX_BYTES, backupFileName, checkBackup, createBackup, describeBackup } from "./backup.ts";
 
 const DATE = new Intl.DateTimeFormat("fr-FR", { dateStyle: "long" });

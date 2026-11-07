@@ -1,6 +1,7 @@
 // Appels à l'API interne de X, celle qu'utilise le site lui-même.
 // C'est le point qui casse si X change son API : un seul fichier à relire.
 import { handleFromUserNameText } from "../timeline/authors.ts";
+import { ACCOUNT_BUTTON_SELECTOR } from "../timeline/selectors.ts";
 import { classify, noUserMatch, readLookup, routeMaybeGone, type Lookup, type Outcome } from "./outcome.ts";
 
 /**
@@ -58,9 +59,6 @@ export function pageAccount(): string | null {
   if (loadedAccount === undefined) loadedAccount = accountId();
   return loadedAccount;
 }
-
-/** Bouton de compte de la barre latérale : « Nom @identifiant ». */
-const ACCOUNT_BUTTON_SELECTOR = '[data-testid="SideNav_AccountSwitcher_Button"]';
 
 /**
  * Empreinte de la session X, ou null sans session. Le jeton lui-même n'est

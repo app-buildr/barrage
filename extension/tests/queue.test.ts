@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { MAX_ATTEMPTS } from "../src/core/config.ts";
 import {
-  MAX_ATTEMPTS,
   activeHandles,
   eligible,
   failure,

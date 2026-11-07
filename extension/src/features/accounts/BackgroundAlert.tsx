@@ -2,12 +2,12 @@
 // des options : une erreur qui empêche tout blocage, le temps qu'elle soit
 // d'actualité, ou une limite imposée par X.
 import { CircleAlert } from "lucide-react";
-import { useSafeWrite } from "@/core/use-safe-write.ts";
+import { useSafeWrite } from "@/ui/use-safe-write.ts";
 import { write } from "@/core/write.ts";
-import { Alert, AlertDescription, AlertTitle } from "@/ui/components/alert";
-import { Button } from "@/ui/components/button";
-import { StatusMessage } from "@/ui/layout/Section";
-import { cn } from "@/ui/lib/utils";
+import { Alert, AlertDescription, AlertTitle } from "@/ui/components/alert.tsx";
+import { Button } from "@/ui/components/button.tsx";
+import { StatusMessage } from "@/ui/layout/Section.tsx";
+import { cn } from "@/ui/lib/utils.ts";
 import type { BlockingError, ErrorReason } from "@/core/state.ts";
 import { resumable } from "../blocking/plan.ts";
 

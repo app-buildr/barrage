@@ -3,9 +3,9 @@ import { afterEach, beforeEach, mock, test } from "node:test";
 import {
   AUTH_RETRY_MS,
   AUTOMATION_PAUSE_MS,
+  BLOCK_DELAY_MS,
   CHECK_RETRY_MS,
   DELAY_JITTER,
-  DELAY_SECONDS,
   MAX_PAUSE_MS,
   NETWORK_RETRY_MS,
   RETIRE_GRACE_MS,
@@ -120,7 +120,7 @@ test("une limite de X est respectée jusqu'à son échéance, y compris par un a
   assert.deepEqual(x.posts(BLOCK), ["a"]);
   const { pauseUntil } = await getState("1");
   assert.ok(pauseUntil >= reset * 1000);
-  assert.ok(pauseUntil <= reset * 1000 + DELAY_SECONDS * 1000 * (1 + DELAY_JITTER));
+  assert.ok(pauseUntil <= reset * 1000 + BLOCK_DELAY_MS * (1 + DELAY_JITTER));
 
   x.routes[BLOCK] = () => ({ json: {} });
   await openTab();
@@ -136,7 +136,7 @@ test("une échéance de limite absurde est ramenée à la pause maximale", async
   x.routes[BLOCK] = () => ({ status: 429, text: "", headers: { "x-rate-limit-reset": "99999999999" } });
   await openTab();
   const { pauseUntil } = await getState("1");
-  assert.ok(pauseUntil <= T0 + MAX_PAUSE_MS + 2 * DELAY_SECONDS * 1000);
+  assert.ok(pauseUntil <= T0 + MAX_PAUSE_MS + 2 * BLOCK_DELAY_MS);
 });
 
 test("le code 226 arrête tout, même une fois la pause finie, jusqu'à la reprise demandée", async () => {
@@ -260,7 +260,7 @@ test("deux blocages restent espacés, même si la liste change pendant l'attente
     await settle();
   }
   assert.equal(times.length, 5);
-  const minimum = DELAY_SECONDS * 1000 * (1 - DELAY_JITTER);
+  const minimum = BLOCK_DELAY_MS * (1 - DELAY_JITTER);
   for (let i = 1; i < times.length; i++) {
     assert.ok((times[i] as number) - (times[i - 1] as number) >= minimum, `écart ${i}`);
   }

@@ -1,6 +1,6 @@
 // Service worker : assemblage seulement, la logique vit dans features/.
 import { syncAllBadges } from "../features/badges/store.ts";
-import { watchBadge } from "../features/blocking/badge.ts";
+import { watchActionBadge } from "../features/blocking/action-badge.ts";
 import { repairInheritedBlocks } from "../features/blocking/store.ts";
 import { migrate } from "../features/lists/migrate.ts";
 import { syncLists } from "../features/lists/sync.ts";
@@ -22,5 +22,5 @@ chrome.runtime.onInstalled.addListener(({ reason, previousVersion }) => {
 });
 servePages();
 serveWrites();
-watchBadge();
+watchActionBadge();
 syncLists();

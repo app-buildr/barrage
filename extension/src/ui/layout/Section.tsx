@@ -1,6 +1,6 @@
 // Éléments de mise en page des options : carte blanche, aide, compte rendu.
 import type { ComponentProps } from "react";
-import { cn } from "@/ui/lib/utils";
+import { cn } from "@/ui/lib/utils.ts";
 
 export function Panel({ className, ...props }: ComponentProps<"div">) {
   return (

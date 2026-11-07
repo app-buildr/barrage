@@ -2,7 +2,7 @@
 // relu à chaque écriture, et à l'échéance d'une erreur ou d'une limite de X
 // pour qu'elles disparaissent de l'affichage, même sans nouvelle écriture.
 import { useEffect, useState } from "react";
-import { getState, onStateChange, type State } from "./state.ts";
+import { getState, onStateChange, type State } from "@/core/state.ts";
 
 /** La pause la plus longue, marge comprise. */
 const MAX_TIMER_MS = 2 * 24 * 60 * 60_000;

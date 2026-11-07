@@ -2,20 +2,8 @@
 // Clavier (flèches, Début, Fin) géré par Radix. Un réseau pas encore disponible
 // a un onglet grisé « Bientôt », que ni le clic ni le clavier n'ouvrent.
 import { useState, type ReactNode } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/ui/components/tabs";
-import { NETWORKS, toNetworkId, type Network, type NetworkId } from "./networks.ts";
-
-const TAB_KEY = "barrage-tab";
-
-/** Confort par navigateur seulement : l'onglet ouvert est retrouvé à la prochaine visite. */
-function savedTab(): NetworkId {
-  let saved: string | null = null;
-  try {
-    saved = localStorage.getItem(TAB_KEY);
-  } catch {}
-  const id = toNetworkId(saved);
-  return NETWORKS.find((n) => n.id === id)?.available ? id : "x";
-}
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/ui/components/tabs.tsx";
+import { AVAILABLE_NETWORKS, ENGINE_NETWORK, NETWORKS, toNetworkId, type Network, type NetworkId } from "./networks.ts";
 
 type Props = {
   /** Nombre affiché dans l'onglet d'un réseau disponible. */
@@ -25,18 +13,10 @@ type Props = {
 };
 
 export function NetworkTabs({ count, panel }: Props) {
-  const [tab, setTab] = useState<NetworkId>(savedTab);
-
-  function select(value: string): void {
-    const id = toNetworkId(value);
-    setTab(id);
-    try {
-      localStorage.setItem(TAB_KEY, id);
-    } catch {}
-  }
+  const [tab, setTab] = useState<NetworkId>(ENGINE_NETWORK);
 
   return (
-    <Tabs value={tab} onValueChange={select} className="gap-0">
+    <Tabs value={tab} onValueChange={(value) => setTab(toNetworkId(value))} className="gap-0">
       <TabsList
         aria-label="Réseaux sociaux"
         className="mb-5 h-auto w-full flex-wrap justify-start gap-2 bg-transparent p-0 group-data-[orientation=horizontal]/tabs:h-auto"
@@ -64,7 +44,7 @@ export function NetworkTabs({ count, panel }: Props) {
           </TabsTrigger>
         ))}
       </TabsList>
-      {NETWORKS.filter((n) => n.available).map((network) => (
+      {AVAILABLE_NETWORKS.map((network) => (
         // Panneau inactif caché mais gardé : recherche, filtre et saisie en
         // cours sont retrouvés en revenant sur l'onglet.
         <TabsContent key={network.id} value={network.id} forceMount className="data-[state=inactive]:hidden">

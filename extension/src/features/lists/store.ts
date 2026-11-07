@@ -1,7 +1,7 @@
 // Écritures des listes de comptes, appliquées une à la fois par le service
 // worker (voir core/writer.ts). Les listes valent pour tous les comptes X ;
 // les files, elles, sont propres à chacun.
-import { accountStates, readStorage, scoped, strings, type State } from "../../core/state.ts";
+import { accountStates, readStorage, scoped, stringArray, type State } from "../../core/state.ts";
 import { blockedByBarrage, resultOf } from "../blocking/queue.ts";
 import type { NetworkId } from "../networks/networks.ts";
 import {
@@ -266,6 +266,6 @@ export async function completeOnboarding(choice: OnboardingChoice): Promise<void
   const next = replace(lists, { ...find(lists, OFFICIAL_ID), ...official });
   if (choice.kind === "list") next.push(importedList(next, choice.list));
   // Une migration manquée ne perd rien : les comptes de l'ancienne clé `handles` sont repris.
-  await saveLists(stored, withManualHandles(next, strings(stored.handles), addedAt), true, { onboarded: true });
+  await saveLists(stored, withManualHandles(next, stringArray(stored.handles), addedAt), true, { onboarded: true });
   if (Array.isArray(stored.handles)) await chrome.storage.local.remove("handles");
 }

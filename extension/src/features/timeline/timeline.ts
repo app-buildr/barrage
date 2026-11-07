@@ -1,6 +1,6 @@
 // Surveillance du fil : dès qu'un compte de la liste apparaît (auteur d'un
 // tweet, d'un tweet cité, ou suggestion de compte), son contenu est masqué et
-// le compte passe en tête de la file de blocage.
+// le compte entre dans la file de blocage.
 //
 // Seul l'auteur compte : un tweet qui mentionne un compte de la liste, ou un
 // retweet par un compte hors liste, n'est pas visé par le nom du retweeteur.
@@ -12,7 +12,7 @@
 // Ce qu'affiche la page vaut pour le compte X connecté à son chargement : si
 // la session passe sur un autre compte entre-temps, plus rien n'est signalé.
 import { contextAlive } from "../../core/context.ts";
-import { active, getState, onStateChange, resultChanges, strings, type StateChanges } from "../../core/state.ts";
+import { active, getState, onStateChange, resultChanges, stringArray, type StateChanges } from "../../core/state.ts";
 import { write } from "../../core/write.ts";
 import { accountId, pageAccount } from "../blocking/api.ts";
 import { isPending, resultOf, type Results } from "../blocking/queue.ts";
@@ -237,7 +237,7 @@ function onQueueChange(changes: StateChanges): void {
   // signalé de nouveau s'il réapparaît en attente dans le fil.
   const seenChange = changes[prefix + "seen"];
   if (seenChange) {
-    const seen = new Set(strings(seenChange.newValue));
+    const seen = new Set(stringArray(seenChange.newValue));
     for (const handle of seenBatch.sent) if (!seen.has(handle)) seenBatch.sent.delete(handle);
   }
 }

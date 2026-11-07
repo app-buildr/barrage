@@ -1,7 +1,7 @@
 // Listes de comptes : forme, lecture et liste effective. Fonctions pures,
 // testées dans tests/multi-lists.test.ts.
 import { LIST_NAME_MAX } from "../../core/config.ts";
-import { NETWORKS, type NetworkId } from "../networks/networks.ts";
+import { AVAILABLE_NETWORKS, type NetworkId } from "../networks/networks.ts";
 
 export const OFFICIAL_ID = "official";
 export const MANUAL_ID = "manual";
@@ -32,7 +32,7 @@ export type ListDef = {
 const SOURCES: readonly ListSource[] = ["official", "manual", "github", "file"];
 
 /** Réseaux proposés pour une liste : ceux où le blocage fonctionne. */
-export const LIST_NETWORKS: readonly NetworkId[] = NETWORKS.filter((n) => n.available).map((n) => n.id);
+export const LIST_NETWORKS: readonly NetworkId[] = AVAILABLE_NETWORKS.map((n) => n.id);
 
 /**
  * Liste collaborative tant que rien n'est enregistré : désactivée, pour que

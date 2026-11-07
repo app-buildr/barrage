@@ -1,7 +1,7 @@
 // Migration depuis une version antérieure à la 1.4.0 : la clé `handles` devient
 // « Ma liste perso » et l'accueil n'est pas montré. Les badges sont rattrapés
 // juste après, voir syncAllBadges.
-import { readStorage, strings } from "../../core/state.ts";
+import { readStorage, stringArray } from "../../core/state.ts";
 import { isNewer } from "../updates/version.ts";
 import { officialList, readLists, withManualHandles } from "./lists.ts";
 
@@ -32,7 +32,7 @@ export async function migrate(previousVersion?: string): Promise<void> {
   // Listes déjà là (accueil terminé, migration interrompue) : seule `handles` reste à reprendre.
   const lists = Array.isArray(stored.lists) ? readLists(stored.lists) : [officialList(true, ["x"], at)];
   await chrome.storage.local.set({
-    lists: withManualHandles(lists, strings(handles), at),
+    lists: withManualHandles(lists, stringArray(handles), at),
     onboarded: true,
     ...(stored.notifyBadges === undefined ? { notifyBadges: true } : {}),
   });

@@ -2,12 +2,12 @@
 // Mémoïsée : seules les lignes dont l'état change sont redessinées, le focus
 // clavier et le défilement restent en place.
 import { memo, useState } from "react";
-import { Badge } from "@/ui/components/badge";
-import { Button } from "@/ui/components/button";
-import { Switch } from "@/ui/components/switch";
-import { TableCell, TableRow } from "@/ui/components/table";
-import { cn } from "@/ui/lib/utils";
-import type { NetworkId } from "../networks/networks.ts";
+import { Badge } from "@/ui/components/badge.tsx";
+import { Button } from "@/ui/components/button.tsx";
+import { Switch } from "@/ui/components/switch.tsx";
+import { TableCell, TableRow } from "@/ui/components/table.tsx";
+import { cn } from "@/ui/lib/utils.ts";
+import type { Network } from "../networks/networks.ts";
 import { blockNow, toggle, unblockNow } from "./actions.ts";
 import { CELL } from "./AccountTable.tsx";
 import { ProfileLink } from "./ProfileLink.tsx";
@@ -36,7 +36,7 @@ function StatusLabel({ status }: { status: Status }) {
 }
 
 type Props = {
-  network: NetworkId;
+  network: Network;
   handle: string;
   enabled: boolean;
   status: Status;

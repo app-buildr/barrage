@@ -2,7 +2,7 @@
 // fermeture mémorisée dans chrome.storage.local.
 import { useEffect, useState } from "react";
 import { Info, X } from "lucide-react";
-import { Button } from "@/ui/components/button";
+import { Button } from "@/ui/components/button.tsx";
 
 const DISMISSED_KEY = "tipDismissed";
 

@@ -5,10 +5,9 @@ import { Check, Info } from "lucide-react";
 import { IMPORT_PREVIEW_SIZE, LIST_FILE_EXTENSIONS, LIST_MAX_ADDED_SHARE } from "@/core/config.ts";
 import { plural } from "@/core/format.ts";
 import { CORAL_LINK, PILL_INPUT } from "@/ui/classes.ts";
-import { Input } from "@/ui/components/input";
-import { cn } from "@/ui/lib/utils";
-import { NETWORKS, type NetworkId } from "../networks/networks.ts";
-import { LIST_NETWORKS } from "./lists.ts";
+import { Input } from "@/ui/components/input.tsx";
+import { cn } from "@/ui/lib/utils.ts";
+import { AVAILABLE_NETWORKS, type NetworkId } from "../networks/networks.ts";
 import type { Analysis } from "./use-list-analysis.ts";
 
 type ChipsProps = { value: readonly NetworkId[]; onChange: (networks: NetworkId[]) => void };
@@ -21,7 +20,7 @@ export function NetworkChips({ value, onChange }: ChipsProps) {
   return (
     <div className="flex flex-wrap items-center gap-3">
       <span className="text-[15px] font-bold text-muted-foreground">Appliquer sur</span>
-      {LIST_NETWORKS.map((id) => {
+      {AVAILABLE_NETWORKS.map(({ id, label }) => {
         const checked = value.includes(id);
         const last = checked && value.length === 1;
         return (
@@ -41,7 +40,7 @@ export function NetworkChips({ value, onChange }: ChipsProps) {
             )}
           >
             {checked ? <Check className="size-4" strokeWidth={3} aria-hidden="true" /> : null}
-            {NETWORKS.find((n) => n.id === id)?.label}
+            {label}
           </button>
         );
       })}
