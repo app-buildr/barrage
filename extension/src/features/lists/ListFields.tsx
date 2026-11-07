@@ -2,12 +2,14 @@
 // attendu », adresse et choix d'un fichier.
 import { useRef } from "react";
 import { Check, Info } from "lucide-react";
-import { LIST_FILE_EXTENSIONS, LIST_MAX_ADDED_SHARE } from "@/core/config.ts";
+import { IMPORT_PREVIEW_SIZE, LIST_FILE_EXTENSIONS, LIST_MAX_ADDED_SHARE } from "@/core/config.ts";
+import { plural } from "@/core/format.ts";
 import { CORAL_LINK, PILL_INPUT } from "@/ui/classes.ts";
 import { Input } from "@/ui/components/input";
 import { cn } from "@/ui/lib/utils";
 import { NETWORKS, type NetworkId } from "../networks/networks.ts";
 import { LIST_NETWORKS } from "./lists.ts";
+import type { Analysis } from "./use-list-analysis.ts";
 
 type ChipsProps = { value: readonly NetworkId[]; onChange: (networks: NetworkId[]) => void };
 
@@ -73,6 +75,25 @@ export function AutoUpdateNotice() {
       {LIST_MAX_ADDED_SHARE * 100} % de comptes en plus par semaine. Au-delà, Barrage vous demande de confirmer dans
       Réglages. N'importez que des listes dont vous connaissez l'auteur.
     </p>
+  );
+}
+
+/** Aperçu d'une liste analysée, avant son activation : rien n'est encore enregistré. */
+export function ListPreview({ analysis }: { analysis: Analysis }) {
+  const { handles, warning } = analysis;
+  const shown = handles.slice(0, IMPORT_PREVIEW_SIZE);
+  return (
+    <div className="rounded-step border border-line bg-card p-4 text-[15px] text-ink">
+      <p className="m-0 font-bold">
+        {plural(handles.length, "compte")} à bloquer
+        {handles.length > shown.length ? `, dont les ${shown.length} premiers :` : " :"}
+      </p>
+      <p className="mt-1 mb-0 break-words text-muted-foreground">
+        {shown.map((handle) => `@${handle}`).join(", ")}
+        {handles.length > shown.length ? "…" : ""}
+      </p>
+      {warning ? <p className="mt-2 mb-0 font-bold text-sun-soft-ink">{warning}</p> : null}
+    </div>
   );
 }
 

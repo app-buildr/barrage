@@ -3,7 +3,7 @@ import { beforeEach, test } from "node:test";
 import { RETIRE_GRACE_MS } from "../src/core/config.ts";
 import { IMPORT_LIST, REFRESH_LISTS } from "../src/core/messages.ts";
 import { getState, resultKey, unblockQueue } from "../src/core/state.ts";
-import { BAD_HOST_MESSAGE, DOWNLOAD_ERROR, TABLE_MESSAGE } from "../src/features/lists/import.ts";
+import { BAD_HOST_MESSAGE, DOWNLOAD_ERROR, INVALID_WARNING, TABLE_MESSAGE } from "../src/features/lists/import.ts";
 import { officialList, type ListDef } from "../src/features/lists/lists.ts";
 import { acceptPendingList } from "../src/features/lists/store.ts";
 import { syncLists } from "../src/features/lists/sync.ts";
@@ -254,7 +254,14 @@ test("l'import analyse sans rien enregistrer, sans redirection ni cookies", asyn
   responses["l.txt"] = () => new Response("@e f f !!");
   const before = structuredClone(store);
   const reply = await send({ type: IMPORT_LIST, url: GITHUB });
-  assert.deepEqual(reply, { ok: true, handles: ["e", "f"], duplicates: 1, invalid: ["!!"], url: GITHUB });
+  assert.deepEqual(reply, {
+    ok: true,
+    handles: ["e", "f"],
+    duplicates: 1,
+    invalid: ["!!"],
+    warning: INVALID_WARNING,
+    url: GITHUB,
+  });
   assert.deepEqual(store, before);
   assert.equal(fetched[0]?.init?.redirect, "error");
   assert.equal(fetched[0]?.init?.credentials, "omit");

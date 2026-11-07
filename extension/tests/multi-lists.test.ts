@@ -5,7 +5,7 @@ import { getState, offListHandles, queueOrder, resultKey, unblockQueue } from ".
 import { addHandles } from "../src/features/accounts/store.ts";
 import { accountLines, lineCounts } from "../src/features/accounts/lines.ts";
 import { listDetails } from "../src/features/lists/details.ts";
-import { analyzeList, checkListFile, describeReport, looksLikeTable, validateListUrl, BAD_HOST_MESSAGE, TABLE_MESSAGE } from "../src/features/lists/import.ts";
+import { analyzeList, checkListFile, describeReport, looksLikeProse, looksLikeTable, validateListUrl, BAD_HOST_MESSAGE, INVALID_WARNING, PROSE_WARNING, TABLE_MESSAGE } from "../src/features/lists/import.ts";
 import { cleanName, effectiveHandles, officialList, readLists, uniqueName, type ListDef } from "../src/features/lists/lists.ts";
 import { migrate } from "../src/features/lists/migrate.ts";
 import { pendingBadge } from "../src/features/badges/badges.ts";
@@ -257,6 +257,7 @@ test("l'analyse accepte tous les formats et rend compte des doublons et invalide
     handles: ["alice", "bob", "carol", "dave", "erin"],
     duplicates: 1,
     invalid: ["x.com/home", "pas-valide!"],
+    warning: INVALID_WARNING,
   });
   assert.ok(report.ok);
   assert.equal(describeReport(report), "5 comptes retenus, 1 doublon, 2 invalides.");
@@ -387,4 +388,30 @@ test("la migration ignore une version déjà à jour et une installation neuve",
   await migrate("1.4.0");
   await migrate(undefined);
   assert.equal("lists" in store, false);
+});
+
+// Texte libre
+
+test("des noms ou des phrases sont signalés, sans empêcher l'aperçu", () => {
+  for (const text of ["Jean Dupont\nMarie Curie\nPaul Martin", "Bonjour je suis une phrase sans virgule\nEt une autre ici"]) {
+    assert.equal(looksLikeProse(text), true);
+    const report = analyzeList(text);
+    assert.ok(report.ok && report.warning === PROSE_WARNING);
+  }
+});
+
+test("une vraie liste n'est pas signalée", () => {
+  for (const text of ["alice\nbob\ncarol", "@alice @bob\n@carol", "https://x.com/alice https://x.com/bob", "alice"]) {
+    assert.equal(looksLikeProse(text), false);
+    const report = analyzeList(text);
+    assert.ok(report.ok && report.warning === undefined);
+  }
+});
+
+test("une liste aux entrées largement invalides met en garde, un écart isolé non", () => {
+  const good = Array.from({ length: 20 }, (_, i) => `c${i}`);
+  const few = analyzeList([...good, "pas!valide"].join("\n"));
+  assert.ok(few.ok && few.warning === undefined);
+  const many = analyzeList([...good, "a!", "b!", "c!"].join("\n"));
+  assert.ok(many.ok && many.warning === INVALID_WARNING);
 });

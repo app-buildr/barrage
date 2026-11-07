@@ -14,13 +14,15 @@ import {
 } from "./import.ts";
 import type { NewList } from "./store.ts";
 
-export type Analysis = Omit<NewList, "networks">;
+export type Analysis = Omit<NewList, "networks"> & { warning?: string };
 type Outcome = { message: string; kind: StatusKind };
 
 const refused = (message: string): Outcome => ({ message, kind: "error" });
 
 const readReport = (report: ImportReport): Outcome =>
-  report.ok ? { message: describeReport(report), kind: "ok" } : refused(report.reason);
+  report.ok ? { message: describeReport(report), kind: report.warning ? "warn" : "ok" } : refused(report.reason);
+
+const warningOf = (report: Extract<ImportReport, { ok: true }>) => (report.warning ? { warning: report.warning } : {});
 
 export function useListAnalysis() {
   const [outcome, setOutcome] = useState<Outcome | null>(null);
@@ -52,7 +54,7 @@ export function useListAnalysis() {
       const reply = (await chrome.runtime.sendMessage({ type: IMPORT_LIST, url: checked.url })) as ImportListReply;
       return {
         outcome: readReport(reply),
-        analysis: reply.ok ? { source: "github", url: reply.url, handles: reply.handles } : null,
+        analysis: reply.ok ? { source: "github", url: reply.url, handles: reply.handles, ...warningOf(reply) } : null,
       };
     }, DOWNLOAD_ERROR);
   }
@@ -62,7 +64,10 @@ export function useListAnalysis() {
       const problem = checkListFile(file.name, file.size);
       if (problem) return { outcome: refused(problem), analysis: null };
       const report = analyzeList(await file.text());
-      return { outcome: readReport(report), analysis: report.ok ? { source: "file", handles: report.handles } : null };
+      return {
+        outcome: readReport(report),
+        analysis: report.ok ? { source: "file", handles: report.handles, ...warningOf(report) } : null,
+      };
     }, FILE_ERROR);
   }
 

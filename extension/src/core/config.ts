@@ -97,6 +97,10 @@ export const LIST_HOSTS_TEXT = LIST_HOSTS.join(" ou ");
 export const LIST_FILE_EXTENSIONS: readonly string[] = [".txt", ".csv"];
 /** Taille maximale d'une liste importée, fichier ou adresse. */
 export const LIST_MAX_BYTES = 1_000_000;
+/** Au-delà de cette part d'entrées invalides, l'aperçu d'un import met en garde. */
+export const IMPORT_MAX_INVALID_SHARE = 0.1;
+/** Comptes montrés dans l'aperçu d'un import. */
+export const IMPORT_PREVIEW_SIZE = 20;
 /** Longueur maximale du nom d'une liste. */
 export const LIST_NAME_MAX = 40;
 /**

@@ -11,7 +11,7 @@ import { Button } from "@/ui/components/button";
 import { Header } from "@/ui/layout/Header";
 import { Panel, StatusMessage } from "@/ui/layout/Section";
 import { cn } from "@/ui/lib/utils";
-import { AutoUpdateNotice, FilePicker, FormatHint, ListUrlInput, NetworkChips } from "../lists/ListFields.tsx";
+import { AutoUpdateNotice, FilePicker, FormatHint, ListPreview, ListUrlInput, NetworkChips } from "../lists/ListFields.tsx";
 import { LIST_NETWORKS } from "../lists/lists.ts";
 import { useListAnalysis, type Analysis } from "../lists/use-list-analysis.ts";
 import type { NetworkId } from "../networks/networks.ts";
@@ -48,8 +48,10 @@ export function Welcome({ state }: { state: State }) {
   const ready = choice === "official" || analysis !== null;
 
   function start(): void {
-    const selected = analysis && choice === "own" ? { kind: "list" as const, list: { ...analysis, networks } } : null;
-    void attempt(write("completeOnboarding", selected ?? { kind: "official", networks }));
+    if (analysis && choice === "own") {
+      const { warning: _warning, ...list } = analysis;
+      void attempt(write("completeOnboarding", { kind: "list", list: { ...list, networks } }));
+    } else void attempt(write("completeOnboarding", { kind: "official", networks }));
   }
 
   return (
@@ -110,6 +112,7 @@ export function Welcome({ state }: { state: State }) {
             <AutoUpdateNotice />
             <FilePicker onFile={(file) => void analyzeFile(file).then(setAnalysis)} />
             <StatusMessage kind={outcome?.kind} message={outcome?.message} />
+            {analysis ? <ListPreview analysis={analysis} /> : null}
           </div>
         ) : null}
         <FormatHint />

@@ -15,7 +15,7 @@ import { cn } from "@/ui/lib/utils";
 import type { NetworkId } from "../networks/networks.ts";
 import { listDetails } from "./details.ts";
 import { plural } from "@/core/format.ts";
-import { AutoUpdateNotice, FilePicker, FormatHint, ListUrlInput, NetworkChips } from "./ListFields.tsx";
+import { AutoUpdateNotice, FilePicker, FormatHint, ListPreview, ListUrlInput, NetworkChips } from "./ListFields.tsx";
 import { LIST_NETWORKS, OFFICIAL_ID, cleanName, listHandles, type ListDef } from "./lists.ts";
 import type { PendingList } from "./remote.ts";
 import { useListAnalysis, type Analysis } from "./use-list-analysis.ts";
@@ -217,21 +217,31 @@ function ListCard({ list, attempt, count, now, pending, current }: CardProps) {
   );
 }
 
-/** Reste ouvert après un import : le compte rendu y est lu, et d'autres listes peuvent suivre. */
+/**
+ * Analyse, aperçu, puis activation sur un clic : rien n'est enregistré avant.
+ * Reste ouvert après un import, d'autres listes peuvent suivre.
+ */
 function NewListPanel({ attempt }: { attempt: Attempt }) {
   const [url, setUrl] = useState("");
   const [networks, setNetworks] = useState<NetworkId[]>([...LIST_NETWORKS]);
+  const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const { outcome, busy, analyzeUrl, analyzeFile, reset } = useListAnalysis();
 
-  async function save(analysis: Analysis | null): Promise<void> {
-    if (!analysis) return;
-    if (await attempt(write("addList", { ...analysis, networks }))) setUrl("");
-    else reset();
+  function clear(): void {
+    setAnalysis(null);
+    reset();
+  }
+
+  async function activate(ready: Analysis): Promise<void> {
+    const { warning: _warning, ...list } = ready;
+    if (!(await attempt(write("addList", { ...list, networks })))) return;
+    setUrl("");
+    clear();
   }
 
   function submit(event: FormEvent): void {
     event.preventDefault();
-    void analyzeUrl(url).then(save);
+    void analyzeUrl(url).then(setAnalysis);
   }
 
   return (
@@ -249,16 +259,35 @@ function NewListPanel({ attempt }: { attempt: Attempt }) {
       <FormatHint />
       <AutoUpdateNotice />
       <form className="flex gap-3 max-[560px]:flex-wrap" noValidate onSubmit={submit}>
-        <ListUrlInput value={url} onChange={setUrl} />
+        <ListUrlInput
+          value={url}
+          onChange={(value) => {
+            setUrl(value);
+            clear();
+          }}
+        />
         <Button type="submit" variant="cta" size="lg" disabled={busy || !url.trim()}>
           Importer
         </Button>
       </form>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <NetworkChips value={networks} onChange={setNetworks} />
-        <FilePicker onFile={(file) => void analyzeFile(file).then(save)} />
+        <FilePicker onFile={(file) => void analyzeFile(file).then(setAnalysis)} />
       </div>
       <StatusMessage kind={outcome?.kind} message={outcome?.message} />
+      {analysis ? (
+        <>
+          <ListPreview analysis={analysis} />
+          <div className="flex flex-wrap items-center gap-3">
+            <Button variant="cta" onClick={() => void activate(analysis)}>
+              Activer cette liste
+            </Button>
+            <Button variant="outline" onClick={clear}>
+              Annuler
+            </Button>
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }
