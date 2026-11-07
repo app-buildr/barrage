@@ -1,32 +1,43 @@
 // Tableau de comptes dans une carte : en-tête figé, défilement vertical, message
 // quand le filtre ne laisse rien.
 import type { ReactNode } from "react";
-import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/ui/components/table";
-import { cn } from "@/ui/lib/utils";
+import { OVERLINE } from "@/ui/classes.ts";
+import { Table, TableBody, TableCaption, TableHead, TableHeader, TableRow } from "@/ui/components/table.tsx";
+import { StatusMessage } from "@/ui/layout/Section.tsx";
+import { cn } from "@/ui/lib/utils.ts";
 
 /** Cellules : mêmes marges partout, réduites sur petit écran. */
-export const CELL = "px-6 py-3.5 max-[560px]:px-3 max-[560px]:py-2.5";
+export const CELL = "px-6 py-3.5 max-xs:px-3 max-xs:py-2.5";
 
-export const HEAD = cn(
+const HEAD = cn(
   CELL,
-  "sticky top-0 z-2 h-auto bg-cream text-[13px] font-bold tracking-[.04em] text-muted-foreground uppercase",
+  OVERLINE,
+  "sticky top-0 z-2 h-auto bg-cream text-label text-muted-foreground",
   "shadow-[inset_0_-1px_0_var(--color-line)]",
 );
 
-type Props = { head: ReactNode; children: ReactNode; empty?: string | null; className?: string };
-
-export function AccountTable({ head, children, empty, className }: Props) {
+export function AccountTable({ children, empty }: { children: ReactNode; empty?: string | null }) {
   return (
-    <div className={cn("overflow-hidden rounded-card border border-line bg-card shadow-soft", className)}>
-      <Table containerClassName="max-h-[600px] overflow-auto" className="text-[15px]">
+    <div className="overflow-hidden rounded-card border border-line bg-card shadow-soft">
+      <Table containerClassName="max-h-[600px] overflow-auto" className="text-body">
+        <TableCaption className="sr-only">Comptes de la liste et état de leur blocage</TableCaption>
         <TableHeader className="[&_tr]:border-0">
-          <TableRow className="hover:bg-transparent">{head}</TableRow>
+          <TableRow className="hover:bg-transparent">
+            <TableHead className={`${HEAD} w-[1%] pr-2`}>
+              <abbr title="Blocage automatique" className="no-underline">
+                Blocage auto
+              </abbr>
+            </TableHead>
+            <TableHead className={HEAD}>Compte</TableHead>
+            <TableHead className={HEAD}>État</TableHead>
+            <TableHead className={`${HEAD} w-[1%] text-right`}>
+              <span className="sr-only">Action</span>
+            </TableHead>
+          </TableRow>
         </TableHeader>
         <TableBody>{children}</TableBody>
       </Table>
-      {empty ? <p className="m-0 px-6 py-4 text-muted-foreground">{empty}</p> : null}
+      <StatusMessage kind="muted" message={empty} className="px-6 py-4 text-base" />
     </div>
   );
 }
-
-export { TableHead };

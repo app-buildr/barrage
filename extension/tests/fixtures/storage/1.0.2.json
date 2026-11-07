@@ -1,0 +1,16 @@
+{
+  "handles": ["perso_un", "perso_deux"],
+  "remote": ["liste_a", "liste_b", "liste_c", "liste_d"],
+  "disabled": ["liste_c"],
+  "retired": [],
+  "unblock": [],
+  "seen": ["liste_d"],
+  "notify": false,
+  "pauseUntil": 0,
+  "error": null,
+  "latestVersion": "1.0.2",
+  "result:liste_a": { "state": "blocked", "at": 1761000000000 },
+  "result:liste_b": { "state": "already_blocked", "at": 1761000000000 },
+  "result:liste_c": { "state": "unblocked", "at": 1761000000000 },
+  "result:perso_un": { "state": "failed", "at": 1761000000000, "attempts": 2, "message": "Refus de X (HTTP 403)." }
+}

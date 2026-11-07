@@ -1,7 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Barrage",
-  "version": "1.3.0",
+  "version": "1.4.0",
+  "minimum_chrome_version": "120",
   "description": "Bloque automatiquement sur vos réseaux sociaux les comptes d'une liste collaborative et open source.",
   "permissions": [
     "storage",
@@ -39,6 +40,14 @@
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
+    }
+  },
+  "commands": {
+    "undo-last-block": {
+      "suggested_key": {
+        "default": "Alt+Shift+Z"
+      },
+      "description": "Annuler le dernier blocage notifié sur x.com"
     }
   },
   "icons": {

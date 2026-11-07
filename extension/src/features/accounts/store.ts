@@ -1,27 +1,9 @@
-// Écritures de la liste de comptes : ajout, interrupteur « Blocage
-// automatique », blocage et déblocage demandés à la main. La liste et les
-// interrupteurs valent pour tous les comptes X ; un blocage ou un déblocage
-// demandé à la main vise le compte X affiché, le dernier connecté sur x.com.
+// Écritures de la liste de comptes : interrupteur « Blocage automatique »,
+// blocage et déblocage demandés à la main. Les interrupteurs valent pour tous
+// les comptes X ; un blocage ou un déblocage demandé à la main vise le compte X
+// affiché, le dernier connecté sur x.com.
 import { accountStates, getState, readStorage, resultKey, scoped } from "../../core/state.ts";
 import { resultOf } from "../blocking/queue.ts";
-
-export type AddResult = { added: string[]; existing: string[] };
-
-/**
- * Ajoute des comptes, déjà normalisés par parseHandle, à la fin de la liste.
- * Ceux qui y sont déjà, ou en double dans la saisie, ne sont ajoutés qu'une fois.
- */
-export async function addHandles(handles: readonly string[]): Promise<AddResult> {
-  const state = await getState();
-  const known = new Set(state.handles);
-  const result: AddResult = { added: [], existing: [] };
-  for (const handle of new Set(handles)) {
-    (known.has(handle) ? result.existing : result.added).push(handle);
-  }
-  // En stockage, `handles` ne contient que les ajouts de l'utilisateur, voir getState.
-  if (result.added.length) await chrome.storage.local.set({ handles: [...state.added, ...result.added] });
-  return result;
-}
 
 /**
  * Blocage demandé à la main depuis les options : le compte passe en tête de
@@ -43,13 +25,13 @@ export async function requestBlock(handle: string): Promise<void> {
  */
 async function disable(handle: string, forceUnblock: boolean): Promise<void> {
   const { disabled, unblock, seen, prefix } = await getState();
-  await chrome.storage.local.set(
-    scoped(prefix, {
-      disabled: [...new Set([...disabled, handle])],
+  await chrome.storage.local.set({
+    disabled: [...new Set([...disabled, handle])],
+    ...scoped(prefix, {
       ...(forceUnblock ? { unblock: [...new Set([...unblock, handle])] } : {}),
       seen: seen.filter((h) => h !== handle),
     }),
-  );
+  });
 }
 
 /**
@@ -68,7 +50,7 @@ export const requestUnblock = (handle: string): Promise<void> => disable(handle,
 export async function setEnabled(handle: string, enabled: boolean): Promise<void> {
   if (!enabled) return disable(handle, false);
   const states = accountStates(await readStorage());
-  const values: Record<string, unknown> = { disabled: states[0]?.disabled.filter((h) => h !== handle) ?? [] };
+  const values: Record<string, unknown> = { disabled: states[0].disabled.filter((h) => h !== handle) };
   for (const { unblock, prefix } of states) {
     if (unblock.includes(handle)) Object.assign(values, scoped(prefix, { unblock: unblock.filter((h) => h !== handle) }));
   }

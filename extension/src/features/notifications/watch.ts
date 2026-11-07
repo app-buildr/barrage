@@ -1,83 +1,81 @@
-// Notifications « @user vient d'être bloqué » et « @user a été débloqué » sur x.com. Chaque onglet X
-// surveille les résultats : le blocage a pu être fait par un autre onglet, et
-// c'est dans celui que l'utilisateur regarde que la notification doit paraître.
-import { onStateChange, prefixFor, resultChanges, type StateChanges } from "../../core/state.ts";
+// Notifications « @user vient d'être bloqué », « @user a été débloqué » et
+// « nouveau badge » sur x.com. Chaque onglet X surveille le stockage : le
+// blocage a pu être fait par un autre onglet, et c'est dans celui que
+// l'utilisateur regarde que la notification doit paraître.
+import { contextAlive } from "../../core/context.ts";
+import { OPEN_BADGES, isUndoLastRequest, type Message } from "../../core/messages.ts";
+import { getState, onStateChange } from "../../core/state.ts";
 import { write } from "../../core/write.ts";
-import { accountId } from "../blocking/api.ts";
-import { newlyBlocked, newlyUnblocked } from "../blocking/queue.ts";
+import { pendingBadge } from "../badges/badges.ts";
+import { accountId } from "../x/session.ts";
+import { createAnnouncer } from "./announce.ts";
 import { mountToaster } from "./mount.tsx";
-import { CONFIRM_MS, createToastStore, type Content } from "./toasts.ts";
+import { createBadgeStore, createToastStore, type Content } from "./toasts.ts";
 
 const toasts = createToastStore();
-
-/**
- * Comptes dont le blocage vient d'être annulé dans cet onglet : la
- * notification a déjà confirmé l'annulation, le déblocage effectif (quelques
- * secondes plus tard, au tour suivant de la file) n'en affiche pas d'autre.
- */
-const cancelled = new Set<string>();
-
-const BLOCKED: Omit<Content, "undo"> = { kind: "blocked", title: " vient d'être bloqué ! ✊", detail: "par Barrage" };
-const UNBLOCKED: Content = {
-  kind: "unblocked",
-  title: " a été débloqué.",
-  detail: "Barrage ne le bloquera plus automatiquement.",
-};
-/** Après « Annuler » : état final tout de suite, le déblocage suit dans la file. */
-const CANCELLED: Content = {
-  kind: "unblocked",
-  title: " : blocage annulé.",
-  detail: UNBLOCKED.detail,
-  duration: CONFIRM_MS,
-  pausable: false,
-};
+const badges = createBadgeStore();
 
 /** Pile dessinée à la première notification seulement : rien dans la page avant. */
 let host: HTMLElement | null = null;
 
-function show(handle: string, content: Content): void {
-  if (!host) host = mountToaster(toasts);
+/**
+ * Affiche `display` dans la pile. Au premier montage, une image plus tard : une
+ * région live créée avec son contenu risque de ne pas être annoncée.
+ */
+function inHost(display: () => void): void {
+  if (!host) {
+    host = mountToaster(toasts, badges, dismissBadge, openBadges);
+    requestAnimationFrame(display);
+    return;
+  }
   // Retirée par x.com ou une autre extension : on la remet, avec son état.
-  else if (!host.isConnected) document.body.append(host);
-  toasts.show(handle, content);
+  if (!host.isConnected) document.body.append(host);
+  display();
 }
 
-/** Seuls les blocages du compte X connecté sont annoncés. */
-async function announce(changes: StateChanges): Promise<void> {
-  const { before, after } = resultChanges(changes, await prefixFor(accountId()));
-  const blocked = newlyBlocked(before, after);
-  const unblocked = newlyUnblocked(before, after);
-  if (!blocked.length && !unblocked.length) return;
-  const { notify } = await chrome.storage.local.get({ notify: true });
-  if (notify === false) return;
-  // « Annuler » coupe le blocage automatique du compte, ce qui le débloque. La
-  // même notification confirme l'annulation.
-  for (const handle of blocked) {
-    show(handle, {
-      ...BLOCKED,
-      undo: () => {
-        cancelled.add(handle);
-        void write("setEnabled", handle, false);
-        show(handle, CANCELLED);
-      },
-    });
-  }
-  // Tout déblocage coupe le blocage automatique du compte. Après « Annuler »,
-  // la notification l'a déjà confirmé : pas de seconde notification.
-  for (const handle of unblocked) {
-    if (!cancelled.delete(handle)) show(handle, UNBLOCKED);
-  }
+function show(handle: string, content: Content): void {
+  inHost(() => toasts.show(handle, content));
+}
+
+const logFailure = (err: unknown): void => console.warn("[Barrage]", err);
+
+const announce = createAnnouncer(show, () => document.visibilityState === "visible");
+
+/** Fermée ou partagée : elle ne revient plus, voir pendingBadge. */
+function dismissBadge(palier: number): void {
+  badges.set(null);
+  // Extension rechargée : cet onglet orphelin ne peut plus écrire, le badge reviendra.
+  if (contextAlive()) write("dismissBadge", palier, accountId()).catch(logFailure);
+}
+
+function openBadges(): void {
+  if (contextAlive()) chrome.runtime.sendMessage({ type: OPEN_BADGES } satisfies Message).catch(logFailure);
+}
+
+/** Badge à notifier du compte X connecté, dans l'onglet visible. */
+async function showBadge(): Promise<void> {
+  const account = accountId();
+  if (!contextAlive() || !account || document.visibilityState !== "visible") return;
+  const { badges: earned, badgeNotified, notifyBadges } = await getState(account);
+  const palier = notifyBadges ? pendingBadge(earned, badgeNotified) : null;
+  if (palier !== null) inHost(() => badges.set(palier));
+  else badges.set(null);
 }
 
 export function watchBlocks(): void {
   // Onglet caché : ses animations s'arrêtent, le décompte aussi. Une
   // notification laissée là réapparaîtrait au retour, périmée : on les retire.
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") toasts.clear();
+    if (document.visibilityState === "hidden") {
+      toasts.clear();
+      badges.set(null);
+    } else void showBadge();
   });
-  onStateChange((changes) => {
-    // Inutile de dessiner dans un onglet que personne ne regarde.
-    if (document.visibilityState !== "visible") return;
-    void announce(changes);
-  }, ["results"]);
+  onStateChange((changes) => void announce(changes), ["results"]);
+  chrome.runtime.onMessage.addListener((message: unknown) => {
+    if (isUndoLastRequest(message)) toasts.undoLast();
+    return false;
+  });
+  onStateChange(() => void showBadge(), ["badges", "badgeNotified", "notifyBadges", "account"]);
+  void showBadge();
 }

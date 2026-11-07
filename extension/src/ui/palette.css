@@ -1,16 +1,36 @@
-/* Palette « Corail », voir resources/barrage-theme-corail.md : importée par la
+/* Palette « Corail » : importée par la
    page d'options (globals.css) et par la notification sur x.com
-   (features/notifications/toast.css), qui restent ainsi assorties. */
+   (features/notifications/toast.css), qui restent ainsi assorties. Deux surfaces
+   sans CSS en recopient des valeurs : le fond de entries/options.html, et les
+   couleurs de la pastille dans features/blocking/action-badge.ts. */
 @theme inline {
   /* Couleurs de marque, utilisables en classes : bg-coral, text-sun-soft-ink… */
   --color-coral: #F0643C;
   --color-coral-deep: #B83A14;
   --color-coral-darker: #8F2C0F;
   --color-coral-soft: #FDE3D8;
-  --color-sun: #FFD23F;
-  --color-sun-ink: #5A1E0A;
   --color-sun-soft: #FFF1C9;
   --color-sun-soft-ink: #7A4E00;
+
+  /* Rayons */
+  --radius-icon: 10px;
+  --radius-step: 14px;
+  --radius-card: 18px;
+
+  /* Corps de texte courants, en px comme dans la notification : déclarés aussi
+     dans ui/lib/utils.ts, sans quoi tailwind-merge les prend pour des couleurs. */
+  --text-body: 15px;
+  --text-label: 13px;
+
+  /* Ombre des notifications */
+  --shadow-toast: 0 16px 40px rgba(120, 60, 30, 0.18);
+
+  /* Coche des badges obtenus */
+  --color-obtained: #1F9D63;
+
+  /* Pastille « x.com connecté » : 5,3:1 du texte sur le fond */
+  --color-connected-soft: #E2F4EA;
+  --color-connected-ink: #16704A;
 
   /* Neutres chauds */
   --color-ink: #2A1A14;
@@ -18,6 +38,7 @@
   --color-disabled: #A89B92;
   --color-cream: #FFF6EE;
   --color-cream-2: #F7EFE8;
+  --color-list-off: #FFFCF9;
   --color-soon: #EFE4DA;
   --color-line: #F2E3D8;
   --color-line-strong: #E2CFC2;

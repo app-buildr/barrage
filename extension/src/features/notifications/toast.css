@@ -1,7 +1,7 @@
 /* Notifications sur x.com, dans le Shadow DOM de mount.tsx : ni les styles de
-   x.com ni ceux-ci ne débordent. Thème corail, voir resources/notification.png.
-   Police système : embarquer Inter exposerait l'extension à x.com
-   (web_accessible_resources), qui pourrait alors détecter Barrage.
+   x.com ni ceux-ci ne débordent. Thème corail.
+   Police système : embarquer Inter demanderait web_accessible_resources, qui
+   exposerait les fichiers de l'extension à x.com pour une simple police.
 
    Dans un Shadow DOM, Chrome ignore les @property de Tailwind : mount.tsx
    reporte leurs valeurs initiales dans une règle ordinaire, pour que border,
@@ -11,6 +11,11 @@
 @import "../../ui/palette.css";
 @source "./Toast.tsx";
 @source "./Toaster.tsx";
+@source "./BadgeToast.tsx";
+@source "./ToastParts.tsx";
+@source "../badges/BadgeDisc.tsx";
+@source "../../ui/BarrageMark.tsx";
+@source "../../ui/classes.ts";
 
 @theme {
   /* En px : les rem suivraient la taille de police choisie sur x.com. */

@@ -3,7 +3,7 @@
 import { createRoot } from "react-dom/client";
 import css from "./toast.css?inline";
 import { Toaster } from "./Toaster.tsx";
-import type { ToastStore } from "./toasts.ts";
+import type { BadgeStore, ToastStore } from "./toasts.ts";
 
 const HOST_ID = "barrage-toasts";
 
@@ -23,15 +23,22 @@ function propertyFallback(sheet: CSSStyleSheet): void {
 }
 
 /** Monte la pile et renvoie son hôte, à remettre dans la page s'il en est retiré. */
-export function mountToaster(store: ToastStore): HTMLElement {
+export function mountToaster(
+  store: ToastStore,
+  badges: BadgeStore,
+  onDismissBadge: (palier: number) => void,
+  onOpenBadges: () => void,
+): HTMLElement {
   const host = document.createElement("div");
   host.id = HOST_ID;
+  // La notification est en français, quelle que soit la langue de x.com.
+  host.lang = "fr";
   const shadow = host.attachShadow({ mode: "closed" });
   const sheet = new CSSStyleSheet();
   sheet.replaceSync(css);
   propertyFallback(sheet);
   shadow.adoptedStyleSheets = [sheet];
   document.body.append(host);
-  createRoot(shadow).render(<Toaster store={store} />);
+  createRoot(shadow).render(<Toaster store={store} badges={badges} onDismissBadge={onDismissBadge} onOpenBadges={onOpenBadges} />);
   return host;
 }

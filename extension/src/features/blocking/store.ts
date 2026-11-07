@@ -1,56 +1,122 @@
 // Écritures du moteur de blocage : résultats, file de déblocage, pause imposée
-// par X et erreur bloquante. Toutes visent un compte X : celles qui reçoivent
-// un préfixe de clés l'exigent ; celles qui reçoivent un compte visent par
-// défaut le dernier connecté sur x.com.
-import { RUNNER_GRACE_MS } from "../../core/config.ts";
+// par X et erreur bloquante. Toutes visent un compte X, et la façon de le désigner
+// dit par où elles passent.
+//
+// Un `account`, ou par défaut le dernier connecté sur x.com : l'écriture lit puis
+// réécrit l'état, elle passe par le service worker (voir core/writer.ts).
+//
+// Un `prefix` de clés : l'écriture part directement de l'onglet qui traite la
+// liste, sans rien lire. Ce sont le résultat d'un blocage (setResults) et tout ce
+// qui arrête le traitement (setPauseUntil, setFailures, recordAutomation,
+// setError) : un blocage a eu lieu, ou X a dit stop, même si le service worker ne
+// répond pas. Perdre cette trace relancerait des requêtes à X.
+import { ACTIONS_WINDOW_MS, LOOKUP_WINDOW_MS, RUNNER_GRACE_MS } from "../../core/config.ts";
 import {
   accountStates,
   accountsOf,
-  active,
   getState,
+  prefixFor,
   readState,
   readStorage,
   resultEntries,
   resultKey,
   scoped,
+  type AccountValues,
   type BlockingError,
+  type ErrorCause,
   type ErrorReason,
+  type HealthIssue,
 } from "../../core/state.ts";
-import { failure, isBlocked, isPending, resultOf, type Result, type Results } from "./queue.ts";
+import { isNewer } from "../updates/version.ts";
+import type { Failure } from "./outcome.ts";
+import { automationPause, resumable, withinWindow } from "./plan.ts";
+import { active, failure, isBlocked, isPending, resultOf, type Result, type Results, type UnblockRefusal } from "./queue.ts";
+
+/**
+ * Une requête à X va partir : noté avant l'envoi, pour qu'un onglet fermé
+ * ou rechargé entre-temps ne la fasse pas oublier. Sans réponse du service
+ * worker, l'appelant échoue et rien ne part.
+ */
+export async function recordRequest(kind: "action" | "lookup", account?: string | null): Promise<void> {
+  const { actions, lookups, prefix } = await getState(account);
+  const now = Date.now();
+  await chrome.storage.local.set(
+    scoped(
+      prefix,
+      kind === "action"
+        ? { actions: [...withinWindow(actions, ACTIONS_WINDOW_MS, now), now] }
+        : { lookups: [...withinWindow(lookups, LOOKUP_WINDOW_MS, now), now] },
+    ),
+  );
+}
+
+/** X annonce ne plus accepter de lookup jusqu'à `until` : blocages déjà vérifiés et déblocages continuent. */
+export async function holdLookups(until: number, account?: string | null): Promise<void> {
+  const { prefix } = await getState(account);
+  await chrome.storage.local.set(scoped(prefix, { lookupPauseUntil: until }));
+}
+
+/** Dernier signe que X a changé, voir features/x/health.ts. */
+export async function setHealth(health: HealthIssue | null): Promise<void> {
+  await chrome.storage.local.set({ health });
+}
+
+/**
+ * Ce qu'une réponse de X permet de lever. Décidé par le traitement, d'après
+ * l'état qu'il a lu : relu ici, il pourrait lever un arrêt qu'il n'a pas vu.
+ */
+export type Cleared = { error?: true; failures?: true; strikes?: true };
+
+/** Champs à écrire pour lever ce qui est donné. */
+export const clearedValues = ({ error, failures, strikes }: Cleared): AccountValues => ({
+  ...(error ? { error: null } : {}),
+  ...(failures ? { failures: [] } : {}),
+  ...(strikes ? { strikes: 0 } : {}),
+});
 
 /**
  * Enregistre des résultats en une écriture, avec d'autres champs à écrire en
  * même temps. Seules les clés de ces comptes sont écrites.
  * @param prefix préfixe des clés du compte X, voir State.prefix
  */
-export async function setResults(prefix: string, entries: Results, extra: Record<string, unknown> = {}): Promise<void> {
+export async function setResults(prefix: string, entries: Results, extra: AccountValues = {}): Promise<void> {
   await chrome.storage.local.set({ ...resultEntries(entries, prefix), ...scoped(prefix, extra) });
 }
 
+/** Comptes vérifiés avant blocage : déjà bloqués ou introuvables. */
+export async function recordChecks(entries: Results, cleared: Cleared, account?: string | null): Promise<void> {
+  await setResults(await prefixFor(account), entries, clearedValues(cleared));
+}
+
 /** Déblocage terminé (ou sans objet) : le compte sort de la file. */
-export async function finishUnblock(
+export function finishUnblock(
   handle: string,
   result: Result | null,
-  extra: Record<string, unknown> = {},
+  cleared: Cleared = {},
   account?: string | null,
 ): Promise<void> {
-  const { unblock, retired, prefix } = await getState(account);
-  await setResults(prefix, result ? { [handle]: result } : {}, {
-    unblock: unblock.filter((h) => h !== handle),
-    retired: retired.filter((h) => h !== handle),
-    ...extra,
-  });
+  return leaveUnblockQueue(handle, result, clearedValues(cleared), account);
+}
+
+async function leaveUnblockQueue(
+  handle: string,
+  result: Result | null,
+  extra: AccountValues,
+  account?: string | null,
+): Promise<void> {
+  const { unblock, prefix } = await getState(account);
+  await setResults(prefix, result ? { [handle]: result } : {}, { unblock: unblock.filter((h) => h !== handle), ...extra });
 }
 
 /** Échec d'un blocage : le compteur de tentatives progresse, d'après le résultat enregistré. */
 export async function recordBlockFailure(
   handle: string,
-  message: string,
+  cause: Failure,
   at: number,
   account?: string | null,
 ): Promise<void> {
   const { results, prefix } = await getState(account);
-  await setResults(prefix, { [handle]: failure(resultOf(results, handle), message, at) });
+  await setResults(prefix, { [handle]: failure(resultOf(results, handle), cause, at) });
 }
 
 /**
@@ -58,18 +124,44 @@ export async function recordBlockFailure(
  * répéterait à l'identique. Il reste bloqué, marqué pour que « Débloquer »
  * permette de réessayer.
  */
-export async function refuseUnblock(handle: string, message: string, account?: string | null): Promise<void> {
-  const previous = resultOf((await getState(account)).results, handle);
-  await finishUnblock(
-    handle,
-    previous ? { ...previous, unblockFailed: true, message } : null,
-    { error: errorValue(`Déblocage de @${handle} impossible : ${message}`, "other", 0) },
-    account,
-  );
+export async function refuseUnblock(handle: string, cause: Failure, account?: string | null): Promise<void> {
+  const { results } = await getState(account);
+  const previous = resultOf(results, handle);
+  const error = errorValue({ ...cause, context: { unblock: handle } }, "other", 0);
+  const result = previous ? refused(previous, { unblockFailed: true }, cause) : null;
+  await leaveUnblockQueue(handle, result, { error }, account);
 }
+
+/**
+ * Résultat après un déblocage refusé. Une demande à la main peut viser un compte
+ * dans n'importe quel état, mais seul un état bloqué lit ces champs.
+ */
+const refused = (previous: Result, refusal: UnblockRefusal, cause: Failure): Result =>
+  ({ ...previous, ...refusal, ...cause }) as Result;
 
 export async function setPauseUntil(prefix: string, pauseUntil: number): Promise<void> {
   await chrome.storage.local.set(scoped(prefix, { pauseUntil }));
+}
+
+export async function setFailures(prefix: string, failures: string[]): Promise<void> {
+  await chrome.storage.local.set(scoped(prefix, { failures }));
+}
+
+/**
+ * Soupçon d'automatisation : tout s'arrête, et la pause croît à chaque rechute.
+ * Même la pause finie, rien ne reprend sans un clic dans les options.
+ */
+export async function recordAutomation(prefix: string, strikes: number, cause: Failure): Promise<void> {
+  const pauseUntil = Date.now() + automationPause(strikes);
+  const error = errorValue(cause, "automation", Infinity);
+  await chrome.storage.local.set(scoped(prefix, { strikes: strikes + 1, pauseUntil, error }));
+}
+
+/** Reprise demandée dans les options, jamais avant la fin de la pause. Le soupçon reste compté jusqu'à une réussite. */
+export async function resumeBlocking(account?: string | null): Promise<void> {
+  const { error, pauseUntil, prefix } = await getState(account);
+  if (!resumable(error) || pauseUntil > Date.now()) return;
+  await chrome.storage.local.set(scoped(prefix, { error: null, failures: [] }));
 }
 
 /**
@@ -81,27 +173,28 @@ export async function setPauseUntil(prefix: string, pauseUntil: number): Promise
  */
 export async function setError(
   prefix: string,
-  message: string | null,
+  cause: ErrorCause | null,
   reason: ErrorReason = "other",
   expectedMs = 0,
   session?: string,
 ): Promise<void> {
-  const error = message ? errorValue(message, reason, expectedMs, session) : null;
+  const error = cause ? errorValue(cause, reason, expectedMs, session) : null;
   await chrome.storage.local.set(scoped(prefix, { error }));
 }
 
-function errorValue(message: string, reason: ErrorReason, expectedMs: number, session?: string): BlockingError {
+function errorValue(cause: ErrorCause, reason: ErrorReason, expectedMs: number, session?: string): BlockingError {
   const at = Date.now();
   const staleAt = Number.isFinite(expectedMs) ? at + expectedMs + RUNNER_GRACE_MS : Number.MAX_SAFE_INTEGER;
-  return { message, reason, staleAt, at, ...(session ? { session } : {}) };
+  return { ...cause, reason, staleAt, at, ...(session ? { session } : {}) };
 }
 
 /**
  * Comptes de la liste que X montre comme déjà bloqués par l'utilisateur
  * (page « Comptes bloqués », profil visité) : marqués « bloqué avant Barrage »,
  * sans aucune requête à X. Un compte bloqué par Barrage garde son état.
+ * @returns vrai si un compte a été marqué : les badges sont à rattraper, voir features/writes.ts
  */
-export async function markAlreadyBlocked(handles: readonly string[], account?: string | null): Promise<void> {
+export async function markAlreadyBlocked(handles: readonly string[], account?: string | null): Promise<boolean> {
   const state = await getState(account);
   const listed = new Set(state.handles);
   const at = Date.now();
@@ -110,8 +203,9 @@ export async function markAlreadyBlocked(handles: readonly string[], account?: s
     if (listed.has(handle) && isPending(resultOf(state.results, handle))) entries[handle] = { state: "already_blocked", at };
   }
   const marked = new Set(Object.keys(entries));
-  if (!marked.size) return;
+  if (!marked.size) return false;
   await setResults(state.prefix, entries, { seen: state.seen.filter((h) => !marked.has(h)) });
+  return true;
 }
 
 /**
@@ -141,16 +235,25 @@ export async function useAccount(account: string, handle: string | null): Promis
   if (Object.keys(values).length) await chrome.storage.local.set(values);
 }
 
+/** Publication de la 1.1.0, première à séparer les comptes X. */
+const MULTI_ACCOUNT_AT = Date.UTC(2026, 9, 29, 14, 51, 31);
+
 /**
  * Compte bloqué par Barrage d'après l'état commun d'avant la prise en charge
  * de plusieurs comptes, repris sans préfixe par le premier compte X vu. Avant,
  * Barrage bloquait la liste sur chaque compte du navigateur : un compte qu'il
  * y notait bloqué l'a très probablement été par lui sur les autres aussi.
+ * Seul un blocage daté d'avant compte : ces clés sont aussi celles du premier
+ * compte aujourd'hui, et un blocage récent n'y prouve rien pour les autres. Un
+ * doute laisse le compte à l'utilisateur : Barrage ne le débloquera pas.
  * Lecture d'une seule clé par compte : pas de parcours de tout le stockage.
  */
 function inheritedBlock(stored: Record<string, unknown>): (handle: string) => boolean {
   if (typeof stored.legacy !== "string") return () => false;
-  return (handle) => (stored[resultKey(handle)] as Result | undefined)?.state === "blocked";
+  return (handle) => {
+    const result = stored[resultKey(handle)] as Result | undefined;
+    return result?.state === "blocked" && result.at < MULTI_ACCOUNT_AT;
+  };
 }
 
 /**
@@ -158,7 +261,7 @@ function inheritedBlock(stored: Record<string, unknown>): (handle: string) => bo
  * compte que X montre bloqué l'est, un compte que X montre non bloqué ne l'est
  * pas, quoi que Barrage ait enregistré. X ne dit pas qui a bloqué : un blocage
  * inconnu de Barrage compte comme fait par l'utilisateur, sauf s'il figure
- * dans l'état commun d'avant (voir inheritedBlocks). Les comptes vérifiés
+ * dans l'état commun d'avant (voir inheritedBlock). Les comptes vérifiés
  * sortent de la liste.
  * @param blocking comptes bloqués d'après X, parmi `found`
  * @param found comptes que X connaît ; les autres gardent leur état
@@ -167,7 +270,7 @@ export async function recordAudit(
   batch: readonly string[],
   found: readonly string[],
   blocking: readonly string[],
-  extra: Record<string, unknown>,
+  cleared: Cleared,
   account?: string | null,
 ): Promise<void> {
   // Des tableaux plutôt que des Set : les messages entre contextes ne transportent que du JSON.
@@ -187,17 +290,22 @@ export async function recordAudit(
   }
   const done = new Set(batch);
   if (stale.length) await chrome.storage.local.remove(stale.map((h) => resultKey(h, state.prefix)));
-  await setResults(state.prefix, entries, { audit: state.audit.filter((h) => !done.has(h)), ...extra });
+  await setResults(state.prefix, entries, { audit: state.audit.filter((h) => !done.has(h)), ...clearedValues(cleared) });
 }
+
+/** Première version dont les vérifications ne sont plus à réparer. */
+const REPAIRED_VERSION = "1.1.1";
 
 /**
  * Répare les vérifications faites par la version 1.1.0, qui comptaient comme
  * « bloqué avant Barrage » tous les blocages d'un compte X autre que le
  * premier vu : ceux que l'état commun d'avant attribuait à Barrage lui
  * reviennent, pour être débloqués au passage sur Off. Sans requête à X, et
- * sans effet une fois appliquée.
+ * seulement en quittant une version concernée : plus tard, un « déjà bloqué »
+ * est un vrai blocage de l'utilisateur, que Barrage ne doit pas s'attribuer.
  */
-export async function repairInheritedBlocks(): Promise<void> {
+export async function repairInheritedBlocks(previousVersion: string | undefined): Promise<void> {
+  if (!previousVersion || !isNewer(REPAIRED_VERSION, previousVersion)) return;
   const stored = await readStorage();
   const inherited = inheritedBlock(stored);
   const values: Record<string, unknown> = {};

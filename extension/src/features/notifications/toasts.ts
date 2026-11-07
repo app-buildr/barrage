@@ -5,6 +5,8 @@
 export const TOAST_MS = 5000;
 /** Confirmation de « Annuler » : rien à faire, juste à lire. */
 export const CONFIRM_MS = 3000;
+/** Durée de la sortie d'une notification. */
+export const LEAVE_MS = 300;
 /** Au-delà, les plus anciennes notifications cèdent la place. */
 export const MAX_TOASTS = 3;
 
@@ -33,6 +35,41 @@ export type ToastItem = { id: number; handle: string; content: Content; revision
 
 type Listener = () => void;
 
+/** Abonnés d'une pile, prévenus à chaque changement. */
+function createListeners() {
+  const listeners = new Set<Listener>();
+  return {
+    subscribe(listener: Listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    notify() {
+      for (const listener of listeners) listener();
+    },
+  };
+}
+
+/** Palier de la notification de badge affichée : une seule à la fois, hors de la pile. */
+export type BadgeStore = {
+  getSnapshot(): number | null;
+  subscribe(listener: Listener): () => void;
+  set(palier: number | null): void;
+};
+
+export function createBadgeStore(): BadgeStore {
+  let palier: number | null = null;
+  const { subscribe, notify } = createListeners();
+  return {
+    getSnapshot: () => palier,
+    subscribe,
+    set(next) {
+      if (next === palier) return;
+      palier = next;
+      notify();
+    },
+  };
+}
+
 export type ToastStore = {
   getSnapshot(): readonly ToastItem[];
   subscribe(listener: Listener): () => void;
@@ -44,24 +81,23 @@ export type ToastStore = {
   remove(id: number): void;
   /** Retire tout, sans animation. */
   clear(): void;
+  /** « Annuler » de la notification la plus récente qui le propose. */
+  undoLast(): void;
 };
 
 export function createToastStore(): ToastStore {
   let items: readonly ToastItem[] = [];
   let nextId = 1;
-  const listeners = new Set<Listener>();
+  const { subscribe, notify } = createListeners();
 
   function set(next: readonly ToastItem[]): void {
     items = next;
-    for (const listener of listeners) listener();
+    notify();
   }
 
   return {
     getSnapshot: () => items,
-    subscribe(listener) {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
+    subscribe,
     show(handle, content) {
       const existing = items.find((t) => t.handle === handle && !t.leaving);
       if (existing) {
@@ -78,6 +114,9 @@ export function createToastStore(): ToastStore {
     },
     clear() {
       if (items.length) set([]);
+    },
+    undoLast() {
+      [...items].reverse().find((t) => !t.leaving && t.content.undo)?.content.undo?.();
     },
   };
 }

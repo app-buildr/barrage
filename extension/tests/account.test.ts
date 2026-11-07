@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { accountId } from "../src/features/blocking/api.ts";
+import { accountId } from "../src/features/x/session.ts";
 
 /** Cookies de la page, lus par accountId. */
 const page = { cookie: "" };

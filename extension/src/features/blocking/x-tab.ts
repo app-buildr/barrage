@@ -1,10 +1,10 @@
 // Le blocage passe par la session X de l'utilisateur, disponible seulement dans
 // un onglet x.com. Ce module garantit qu'un tel onglet existe quand les options
 // demandent un blocage ou un déblocage, et en ouvre un en arrière-plan sinon.
-import { PING, isPingRequest, type PingReply } from "../../core/messages.ts";
-import { signedIn } from "./api.ts";
+import { PING, type Message, type PingReply } from "../../core/messages.ts";
+import { X_HOME_URL, X_MATCHES } from "../networks/networks.ts";
 
-export const X_TABS = ["https://x.com/*", "https://twitter.com/*"];
+export type XTabStatus = "none" | "logged_out" | "connected";
 
 /**
  * Options : état des onglets x.com dont le content script répond. "connected" :
@@ -12,14 +12,16 @@ export const X_TABS = ["https://x.com/*", "https://twitter.com/*"];
  * l'extension, les onglets déjà ouverts n'ont plus de script vivant, d'où le
  * ping plutôt qu'une simple recherche d'onglet.
  */
-export async function xTabStatus(): Promise<"none" | "logged_out" | "connected"> {
-  const tabs = (await chrome.tabs.query({ url: X_TABS })).filter((tab) => tab.id !== undefined);
-  const pings = tabs.map((tab) =>
-    chrome.tabs.sendMessage(tab.id as number, { type: PING }).then(
-      (reply: unknown) => reply as PingReply | undefined,
-      () => undefined,
-    ),
-  );
+export async function xTabStatus(): Promise<XTabStatus> {
+  const tabs = await chrome.tabs.query({ url: X_MATCHES });
+  const pings = tabs
+    .flatMap((tab) => (tab.id === undefined ? [] : [tab.id]))
+    .map((id) =>
+      chrome.tabs.sendMessage(id, { type: PING } satisfies Message).then(
+        (reply: unknown) => reply as PingReply | undefined,
+        () => undefined,
+      ),
+    );
   // Un onglet sans script vivant ne répond rien.
   const replies = (await Promise.all(pings)).filter((reply) => reply !== undefined);
   if (replies.some((reply) => reply.session)) return "connected";
@@ -47,19 +49,10 @@ export function wakeXTab(): Promise<void> {
   waking ??= (async () => {
     if ((await xTabStatus().catch(() => "none")) !== "none") return;
     if (await openedTabStillLoading()) return;
-    const tab = await chrome.tabs.create({ url: "https://x.com/home", active: false }).catch(() => null);
+    const tab = await chrome.tabs.create({ url: X_HOME_URL, active: false }).catch(() => null);
     if (tab?.id !== undefined) opened = { id: tab.id, at: Date.now() };
   })().finally(() => {
     waking = null;
   });
   return waking;
-}
-
-/** Content script : se déclarer vivant auprès des options, avec l'état de la session. */
-export function answerPings(): void {
-  chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse: (reply: PingReply) => void) => {
-    if (!isPingRequest(message)) return false;
-    sendResponse({ session: signedIn() });
-    return false;
-  });
 }

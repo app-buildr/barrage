@@ -1,0 +1,16 @@
+{
+  "handles": ["perso_un"],
+  "remote": ["liste_a", "liste_b", "liste_c"],
+  "account": "111",
+  "legacy": "111",
+  "accounts": { "111": { "handle": "premier" }, "222": { "handle": "second" } },
+  "disabled": [],
+  "notify": true,
+  "audit": [],
+  "acct:222/audit": [],
+  "acct:222/seen": [],
+  "result:liste_a": { "state": "blocked", "at": 1761000000000 },
+  "result:liste_b": { "state": "blocked", "at": 1761000000000 },
+  "acct:222/result:liste_a": { "state": "already_blocked", "at": 1761900000000 },
+  "acct:222/result:liste_c": { "state": "already_blocked", "at": 1761900000000 }
+}

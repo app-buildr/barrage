@@ -1,0 +1,38 @@
+name: release
+
+# Publie barrage.zip à chaque tag v*. Le nom de l'asset ne doit pas changer : les
+# liens du README et du site pointent sur releases/latest/download/barrage.zip.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: extension
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: extension/.nvmrc
+          cache: npm
+          cache-dependency-path: extension/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm run check -- --tag="$GITHUB_REF_NAME"
+      - name: Zip dist/ under barrage/
+        run: |
+          cp -R dist barrage
+          zip -r -X barrage.zip barrage
+      - run: gh release create "$GITHUB_REF_NAME" barrage.zip --verify-tag --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}
