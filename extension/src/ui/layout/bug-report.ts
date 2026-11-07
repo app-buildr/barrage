@@ -3,7 +3,8 @@
 
 import { REPO_URL } from "../../core/config.ts";
 
-type Context = { version: string; userAgent: string; tab: string; activeLists: number };
+/** `activeLists` : absent quand l'état n'a pas pu être lu. */
+type Context = { version: string; userAgent: string; tab: string; activeLists?: number };
 
 export function bugReportUrl({ version, userAgent, tab, activeLists }: Context): string {
   const body = [
@@ -21,7 +22,7 @@ export function bugReportUrl({ version, userAgent, tab, activeLists }: Context):
     `- Version de Barrage : ${version}`,
     `- Navigateur : ${userAgent}`,
     `- Onglet ouvert : ${tab}`,
-    `- Listes actives : ${activeLists}`,
+    ...(activeLists === undefined ? [] : [`- Listes actives : ${activeLists}`]),
   ].join("\n");
   const params = `title=${encodeURIComponent("Bug : ")}&body=${encodeURIComponent(body)}`;
   return `${REPO_URL}/issues/new?${params}`;

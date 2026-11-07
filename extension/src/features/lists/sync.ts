@@ -115,6 +115,7 @@ export function syncLists(refresh: () => Promise<unknown>): () => void {
     if (!isRefreshListsRequest(message)) return false;
     void checkedRecently()
       .then((recent) => (recent ? undefined : refresh()))
+      .catch((err: unknown) => console.warn("[Barrage]", err))
       .finally(() => sendResponse(true));
     return true; // réponse asynchrone
   });

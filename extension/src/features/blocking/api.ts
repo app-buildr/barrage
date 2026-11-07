@@ -1,5 +1,6 @@
 // Appels à l'API interne de X, celle qu'utilise le site lui-même.
 // C'est le point qui casse si X change son API : un seul fichier à relire.
+import { X_REQUEST_TIMEOUT_MS } from "../../core/config.ts";
 import { handleFromUserNameText } from "../timeline/authors.ts";
 import { ACCOUNT_BUTTON_SELECTOR } from "../timeline/selectors.ts";
 import { classify, noUserMatch, readLookup, routeMaybeGone, type Lookup, type Outcome } from "./outcome.ts";
@@ -84,6 +85,8 @@ async function call(path: string, init: RequestInit): Promise<{ outcome: Outcome
     response = await fetch(location.origin + path, {
       ...init,
       credentials: "include",
+      // Sans réponse, l'onglet garderait le verrou : aucun autre ne prendrait la file.
+      signal: AbortSignal.timeout(X_REQUEST_TIMEOUT_MS),
       headers: {
         authorization: `Bearer ${WEB_BEARER}`,
         "content-type": "application/x-www-form-urlencoded",

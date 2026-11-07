@@ -19,6 +19,7 @@ import {
   MAX_CONSECUTIVE_FAILURES,
   MAX_PAUSE_MS,
   NETWORK_RETRY_MS,
+  SLEEP_SLICE_MS,
 } from "../../core/config.ts";
 import {
   QUEUE_KEYS,
@@ -87,8 +88,17 @@ async function ensureAccount(account: string): Promise<void> {
  */
 const switched = (state: State): boolean => accountId() !== state.account;
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+/**
+ * Attend `ms`, ou moins si l'extension a été rechargée. L'horloge décide de la
+ * fin : Chrome ralentit les minuteurs d'un onglet caché, des tranches comptées
+ * une à une allongeraient d'autant une longue pause.
+ */
+async function sleep(ms: number): Promise<void> {
+  const end = Date.now() + ms;
+  do {
+    const slice = Math.min(Math.max(end - Date.now(), 0), SLEEP_SLICE_MS);
+    await new Promise((resolve) => setTimeout(resolve, slice));
+  } while (Date.now() < end && contextAlive());
 }
 
 function jittered(ms: number): number {
@@ -362,8 +372,33 @@ async function start(pageLoad = false): Promise<void> {
     });
 }
 
+/** Démarrage à refaire après un échec, un seul à la fois. */
+let retry: { pageLoad: boolean } | null = null;
+
+/**
+ * Démarre sans laisser d'échec sans suite : le service worker peut ne pas
+ * répondre au chargement, et le traitement ne repartirait qu'à la prochaine
+ * modification de l'état. Ce démarrage n'envoie rien à X par lui-même.
+ */
+function launch(pageLoad = false): void {
+  start(pageLoad).catch((err: unknown) => {
+    if (!contextAlive()) return;
+    console.error("[Barrage]", err);
+    if (retry) {
+      retry.pageLoad ||= pageLoad;
+      return;
+    }
+    const next = { pageLoad };
+    retry = next;
+    setTimeout(() => {
+      retry = null;
+      launch(next.pageLoad);
+    }, NETWORK_RETRY_MS);
+  });
+}
+
 /** Traite la file maintenant, puis à chaque modification qui la concerne. */
 export function startRunner(): void {
-  onStateChange(coalesced(() => void start()), QUEUE_KEYS);
-  void start(true);
+  onStateChange(coalesced(() => launch()), QUEUE_KEYS);
+  launch(true);
 }

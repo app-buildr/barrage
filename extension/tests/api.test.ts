@@ -122,3 +122,13 @@ test("connecté d'après twid ou le bouton de compte", () => {
   assert.equal(signedIn(), true);
   assert.equal(accountHandle(), "moi");
 });
+
+test("une requête sans réponse est abandonnée au bout du délai, comme une coupure réseau", async () => {
+  let signal: AbortSignal | null | undefined;
+  globalThis.fetch = (async (_url: string, init: RequestInit) => {
+    signal = init.signal;
+    throw new DOMException("délai dépassé", "TimeoutError");
+  }) as unknown as typeof fetch;
+  assert.equal((await blockUser("a")).kind, "network");
+  assert.ok(signal instanceof AbortSignal);
+});

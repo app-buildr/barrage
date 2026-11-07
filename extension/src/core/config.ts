@@ -46,6 +46,15 @@ export const CHECK_RETRY_MS = 15 * 60_000;
 /** Attente après une coupure réseau. */
 export const NETWORK_RETRY_MS = 60_000;
 
+/** Une requête à X sans réponse au bout de ce délai est abandonnée, comme une coupure réseau. */
+export const X_REQUEST_TIMEOUT_MS = 30_000;
+
+/**
+ * Une attente du traitement se découpe en tranches de cette durée : un script
+ * orphelin, après un rechargement de l'extension, rend vite le verrou.
+ */
+export const SLEEP_SLICE_MS = 30_000;
+
 /**
  * Après une erreur de session, délai avant de retenter avec la même session.
  * Un compte X verrouillé ou restreint garde son cookie : retenter à chaque

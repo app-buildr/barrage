@@ -9,6 +9,7 @@ import {
   MAX_PAUSE_MS,
   NETWORK_RETRY_MS,
   RETIRE_GRACE_MS,
+  SLEEP_SLICE_MS,
   STATE_COALESCE_MS,
 } from "../src/core/config.ts";
 import { getState, resultKey } from "../src/core/state.ts";
@@ -417,4 +418,57 @@ test("une rafale d'écritures ne relit l'état qu'une fois par onglet", async ()
   for (let i = 0; i < 5; i++) await chrome.storage.local.set({ disabled: [`z${i}`] });
   await advance(STATE_COALESCE_MS);
   assert.equal(reads, 1);
+});
+
+test("un démarrage sans réponse du service worker est retenté, une fois par délai", async (t) => {
+  t.mock.method(console, "error", () => {});
+  store.account = null;
+  store.seen = ["a"];
+  const sendMessage = chrome.runtime.sendMessage;
+  let attempts = 0;
+  (chrome.runtime as any).sendMessage = async () => {
+    attempts++;
+    return undefined;
+  };
+  await openTab();
+  assert.equal(attempts, 1);
+  // D'autres écritures, pendant l'attente, n'ajoutent pas de nouvel essai programmé.
+  await chrome.storage.local.set({ disabled: ["z"] });
+  await advance(STATE_COALESCE_MS);
+  assert.equal(attempts, 2);
+  await advance(NETWORK_RETRY_MS, 10_000);
+  assert.equal(attempts, 3);
+  await advance(NETWORK_RETRY_MS - 1000, 10_000);
+  assert.equal(attempts, 3);
+
+  (chrome.runtime as any).sendMessage = sendMessage;
+  await advance(NETWORK_RETRY_MS, 10_000);
+  assert.equal(store.account, "1");
+});
+
+test("un script orphelin rend le verrou sans attendre la fin de sa pause", async () => {
+  store.seen = ["a"];
+  store.pauseUntil = T0 + 15 * 60_000;
+  await openTab();
+  let freed = false;
+  void navigator.locks.request("barrage-queue", async () => {
+    freed = true;
+  });
+  await settle();
+  assert.equal(freed, false);
+
+  (chrome.runtime as any).id = undefined;
+  await advance(SLEEP_SLICE_MS);
+  assert.equal(freed, true);
+  assert.deepEqual(x.requests, []);
+});
+
+test("une longue pause dure jusqu'au bout, découpée ou non", async () => {
+  store.seen = ["a"];
+  store.pauseUntil = T0 + 5 * 60_000;
+  await openTab();
+  await advance(5 * 60_000 - 1000, 10_000);
+  assert.deepEqual(x.posts(BLOCK), []);
+  await advance(2000);
+  assert.ok(x.requests.length > 0);
 });

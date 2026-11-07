@@ -23,6 +23,7 @@ import { Footer } from "@/ui/layout/Footer.tsx";
 import { Header } from "@/ui/layout/Header.tsx";
 import type { MainTab } from "@/ui/layout/main-tab.ts";
 import { MainTabList } from "@/ui/layout/MainTabs.tsx";
+import { ErrorBoundary, StartupError } from "@/ui/layout/StartupError.tsx";
 import { useReveal } from "@/ui/use-reveal.ts";
 
 /** Panneau gardé monté : recherche, filtre et saisie en cours sont retrouvés au retour. */
@@ -64,10 +65,11 @@ function Options({ state, tab }: { state: State; tab: MainTab }) {
 }
 
 function OptionsApp() {
-  const state = useExtensionState();
+  const { state, failed } = useExtensionState();
   const { tab, welcome } = useMainRoute(state?.onboarded);
   useReveal(welcome !== null);
 
+  if (!state && failed) return <StartupError message="Impossible de lire les données : rechargez la page." />;
   if (!state || welcome === null) return null;
   return welcome ? (
     <div className="tab-content">
@@ -80,7 +82,9 @@ function OptionsApp() {
 
 createRoot(document.getElementById("root") as HTMLElement).render(
   <StrictMode>
-    <OptionsApp />
+    <ErrorBoundary>
+      <OptionsApp />
+    </ErrorBoundary>
   </StrictMode>,
 );
 

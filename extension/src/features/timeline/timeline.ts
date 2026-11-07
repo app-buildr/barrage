@@ -256,7 +256,8 @@ export function watchTimeline(): void {
   // Le fil est virtualisé : les tweets entrent et sortent du DOM au défilement.
   const observer = new MutationObserver((records) => {
     // Extension rechargée ou désinstallée : ce script orphelin s'arrête au lieu
-    // d'échouer à chaque mutation. Le nouveau script injecté prend le relais.
+    // d'échouer à chaque mutation. Rien ne le remplace avant le rechargement de
+    // l'onglet : sans permission scripting, un onglet ouvert n'est pas réinjecté.
     if (!contextAlive()) return observer.disconnect();
     // Sans liste, rien à relire : le retour d'une liste fait tout relire, voir loadList.
     if (!listed.size) return;
