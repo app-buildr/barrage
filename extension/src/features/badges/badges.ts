@@ -1,6 +1,6 @@
 // Badges de progression : paliers, attribution et partage. Fonctions pures,
 // testées dans tests/badges.test.ts.
-import { SITE_URL } from "../../core/config.ts";
+import { SITE_URL, X_ACCOUNT } from "../../core/config.ts";
 
 export type Badge = {
   palier: number;
@@ -54,8 +54,8 @@ export function pendingBadge(earned: Earned, notified: number): number | null {
 /** Texte du tweet de partage. */
 export function shareText(badge: Badge): string {
   const signature = `Vos réseaux sociaux, vos règles. ${SITE_URL.replace("https://", "")}`;
-  if (badge.palier === 1) return `J'ai bloqué mon premier compte avec @BarrageApp ${badge.emoji} ${signature}`;
-  return `J'ai débloqué le badge ${badge.name} ${badge.emoji} : ${badge.palier} comptes bloqués avec @BarrageApp. ${signature}`;
+  if (badge.palier === 1) return `J'ai bloqué mon premier compte avec ${X_ACCOUNT} ${badge.emoji} ${signature}`;
+  return `J'ai débloqué le badge ${badge.name} ${badge.emoji} : ${badge.palier} comptes bloqués avec ${X_ACCOUNT}. ${signature}`;
 }
 
 export const shareUrl = (badge: Badge): string => `https://x.com/intent/post?text=${encodeURIComponent(shareText(badge))}`;

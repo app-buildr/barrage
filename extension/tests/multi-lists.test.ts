@@ -18,6 +18,7 @@ import {
   setListActive,
   setListNetworks,
   updateListHandles,
+  type OnboardingChoice,
 } from "../src/features/lists/store.ts";
 
 let store: Record<string, unknown>;
@@ -304,7 +305,7 @@ test("accueil : liste perso active, collaborative enregistrée désactivée", as
 
 test("accueil : un second envoi ne change rien", async () => {
   store = { remote: ["a", "b"] };
-  const choice = { kind: "list", list: { source: "file", handles: ["c"], networks: ["x"] } } as const;
+  const choice: OnboardingChoice = { kind: "list", list: { source: "file", handles: ["c"], networks: ["x"] } };
   await completeOnboarding(choice);
   await completeOnboarding(choice);
   assert.equal((await getState()).lists.length, 2);

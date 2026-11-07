@@ -27,9 +27,7 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
-      # Non bloquant tant que tests/ a des erreurs de type (TEST-07).
       - run: npm run typecheck:tests
-        continue-on-error: true
       - run: npm test
       - run: npm run build
       - run: npm run check

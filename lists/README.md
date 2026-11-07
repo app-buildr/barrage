@@ -31,14 +31,17 @@ Pour demander le retrait de votre propre compte sans passer par GitHub, voir le 
 - un fichier qui n'est pas un tableau de chaînes, ou un fichier sans réseau connu ;
 - une entrée invalide, un doublon, un tri non respecté ;
 - une liste X vide, ou plus longue que `LIST_MAX_SIZE` ;
-- une différence avec `main` que l'extension refuserait : plus de `LIST_MAX_REMOVED_SHARE` de retraits d'un coup.
+- une différence avec `main` que l'extension refuserait : plus de `LIST_MAX_REMOVED_SHARE` (10 %) de retraits d'un coup ;
+- de même, plus de `LIST_MAX_ADDED_SHARE` (25 %) d'ajouts d'un coup.
 
-Ces seuils sont dans `extension/src/core/config.ts`, et le script les importe.
+Jusqu'à `LIST_GUARD_FLOOR` comptes (5), un ajout ou un retrait passe toujours. Ces seuils sont dans `extension/src/core/config.ts`, et le script les importe.
 
 ## Revenir en arrière
 
 Une liste fusionnée par erreur se corrige par une nouvelle pull request, en général un `git revert` du commit fautif. Le push direct sur `main` n'est pas possible.
 
-Le retour arrière passe par les mêmes seuils que le reste. Annuler un ajout massif est un retrait massif : au-delà de `LIST_MAX_REMOVED_SHARE`, la CI le refuse, comme le ferait l'extension, qui resterait sur la mauvaise liste. Il faut alors redescendre par paliers, une pull request par palier, chacun sous le seuil, en laissant au moins 6 h entre deux paliers : une installation qui manque un palier refuse les suivants et reste figée.
+Le retour arrière passe par les mêmes seuils que le reste. Annuler un ajout massif est un retrait massif : au-delà de `LIST_MAX_REMOVED_SHARE`, la CI le refuse. Il faut alors redescendre par paliers, une pull request par palier, chacun sous le seuil.
+
+L'extension, elle, compare chaque liste reçue à une référence renouvelée tous les 7 jours (`LIST_BASELINE_MS`), pas à la liste précédente. Un retour vers cette référence passe toujours. Des retraits enchaînés qui dépassent le seuil par rapport à elle sont mis de côté : la liste en place reste, et la mise à jour attend une confirmation dans les options.
 
 Les comptes débloqués à cause d'une liste erronée ne sont rebloqués que s'ils réapparaissent dans le fil.

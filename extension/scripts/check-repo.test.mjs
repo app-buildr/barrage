@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { LIST_MAX_REMOVED_SHARE, LIST_MAX_SIZE } from "../src/core/config.ts";
+import { LIST_GUARD_FLOOR, LIST_MAX_ADDED_SHARE, LIST_MAX_REMOVED_SHARE, LIST_MAX_SIZE } from "../src/core/config.ts";
 
 const SCRIPT = fileURLToPath(new URL("./check-repo.mjs", import.meta.url));
 const REPO = fileURLToPath(new URL("../..", import.meta.url));
@@ -131,6 +131,23 @@ test("compare les retraits à la base avec le seuil de l'extension", () => {
   assert.match(atLimit.output, new RegExp(`${100 - kept} retirés, 0 ajoutés sur 100`));
   writeList(root, "x", handles(kept - 1));
   assertRefused(root, /x\.json : refusée par l'extension \(\d+ comptes retirés d'un coup sur 100\)/);
+});
+
+test("compare les ajouts à la base avec le seuil de l'extension", () => {
+  const root = fixture();
+  const atMost = 100 + 100 * LIST_MAX_ADDED_SHARE;
+  writeList(root, "x", handles(atMost));
+  const atLimit = check(root);
+  assert.equal(atLimit.status, 0, atLimit.output);
+  writeList(root, "x", handles(atMost + 1));
+  assertRefused(root, /x\.json : refusée par l'extension \(\d+ comptes ajoutés d'un coup à 100\)/);
+});
+
+test("laisse passer un ajout sous le plancher, même gros en proportion", () => {
+  const root = fixture(handles(4));
+  writeList(root, "x", handles(4 + LIST_GUARD_FLOOR));
+  const { status, output } = check(root);
+  assert.equal(status, 0, output);
 });
 
 test("compte les ajouts et les retraits d'une liste qui change", () => {

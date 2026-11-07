@@ -1,11 +1,14 @@
 // Réglages techniques, volontairement absents des options.
 
-/** Dépôt du projet. */
-export const REPO_URL = "https://github.com/app-buildr/barrage";
+/** Dépôt du projet, compte et nom. */
+const REPO = "app-buildr/barrage";
+export const REPO_URL = `https://github.com/${REPO}`;
 /** Site public. */
 export const SITE_URL = "https://app-buildr.github.io/barrage";
 /** Adresse des demandes de retrait de la liste collaborative. */
 export const CONTACT_EMAIL = "barrage.app@protonmail.com";
+/** Compte X du projet, cité dans les textes de partage. */
+export const X_ACCOUNT = "@BarrageApp";
 
 /**
  * Délai entre deux blocages. X limite le nombre d'actions par compte et peut
@@ -84,7 +87,7 @@ export const AUDIT_INTERVAL_MS = 70_000;
  * "https://raw.githubusercontent.com/<compte>/<dépôt>/main/lists". Vide : pas de
  * téléchargement, seule la liste intégrée à l'extension sert.
  */
-export const LISTS_URL = "https://raw.githubusercontent.com/app-buildr/barrage/main/lists";
+export const LISTS_URL = `https://raw.githubusercontent.com/${REPO}/main/lists`;
 /** Intervalle entre deux téléchargements. */
 export const LISTS_REFRESH_MINUTES = 6 * 60;
 /** Au-delà, une liste reçue est jugée anormale et ignorée. */
@@ -133,6 +136,6 @@ export const RETIRE_GRACE_MS = 72 * 60 * 60_000;
 // temps que les listes, pour signaler qu'il faut mettre à jour.
 
 /** Dernière version publiée de l'extension. Vide : pas de vérification. */
-export const RELEASES_URL = "https://api.github.com/repos/app-buildr/barrage/releases/latest";
+export const RELEASES_URL = `https://api.github.com/repos/${REPO}/releases/latest`;
 /** Guide de mise à jour, lien du bandeau des options. */
 export const UPDATE_GUIDE_URL = `${SITE_URL}/#mise-a-jour`;

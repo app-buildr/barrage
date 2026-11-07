@@ -7,22 +7,22 @@ import { pendingIn } from "./queue.ts";
 const CORAL_DEEP = "#B83A14";
 const RED = "#f4212e";
 const WHITE = "#ffffff";
-const TITLE = "Barrage : liste et suivi";
 
-async function refreshBadge(): Promise<void> {
+export async function refreshBadge(): Promise<void> {
   const state = await getState();
+  const title = chrome.runtime.getManifest().action?.default_title ?? "";
   await chrome.action.setBadgeTextColor({ color: WHITE });
   if (updateAvailable(state.latestVersion)) {
     await chrome.action.setBadgeBackgroundColor({ color: RED });
     await chrome.action.setBadgeText({ text: "!" });
-    await chrome.action.setTitle({ title: `${TITLE} (mise à jour disponible)` });
+    await chrome.action.setTitle({ title: `${title} (mise à jour disponible)` });
     return;
   }
   // Seuls les comptes vus dans le fil ou demandés à la main sont en file.
   const pending = pendingIn(queueOrder(state), state.results).length;
   await chrome.action.setBadgeBackgroundColor({ color: CORAL_DEEP });
   await chrome.action.setBadgeText({ text: pending > 999 ? "999+" : pending ? String(pending) : "" });
-  await chrome.action.setTitle({ title: TITLE });
+  await chrome.action.setTitle({ title });
 }
 
 export function watchBadge(): void {

@@ -107,12 +107,6 @@ function compareWithBase(network, list) {
   const added = list.filter((entry) => !known.has(entry)).length;
   const removed = base.length - (list.length - added);
   if (base.length || list.length) notes.push(`${file} : ${removed} retirés, ${added} ajoutés sur ${base.length} (${args.base})`);
-  // Absent tant que le plafond d'ajouts n'existe pas dans config.ts (SEC-03).
-  const maxAdded = config.LIST_MAX_ADDED_SHARE;
-  if (maxAdded === undefined) return;
-  if (base.length && added / base.length > maxAdded) {
-    errors.push(`${file} : ${added} comptes ajoutés d'un coup sur ${base.length}, au-delà de ${maxAdded * 100} %`);
-  }
 }
 
 function checkLists() {

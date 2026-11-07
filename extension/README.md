@@ -13,7 +13,7 @@ npm run watch            # reconstruit à chaque modification
 npm test                 # tests de la logique et des scripts (node --test)
 npm run lint             # Biome : imports et variables inutilisés, règles des hooks
 npm run typecheck        # src/ (navigateur) et vite.config.ts (Node, tsconfig.node.json)
-npm run typecheck:tests  # src/ et tests/, non bloquant en CI tant qu'il reste des erreurs
+npm run typecheck:tests  # src/ et tests/
 npm run check            # après le build : listes, versions, manifest et dist/
 ```
 
