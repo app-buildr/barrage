@@ -15,6 +15,7 @@
     ],
     "strict": true,
     "noUncheckedIndexedAccess": true,
+    "verbatimModuleSyntax": true,
     "skipLibCheck": true,
     "noEmit": true,
     "allowImportingTsExtensions": true,

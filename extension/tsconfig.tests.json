@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "erasableSyntaxOnly": true,
+    "types": [
+      "chrome",
+      "node",
+      "vite/client"
+    ]
+  },
+  "include": [
+    "src",
+    "tests"
+  ]
+}
