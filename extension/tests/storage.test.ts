@@ -182,6 +182,7 @@ test("débloquer à la main vaut aussi pour un compte bloqué avant Barrage", as
 test("un compte retiré de la liste partagée que Barrage a bloqué est débloqué", async () => {
   store.remote = ["b"];
   store.retired = ["a", "c"];
+  store.retiredAt = { a: 1, c: 1 };
   putResults({ a: { state: "blocked", at: 1 }, c: { state: "already_blocked", at: 1 } });
   const state = await getState();
   assert.deepEqual(state.handles, ["b"]);

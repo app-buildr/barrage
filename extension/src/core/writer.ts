@@ -5,6 +5,7 @@
 // première.
 import { dismissBadge, recordBlockSuccess, setNotifyBadges, syncBadges } from "../features/badges/store.ts";
 import {
+  acceptPendingList,
   addList,
   completeOnboarding,
   removeList,
@@ -26,6 +27,7 @@ import { addSeen } from "../features/timeline/store.ts";
 import { isWriteRequest, type WriteReply } from "./messages.ts";
 
 const WRITES = {
+  acceptPendingList,
   addHandles,
   addList,
   addSeen,

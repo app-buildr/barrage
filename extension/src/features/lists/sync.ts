@@ -3,67 +3,23 @@
 // options, et compare la liste intégrée à chaque mise à jour de l'extension.
 // Un compte retiré de la liste collaborative que Barrage avait bloqué est mis
 // en file de déblocage, pour chaque compte X où il l'avait bloqué ; l'onglet
-// x.com qui traite la file s'en charge. Un compte retiré d'une liste GitHub
-// reste bloqué. La dernière version publiée de l'extension est relevée en même temps.
+// x.com qui traite la file s'en charge, passé RETIRE_GRACE_MS. Un compte retiré
+// d'une liste GitHub reste bloqué. Une liste qui s'écarte trop de sa référence
+// attend une confirmation dans les options, voir compareLists. La dernière version publiée de l'extension est relevée en même temps.
 import { LIST_MAX_BYTES, LISTS_REFRESH_MINUTES, LISTS_URL } from "../../core/config.ts";
 import { isImportListRequest, isRefreshListsRequest, type ImportListReply } from "../../core/messages.ts";
-import { accountStates, readStorage, scoped, strings, type State } from "../../core/state.ts";
+import { accountStates, readStorage, strings, type State } from "../../core/state.ts";
 import { DEFAULT_HANDLES } from "./defaults.ts";
-import { blockedByBarrage } from "../blocking/queue.ts";
 import { DOWNLOAD_ERROR, analyzeList, validateListUrl } from "./import.ts";
 import { OFFICIAL_ID, otherActiveHandles, readLists } from "./lists.ts";
 import { compareLists, parseList } from "./remote.ts";
-import { updateListHandles } from "./store.ts";
+import { receiveOfficial, recordListRefusal, replaceOfficial, updateListHandles } from "./store.ts";
 import { serial } from "../../core/writer.ts";
 import { checkLatestVersion } from "../updates/check.ts";
 
 const ALARM = "barrage-lists";
 /** Liste intégrée à la version précédente de l'extension. */
 const BUNDLED_KEY = "bundled";
-
-/**
- * Remplace la liste collaborative `current` par `next` : les comptes retirés que
- * Barrage a bloqués passent en file de déblocage, sur chaque compte X où il
- * les a bloqués. Renvoie false si la nouvelle liste est refusée.
- * @param states état de chaque compte X, voir accountStates : la liste et les
- *   réglages, communs, se lisent sur n'importe lequel
- */
-async function replaceList(
-  states: readonly State[],
-  current: readonly string[],
-  next: readonly string[],
-  extra: Record<string, unknown>,
-): Promise<boolean> {
-  const shared = states[0] as State;
-  const update = compareLists(current, next, otherActiveHandles(shared.lists, "x"));
-  if (!update.ok) {
-    console.warn("[Barrage] liste collaborative ignorée :", update.reason);
-    return false;
-  }
-  const removed = new Set(update.removed);
-  const listed = new Set(next);
-  const values: Record<string, unknown> = {
-    ...extra,
-    // Un compte sorti de la liste quitte aussi les réglages qui le visaient.
-    disabled: shared.disabled.filter((h) => !removed.has(h)),
-  };
-  for (const own of states) {
-    Object.assign(
-      values,
-      scoped(own.prefix, {
-        // Un déblocage demandé à la main reste dû, voir unblockQueue.
-        // Un compte remis dans la liste entre-temps n'est plus à débloquer, même si
-        // la liste est désactivée plus tard.
-        retired: [...new Set([...own.retired, ...blockedByBarrage(update.removed, own.results)])].filter(
-          (h) => !listed.has(h),
-        ),
-        seen: own.seen.filter((h) => !removed.has(h)),
-      }),
-    );
-  }
-  await chrome.storage.local.set(values);
-  return true;
-}
 
 /**
  * Mise à jour de l'extension : tant qu'aucune liste n'est reçue de GitHub, la
@@ -75,7 +31,12 @@ async function syncBundled(): Promise<void> {
   const previous = Array.isArray(stored[BUNDLED_KEY]) ? strings(stored[BUNDLED_KEY]) : null;
   const bundled = { [BUNDLED_KEY]: [...DEFAULT_HANDLES] };
   const states = accountStates(stored);
-  if (previous && states[0]?.remote === null && (await replaceList(states, previous, DEFAULT_HANDLES, bundled))) return;
+  const shared = states[0] as State;
+  if (previous && shared.remote === null) {
+    const update = compareLists(previous, DEFAULT_HANDLES, otherActiveHandles(shared.lists, "x"));
+    if (update.ok) return replaceOfficial(states, DEFAULT_HANDLES, update, bundled);
+    console.warn("[Barrage] liste intégrée sans retrait :", update.reason);
+  }
   await chrome.storage.local.set(bundled);
 }
 
@@ -92,16 +53,13 @@ async function refreshList(): Promise<void> {
   }
 
   const parsed = parseList(body);
+  const at = Date.now();
   if (!parsed.ok) {
     console.warn("[Barrage] liste collaborative ignorée :", parsed.reason);
+    await serial(() => recordListRefusal(OFFICIAL_ID, parsed.reason, at));
     return;
   }
-  await serial(async () => {
-    const states = accountStates(await readStorage());
-    const syncedAt = Date.now();
-    const lists = (states[0] as State).lists.map((l) => (l.id === OFFICIAL_ID ? { ...l, syncedAt } : l));
-    await replaceList(states, states[0]?.remote ?? DEFAULT_HANDLES, parsed.handles, { remote: parsed.handles, lists });
-  });
+  await serial(() => receiveOfficial(parsed.handles, at));
 }
 
 /**
@@ -131,7 +89,12 @@ async function refreshImported(): Promise<void> {
       } catch {
         return; // Hors ligne ou fichier illisible : la liste en place reste.
       }
-      if (!report.ok) return console.warn("[Barrage] liste ignorée :", report.reason);
+      if (!report.ok) {
+        console.warn("[Barrage] liste ignorée :", report.reason);
+        const { reason } = report;
+        await serial(() => recordListRefusal(id, reason, Date.now()));
+        return;
+      }
       const { handles } = report;
       await serial(() => updateListHandles(id, handles, Date.now()));
     }),

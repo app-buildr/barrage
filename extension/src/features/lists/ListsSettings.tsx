@@ -1,7 +1,7 @@
 // Carte « Listes de comptes » de Réglages : listes actives, désactivées, ajout.
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { List, Pencil, Plus, Trash2 } from "lucide-react";
-import { LIST_HOSTS_TEXT, LIST_NAME_MAX } from "@/core/config.ts";
+import { LIST_HOSTS_TEXT, LIST_NAME_MAX, RETIRE_GRACE_MS } from "@/core/config.ts";
 import type { State } from "@/core/state.ts";
 import { useSafeWrite, type Attempt } from "@/core/use-safe-write.ts";
 import { write } from "@/core/write.ts";
@@ -14,8 +14,10 @@ import { Panel, StatusMessage } from "@/ui/layout/Section";
 import { cn } from "@/ui/lib/utils";
 import type { NetworkId } from "../networks/networks.ts";
 import { listDetails } from "./details.ts";
-import { FilePicker, FormatHint, ListUrlInput, NetworkChips } from "./ListFields.tsx";
+import { plural } from "@/core/format.ts";
+import { AutoUpdateNotice, FilePicker, FormatHint, ListUrlInput, NetworkChips } from "./ListFields.tsx";
 import { LIST_NETWORKS, OFFICIAL_ID, cleanName, listHandles, type ListDef } from "./lists.ts";
+import type { PendingList } from "./remote.ts";
 import { useListAnalysis, type Analysis } from "./use-list-analysis.ts";
 
 type ListProps = { list: ListDef; attempt: Attempt };
@@ -109,7 +111,62 @@ function RemoveList({ list, attempt }: ListProps) {
   );
 }
 
-function ListCard({ list, attempt, count, now }: ListProps & { count: number; now: number }) {
+/** Aperçu des comptes concernés par une mise à jour mise de côté. */
+const sample = (handles: readonly string[]): string =>
+  handles.slice(0, 10).map((h) => `@${h}`).join(", ") + (handles.length > 10 ? "…" : "");
+
+type PendingProps = ListProps & { pending: PendingList; current: readonly string[] };
+
+/** Mise à jour refusée par les gardes : dite, et acceptable si le fichier était valide. */
+function PendingUpdate({ list, attempt, pending, current }: PendingProps) {
+  const [confirming, setConfirming] = useState(false);
+  const { handles } = pending;
+  const before = new Set(current);
+  const after = new Set(handles);
+  const added = handles?.filter((h) => !before.has(h)) ?? [];
+  const removed = handles ? current.filter((h) => !after.has(h)) : [];
+  return (
+    <div className="mt-3 rounded-step bg-sun-soft p-4 text-[15px] text-ink">
+      <p className="m-0 font-bold">
+        {handles ? "Mise à jour en attente de votre accord" : "Mise à jour ignorée"} : {pending.reason}.
+      </p>
+      {handles ? (
+        <>
+          <p className="mt-1 mb-0">
+            {plural(added.length, "compte ajouté", "comptes ajoutés")}
+            {added.length ? ` (${sample(added)})` : ""}, {plural(removed.length, "compte retiré", "comptes retirés")}
+            {removed.length ? ` (${sample(removed)})` : ""}. La liste en place reste appliquée tant que vous n'acceptez pas.
+          </p>
+          {confirming ? (
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <span>
+                {list.id === OFFICIAL_ID
+                  ? `Les comptes ajoutés seront bloqués s'ils paraissent dans votre fil. Ceux que Barrage a bloqués parmi les retirés seront débloqués d'ici ${RETIRE_GRACE_MS / 3_600_000} h.`
+                  : "Les comptes ajoutés seront bloqués s'ils paraissent dans votre fil."}
+              </span>
+              <Button variant="destructive" onClick={() => void attempt(write("acceptPendingList", list.id))}>
+                Confirmer
+              </Button>
+              <Button variant="outline" onClick={() => setConfirming(false)}>
+                Annuler
+              </Button>
+            </div>
+          ) : (
+            <Button variant="outline" className="mt-3" onClick={() => setConfirming(true)}>
+              Accepter cette mise à jour
+            </Button>
+          )}
+        </>
+      ) : (
+        <p className="mt-1 mb-0">La liste en place reste appliquée.</p>
+      )}
+    </div>
+  );
+}
+
+type CardProps = ListProps & { count: number; now: number; pending?: PendingList | undefined; current: readonly string[] };
+
+function ListCard({ list, attempt, count, now, pending, current }: CardProps) {
   return (
     <li
       className={cn(
@@ -155,6 +212,7 @@ function ListCard({ list, attempt, count, now }: ListProps & { count: number; no
           <RemoveList list={list} attempt={attempt} />
         </div>
       )}
+      {pending ? <PendingUpdate list={list} attempt={attempt} pending={pending} current={current} /> : null}
     </li>
   );
 }
@@ -189,6 +247,7 @@ function NewListPanel({ attempt }: { attempt: Attempt }) {
         .csv) depuis votre ordinateur. Les autres sites ne sont pas acceptés.
       </p>
       <FormatHint />
+      <AutoUpdateNotice />
       <form className="flex gap-3 max-[560px]:flex-wrap" noValidate onSubmit={submit}>
         <ListUrlInput value={url} onChange={setUrl} />
         <Button type="submit" variant="cta" size="lg" disabled={busy || !url.trim()}>
@@ -215,9 +274,20 @@ function Group({ title, lists, state, attempt }: GroupProps) {
         {title} ({lists.length})
       </h3>
       <ul className="m-0 flex list-none flex-col gap-3 p-0">
-        {lists.map((list) => (
-          <ListCard key={list.id} list={list} attempt={attempt} count={listHandles(list, state.official).length} now={now} />
-        ))}
+        {lists.map((list) => {
+          const current = listHandles(list, state.official);
+          return (
+            <ListCard
+              key={list.id}
+              list={list}
+              attempt={attempt}
+              count={current.length}
+              now={now}
+              pending={state.listGuards[list.id]?.pending}
+              current={current}
+            />
+          );
+        })}
       </ul>
     </>
   );

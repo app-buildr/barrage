@@ -2,7 +2,7 @@
 // attendu », adresse et choix d'un fichier.
 import { useRef } from "react";
 import { Check, Info } from "lucide-react";
-import { LIST_FILE_EXTENSIONS } from "@/core/config.ts";
+import { LIST_FILE_EXTENSIONS, LIST_MAX_ADDED_SHARE } from "@/core/config.ts";
 import { CORAL_LINK, PILL_INPUT } from "@/ui/classes.ts";
 import { Input } from "@/ui/components/input";
 import { cn } from "@/ui/lib/utils";
@@ -62,6 +62,17 @@ export function FormatHint() {
         @compte_01 @compte_02;compte_03; https://x.com/compte_04
       </code>
     </aside>
+  );
+}
+
+/** À l'import d'une adresse : une liste GitHub suit son auteur, pas seulement ce qu'on a vu à l'import. */
+export function AutoUpdateNotice() {
+  return (
+    <p className="m-0 text-[15px] text-muted-foreground">
+      Une liste GitHub se met à jour seule : ce que son auteur y ajoute est appliqué sans vous le demander, jusqu'à{" "}
+      {LIST_MAX_ADDED_SHARE * 100} % de comptes en plus par semaine. Au-delà, Barrage vous demande de confirmer dans
+      Réglages. N'importez que des listes dont vous connaissez l'auteur.
+    </p>
   );
 }
 

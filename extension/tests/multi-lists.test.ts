@@ -73,6 +73,7 @@ test("un compte couvert par une autre liste active reste dans la liste effective
 
 test("un compte retiré de la collaborative n'est pas hors liste : il va être débloqué", async () => {
   store.retired = ["c"];
+  store.retiredAt = { c: 1 };
   store[resultKey("c")] = { state: "blocked", at: 1 };
   const state = await getState();
   assert.deepEqual(offListHandles(state), []);
@@ -203,10 +204,18 @@ test("une liste GitHub qui retire des comptes les laisse bloqués, hors liste", 
   assert.equal(state.lists[1]?.syncedAt, 5);
 });
 
-test("une liste GitHub qui retire plus de la moitié de ses comptes est ignorée", async () => {
-  store.lists = [officialList(true), list("g", ["c", "d", "e"], { source: "github" })];
-  assert.equal(await updateListHandles("g", ["c"], 5), false);
-  assert.deepEqual((await getState()).lists[1]?.handles, ["c", "d", "e"]);
+test("une liste GitHub qui retire trop de comptes d'un coup est mise de côté", async () => {
+  const handles = Array.from({ length: 20 }, (_, i) => `c${i}`);
+  store.lists = [officialList(true), list("g", handles, { source: "github" })];
+  assert.equal(await updateListHandles("g", ["c0"], 5), false);
+  assert.deepEqual((await getState()).lists[1]?.handles, handles);
+});
+
+test("supprimer une liste oublie sa garde", async () => {
+  store.lists = [officialList(true), list("g", ["a"], { source: "github", active: false })];
+  store.listGuards = { g: { baseline: ["a"], baselineAt: 1 } };
+  await removeList("g");
+  assert.deepEqual(Object.keys((await getState()).listGuards), []);
 });
 
 // Adresses

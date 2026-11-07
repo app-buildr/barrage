@@ -2,7 +2,7 @@
 // worker (voir core/writer.ts). Les listes valent pour tous les comptes X ;
 // les files, elles, sont propres à chacun.
 import { accountStates, readStorage, scoped, type State } from "../../core/state.ts";
-import { resultOf } from "../blocking/queue.ts";
+import { blockedByBarrage, resultOf } from "../blocking/queue.ts";
 import type { NetworkId } from "../networks/networks.ts";
 import {
   IMPORTED_NAME,
@@ -10,11 +10,21 @@ import {
   cleanName,
   effectiveHandles,
   officialList,
+  otherActiveHandles,
   readLists,
   uniqueName,
   type ListDef,
 } from "./lists.ts";
-import { compareLists } from "./remote.ts";
+import {
+  compareLists,
+  confirmedGuard,
+  guardReferences,
+  renewGuard,
+  settledGuard,
+  type ListGuard,
+  type PendingList,
+  type Update,
+} from "./remote.ts";
 
 type Stored = Record<string, unknown>;
 
@@ -110,12 +120,80 @@ export async function removeList(id: string): Promise<void> {
   const list = find(lists, id);
   if (list.id === OFFICIAL_ID) throw new Error("La liste collaborative ne peut pas être supprimée.");
   if (list.active) throw new Error("Une liste active ne peut pas être supprimée.");
-  await saveLists(stored, lists.filter((l) => l.id !== id), false);
+  const { [id]: _removed, ...listGuards } = (accountStates(stored)[0] as State).listGuards;
+  await saveLists(stored, lists.filter((l) => l.id !== id), false, { listGuards });
+}
+
+/** Garde de la liste `id` à écrire, les autres inchangées. */
+const withGuard = (states: readonly State[], id: string, guard: ListGuard): Stored => ({
+  listGuards: { ...(states[0] as State).listGuards, [id]: guard },
+});
+
+/**
+ * Remplace la liste collaborative par `next` : les comptes retirés que Barrage
+ * a bloqués passent en file de déblocage, datés, sur chaque compte X où il les
+ * a bloqués. `disabled` ne change pas : un compte hors liste y reste sans effet,
+ * et une liste erronée puis corrigée ne fait pas perdre le choix de l'utilisateur.
+ * @param states état de chaque compte X, voir accountStates : la liste et les
+ *   réglages, communs, se lisent sur n'importe lequel
+ */
+export async function replaceOfficial(
+  states: readonly State[],
+  next: readonly string[],
+  update: Extract<Update, { ok: true }>,
+  extra: Stored,
+): Promise<void> {
+  const removed = new Set(update.removed);
+  const listed = new Set(next);
+  const at = Date.now();
+  const values: Stored = { ...extra };
+  for (const own of states) {
+    // Un déblocage demandé à la main reste dû, voir unblockQueue.
+    // Un compte remis dans la liste entre-temps n'est plus à débloquer, même si
+    // la liste est désactivée plus tard.
+    const retired = [...new Set([...own.retired, ...blockedByBarrage(update.removed, own.results)])].filter(
+      (h) => !listed.has(h),
+    );
+    const retiredAt: Record<string, number> = Object.create(null);
+    for (const handle of retired) retiredAt[handle] = own.retiredAt[handle] ?? at;
+    Object.assign(values, scoped(own.prefix, { retired, retiredAt, seen: own.seen.filter((h) => !removed.has(h)) }));
+  }
+  await chrome.storage.local.set(values);
+}
+
+/** Listes avec cette date de synchronisation pour la liste collaborative. */
+const syncedOfficial = (shared: State, syncedAt: number): ListDef[] =>
+  shared.lists.map((list) => (list.id === OFFICIAL_ID ? { ...list, syncedAt } : list));
+
+/**
+ * Liste collaborative téléchargée : appliquée, ou mise de côté si elle s'écarte
+ * trop de ses références.
+ * @returns faux si la nouvelle liste est refusée
+ */
+export async function receiveOfficial(handles: string[], syncedAt: number): Promise<boolean> {
+  const states = accountStates(await readStorage());
+  const shared = states[0] as State;
+  const guard = renewGuard(shared.listGuards[OFFICIAL_ID], shared.official, syncedAt);
+  const covered = otherActiveHandles(shared.lists, "x");
+  const update = compareLists(shared.official, handles, covered, guardReferences(guard));
+  if (!update.ok) {
+    console.warn("[Barrage] liste collaborative mise de côté :", update.reason);
+    const pending: PendingList = { reason: update.reason, at: syncedAt, handles };
+    await chrome.storage.local.set(withGuard(states, OFFICIAL_ID, { ...guard, pending }));
+    return false;
+  }
+  await replaceOfficial(states, handles, update, {
+    remote: handles,
+    lists: syncedOfficial(shared, syncedAt),
+    ...withGuard(states, OFFICIAL_ID, settledGuard(guard)),
+  });
+  return true;
 }
 
 /**
- * Remplace le contenu d'une liste GitHub après synchronisation. Ignoré si elle
- * retire trop de comptes d'un coup. Les comptes retirés restent bloqués.
+ * Remplace le contenu d'une liste GitHub après synchronisation, ou met la
+ * nouvelle liste de côté si elle s'écarte trop de ses références. Les comptes
+ * retirés restent bloqués.
  * @returns faux si la nouvelle liste est refusée
  */
 export async function updateListHandles(id: string, handles: string[], syncedAt: number): Promise<boolean> {
@@ -123,13 +201,52 @@ export async function updateListHandles(id: string, handles: string[], syncedAt:
   const lists = readLists(stored.lists);
   const list = lists.find((l) => l.id === id);
   if (!list) return false; // Supprimée pendant le téléchargement.
-  const update = compareLists(list.handles, handles, []);
+  const states = accountStates(stored);
+  const guard = renewGuard((states[0] as State).listGuards[id], list.handles, syncedAt);
+  const update = compareLists(list.handles, handles, [], guardReferences(guard));
   if (!update.ok) {
-    console.warn("[Barrage] liste ignorée :", list.name, update.reason);
+    console.warn("[Barrage] liste mise de côté :", list.name, update.reason);
+    const pending: PendingList = { reason: update.reason, at: syncedAt, handles };
+    await chrome.storage.local.set(withGuard(states, id, { ...guard, pending }));
     return false;
   }
-  await saveLists(stored, replace(lists, { ...list, handles, syncedAt }), false);
+  await saveLists(stored, replace(lists, { ...list, handles, syncedAt }), false, withGuard(states, id, settledGuard(guard)));
   return true;
+}
+
+/** Fichier en ligne invalide : rien à appliquer ni à accepter, mais les options le disent. */
+export async function recordListRefusal(id: string, reason: string, at: number): Promise<void> {
+  const states = accountStates(await readStorage());
+  const shared = states[0] as State;
+  const list = shared.lists.find((l) => l.id === id);
+  if (!list) return; // Supprimée pendant le téléchargement.
+  const current = id === OFFICIAL_ID ? shared.official : list.handles;
+  const guard = renewGuard(shared.listGuards[id], current, at);
+  await chrome.storage.local.set(withGuard(states, id, { ...guard, pending: { reason, at } }));
+}
+
+/**
+ * Applique la mise à jour mise de côté, confirmée dans les options. Son contenu
+ * devient la référence, sans perdre le retour à la précédente. Les comptes
+ * retirés de la liste collaborative attendent RETIRE_GRACE_MS comme les autres.
+ */
+export async function acceptPendingList(id: string): Promise<void> {
+  const stored = await readStorage();
+  const states = accountStates(stored);
+  const shared = states[0] as State;
+  const guard = shared.listGuards[id];
+  const handles = guard?.pending?.handles;
+  if (!handles) throw new Error(`Aucune mise à jour à accepter : ${id}`);
+  const at = Date.now();
+  const extra = withGuard(states, id, confirmedGuard(guard, handles, at));
+  if (id === OFFICIAL_ID) {
+    const update = compareLists(shared.official, handles, otherActiveHandles(shared.lists, "x"), [handles]);
+    if (!update.ok) throw new Error(update.reason);
+    await replaceOfficial(states, handles, update, { remote: handles, lists: syncedOfficial(shared, at), ...extra });
+    return;
+  }
+  const lists = readLists(stored.lists);
+  await saveLists(stored, replace(lists, { ...find(lists, id), handles, syncedAt: at }), false, extra);
 }
 
 export type OnboardingChoice =

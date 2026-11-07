@@ -11,7 +11,7 @@ import { Button } from "@/ui/components/button";
 import { Header } from "@/ui/layout/Header";
 import { Panel, StatusMessage } from "@/ui/layout/Section";
 import { cn } from "@/ui/lib/utils";
-import { FilePicker, FormatHint, ListUrlInput, NetworkChips } from "../lists/ListFields.tsx";
+import { AutoUpdateNotice, FilePicker, FormatHint, ListUrlInput, NetworkChips } from "../lists/ListFields.tsx";
 import { LIST_NETWORKS } from "../lists/lists.ts";
 import { useListAnalysis, type Analysis } from "../lists/use-list-analysis.ts";
 import type { NetworkId } from "../networks/networks.ts";
@@ -107,6 +107,7 @@ export function Welcome({ state }: { state: State }) {
                 Analyser
               </Button>
             </form>
+            <AutoUpdateNotice />
             <FilePicker onFile={(file) => void analyzeFile(file).then(setAnalysis)} />
             <StatusMessage kind={outcome?.kind} message={outcome?.message} />
           </div>

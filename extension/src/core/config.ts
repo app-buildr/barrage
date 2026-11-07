@@ -82,10 +82,29 @@ export const LIST_MAX_BYTES = 1_000_000;
 /** Longueur maximale du nom d'une liste. */
 export const LIST_NAME_MAX = 40;
 /**
- * Part maximale de comptes retirés d'un coup. Au-delà, la liste reçue est
- * ignorée : un fichier vidé par erreur ou piraté ne débloque pas tout le monde.
+ * Part maximale de comptes retirés d'une liste en ligne, par rapport à sa
+ * référence (voir LIST_BASELINE_MS). Au-delà, la liste reçue est mise de côté
+ * jusqu'à confirmation dans les options.
  */
-export const LIST_MAX_REMOVED_SHARE = 0.5;
+export const LIST_MAX_REMOVED_SHARE = 0.1;
+/**
+ * Part maximale de comptes ajoutés, sur la même base. Le plus gros ajout connu
+ * de la liste collaborative est de 14 %.
+ */
+export const LIST_MAX_ADDED_SHARE = 0.25;
+/** En dessous de ce nombre de comptes, un ajout ou un retrait passe toujours : une petite liste change vite en proportion. */
+export const LIST_GUARD_FLOOR = 5;
+/**
+ * Durée de vie de la référence à laquelle les seuils se comparent. Comparer à
+ * la dernière liste acceptée laisserait passer des retraits enchaînés, chacun
+ * sous le seuil ; une référence stable limite le cumul sur cette durée.
+ */
+export const LIST_BASELINE_MS = 7 * 24 * 60 * 60_000;
+/**
+ * Délai avant de débloquer un compte retiré de la liste collaborative : un
+ * retrait par erreur, corrigé entre-temps, ne débloque personne.
+ */
+export const RETIRE_GRACE_MS = 72 * 60 * 60_000;
 
 // Mises à jour : Barrage est chargé en mode développeur, sans mise à jour
 // automatique. La dernière version publiée sur GitHub est relevée en même

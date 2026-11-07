@@ -4,10 +4,12 @@
 //
 // chrome.storage.local plutôt que sync : sync plafonne chaque valeur à 8 Ko,
 // trop peu pour une longue liste.
+import { RETIRE_GRACE_MS } from "./config.ts";
 import { DEFAULT_HANDLES } from "../features/lists/defaults.ts";
 import type { Earned } from "../features/badges/badges.ts";
 import { activeHandles, eligible, isBlocked, resultOf, type Result, type Results } from "../features/blocking/queue.ts";
 import { effectiveHandles, readLists, type ListDef } from "../features/lists/lists.ts";
+import { readGuards, type ListGuard } from "../features/lists/remote.ts";
 
 export type ErrorReason = "auth" | "network" | "other";
 
@@ -53,6 +55,10 @@ export type State = {
    * à débloquer sur X, voir unblockQueue.
    */
   retired: string[];
+  /** Date de retrait de ces comptes, en millisecondes, voir RETIRE_GRACE_MS. */
+  retiredAt: Record<string, number>;
+  /** Références et mises à jour refusées des listes en ligne, par identifiant de liste. */
+  listGuards: Record<string, ListGuard>;
   results: Results;
   /** Comptes désactivés dans les options : Barrage ne les bloque plus et ne masque plus leurs tweets. */
   disabled: string[];
@@ -105,6 +111,7 @@ const ACCOUNT_PREFIX_RE = /^acct:\d+\//;
 /** Champs de l'état propres à chaque compte X. La liste et les réglages sont communs. */
 const ACCOUNT_FIELDS = [
   "retired",
+  "retiredAt",
   "unblock",
   "seen",
   "pauseUntil",
@@ -209,21 +216,23 @@ export function queueOrder(state: State): string[] {
  * compte sur Off ou retiré de la liste collaborative que Barrage a bloqué. Calculée
  * plutôt que stockée, la file ne peut pas manquer un blocage qui aboutit juste
  * après le passage sur Off. Un déblocage refusé par X n'est relancé que par
- * une nouvelle demande.
+ * une nouvelle demande. Un compte retiré attend RETIRE_GRACE_MS, et sans date
+ * de retrait il attend que la prochaine synchronisation lui en donne une.
  */
-export function unblockQueue(state: State): string[] {
+export function unblockQueue(state: State, now = Date.now()): string[] {
   const disabled = new Set(state.disabled);
   const blockedByUs = (h: string) => {
     const result = resultOf(state.results, h);
     return result?.state === "blocked" && !result.unblockFailed;
   };
   const listed = new Set(state.handles);
+  const graceOver = (h: string) => now - (state.retiredAt[h] ?? now) >= RETIRE_GRACE_MS;
   return [
     ...new Set([
       ...state.unblock.filter((h) => disabled.has(h) || !listed.has(h)),
       ...state.disabled.filter(blockedByUs),
       // Un compte remis dans la liste entre-temps n'est plus à débloquer.
-      ...state.retired.filter((h) => !listed.has(h) && blockedByUs(h)),
+      ...state.retired.filter((h) => !listed.has(h) && blockedByUs(h) && graceOver(h)),
     ]),
   ];
 }
@@ -271,6 +280,7 @@ export function readState(stored: Record<string, unknown>, account?: string | nu
   const badgeNotified = own("badgeNotified");
   const pauseUntil = own("pauseUntil");
   const error = own("error");
+  const retiredAt = own("retiredAt");
   return {
     account: current,
     accounts: accountsOf(stored),
@@ -281,6 +291,8 @@ export function readState(stored: Record<string, unknown>, account?: string | nu
     onboarded: stored.onboarded === true,
     remote,
     retired: strings(own("retired")),
+    retiredAt: isRecord(retiredAt) ? Object.assign(Object.create(null), retiredAt) : Object.create(null),
+    listGuards: readGuards(stored.listGuards),
     disabled: strings(stored.disabled),
     unblock: strings(own("unblock")),
     results,

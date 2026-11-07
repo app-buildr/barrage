@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
+import { RETIRE_GRACE_MS } from "../src/core/config.ts";
 import { IMPORT_LIST, REFRESH_LISTS } from "../src/core/messages.ts";
 import { getState, resultKey, unblockQueue } from "../src/core/state.ts";
 import { BAD_HOST_MESSAGE, DOWNLOAD_ERROR, TABLE_MESSAGE } from "../src/features/lists/import.ts";
 import { officialList, type ListDef } from "../src/features/lists/lists.ts";
+import { acceptPendingList } from "../src/features/lists/store.ts";
 import { syncLists } from "../src/features/lists/sync.ts";
 import { installChrome } from "./helpers/chrome.ts";
 
@@ -42,18 +44,153 @@ beforeEach(() => {
   syncLists();
 });
 
-test("un compte retiré de la collaborative est mis à débloquer et quitte les réglages", async () => {
+test("un compte retiré de la collaborative n'est débloqué qu'après le délai de grâce", async () => {
   store[resultKey("a")] = { state: "blocked", at: 1 };
-  store.disabled = ["a", "b"];
   store.seen = ["a", "c"];
   responses["/x.json"] = json(["b", "c", "d"]);
   await send({ type: REFRESH_LISTS });
   const state = await getState();
+  const at = state.retiredAt.a as number;
   assert.deepEqual(state.retired, ["a"]);
-  assert.deepEqual(state.disabled, ["b"]);
   assert.deepEqual(state.seen, ["c"]);
-  assert.deepEqual(unblockQueue(state), ["a"]);
+  assert.deepEqual(unblockQueue(state, at + RETIRE_GRACE_MS - 1), []);
+  assert.deepEqual(unblockQueue(state, at + RETIRE_GRACE_MS), ["a"]);
   assert.ok(state.lists[0]?.syncedAt);
+});
+
+test("une liste corrigée pendant le délai de grâce ne débloque rien", async () => {
+  store[resultKey("a")] = { state: "blocked", at: 1 };
+  responses["/x.json"] = json(["b", "c", "d"]);
+  await send({ type: REFRESH_LISTS });
+  responses["/x.json"] = json(["a", "b", "c", "d"]);
+  await send({ type: REFRESH_LISTS });
+  const state = await getState();
+  assert.deepEqual(state.retired, []);
+  assert.deepEqual(unblockQueue(state, Date.now() + 2 * RETIRE_GRACE_MS), []);
+});
+
+test("un compte retiré avant ce délai attend d'être daté, et garde sa date ensuite", async () => {
+  store.retired = ["z"];
+  store[resultKey("z")] = { state: "blocked", at: 1 };
+  assert.deepEqual(unblockQueue(await getState(), Date.now() + 2 * RETIRE_GRACE_MS), []);
+  responses["/x.json"] = json(["a", "b", "c", "d"]);
+  await send({ type: REFRESH_LISTS });
+  const at = (await getState()).retiredAt.z as number;
+  assert.ok(at > 1);
+  store.retiredAt = { z: 5 };
+  await send({ type: REFRESH_LISTS });
+  assert.equal((await getState()).retiredAt.z, 5);
+});
+
+test("un compte sur Off sorti de la liste garde ce réglage s'il y revient", async () => {
+  store.disabled = ["a", "b"];
+  responses["/x.json"] = json(["b", "c", "d"]);
+  await send({ type: REFRESH_LISTS });
+  assert.deepEqual((await getState()).disabled, ["a", "b"]);
+  responses["/x.json"] = json(["a", "b", "c", "d"]);
+  await send({ type: REFRESH_LISTS });
+  assert.deepEqual((await getState()).disabled, ["a", "b"]);
+});
+
+const accounts = (count: number, from = 0) => Array.from({ length: count }, (_, i) => `c${from + i}`);
+
+test("une liste refusée n'applique rien et attend dans les options", async () => {
+  const base = accounts(100);
+  store.remote = base;
+  store[resultKey("c0")] = { state: "blocked", at: 1 };
+  store.seen = ["c0"];
+  store.disabled = ["c1"];
+  const list = store.lists;
+  responses["/x.json"] = json(base.slice(60));
+  await send({ type: REFRESH_LISTS });
+  const state = await getState();
+  assert.deepEqual(state.remote, base);
+  assert.deepEqual(state.retired, []);
+  assert.deepEqual(state.seen, ["c0"]);
+  assert.deepEqual(state.disabled, ["c1"]);
+  assert.deepEqual(store.lists, list);
+  assert.equal(state.lists[0]?.syncedAt, undefined);
+  assert.deepEqual(state.listGuards.official?.pending?.handles, base.slice(60));
+  assert.equal(state.listGuards.official?.pending?.reason, "60 comptes retirés d'un coup sur 100");
+});
+
+test("une liste acceptée dans les options s'applique, et ses retraits attendent le délai de grâce", async () => {
+  const base = accounts(100);
+  store.remote = base;
+  store[resultKey("c0")] = { state: "blocked", at: 1 };
+  store.disabled = ["c1"];
+  responses["/x.json"] = json(base.slice(60));
+  await send({ type: REFRESH_LISTS });
+  await acceptPendingList("official");
+  const state = await getState();
+  assert.deepEqual(state.remote, base.slice(60));
+  assert.deepEqual(state.retired, ["c0"]);
+  assert.deepEqual(unblockQueue(state), []);
+  assert.equal(state.listGuards.official?.pending, undefined);
+  assert.deepEqual(state.listGuards.official?.rollback, base);
+  assert.deepEqual(state.disabled, ["c1"]);
+  // La même liste, téléchargée de nouveau, ne revient pas en attente.
+  await send({ type: REFRESH_LISTS });
+  assert.equal((await getState()).listGuards.official?.pending, undefined);
+  // Le retour arrière ne se heurte pas à la garde de retrait.
+  responses["/x.json"] = json(base);
+  await send({ type: REFRESH_LISTS });
+  assert.deepEqual((await getState()).remote, base);
+  assert.deepEqual((await getState()).retired, []);
+});
+
+test("une liste corrigée en ligne fait disparaître la mise à jour en attente", async () => {
+  const base = accounts(100);
+  store.remote = base;
+  responses["/x.json"] = json([...base, ...accounts(300, 100)]);
+  await send({ type: REFRESH_LISTS });
+  assert.ok((await getState()).listGuards.official?.pending);
+  responses["/x.json"] = json(base);
+  await send({ type: REFRESH_LISTS });
+  assert.equal((await getState()).listGuards.official?.pending, undefined);
+});
+
+test("les retraits enchaînés de la collaborative finissent en attente", async () => {
+  const base = accounts(1000);
+  store.remote = base;
+  for (const size of [910, 820]) {
+    responses["/x.json"] = json(base.slice(1000 - size));
+    await send({ type: REFRESH_LISTS });
+  }
+  const state = await getState();
+  assert.equal(state.remote?.length, 910);
+  assert.equal(state.listGuards.official?.pending?.handles?.length, 820);
+});
+
+test("un fichier invalide se voit dans les options, sans rien à accepter", async () => {
+  responses["/x.json"] = json({ pas: "une liste" });
+  await send({ type: REFRESH_LISTS });
+  const pending = (await getState()).listGuards.official?.pending;
+  assert.equal(pending?.reason, "le fichier n'est pas une liste");
+  assert.equal(pending?.handles, undefined);
+  await assert.rejects(acceptPendingList("official"));
+});
+
+test("une liste GitHub refusée attend aussi, et ses comptes retirés restent bloqués", async () => {
+  const base = accounts(100);
+  store.lists = [officialList(true), github(base)];
+  store[resultKey("c0")] = { state: "blocked", at: 1 };
+  responses["l.txt"] = () => new Response(base.slice(50).join("\n"));
+  await send({ type: REFRESH_LISTS });
+  assert.deepEqual((await getState()).lists[1]?.handles, base);
+  assert.equal((await getState()).listGuards.g?.pending?.handles?.length, 50);
+  await acceptPendingList("g");
+  const state = await getState();
+  assert.deepEqual(state.lists[1]?.handles, base.slice(50));
+  assert.deepEqual(state.retired, []);
+  assert.equal(state.listGuards.g?.pending, undefined);
+});
+
+test("une liste GitHub devenue illisible se voit dans les options", async () => {
+  store.lists = [officialList(true), github(["e"])];
+  responses["l.txt"] = () => new Response("id,nom\n1,Alain\n2,David\n");
+  await send({ type: REFRESH_LISTS });
+  assert.equal((await getState()).listGuards.g?.pending?.reason, TABLE_MESSAGE);
 });
 
 test("un compte retiré mais couvert par une autre liste active n'est pas concerné", async () => {
