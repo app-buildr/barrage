@@ -47,6 +47,18 @@ export function manualList(handles: string[], addedAt: number, name = MANUAL_NAM
   return { id: MANUAL_ID, name, source: "manual", handles, active: true, networks: ["x"], addedAt };
 }
 
+/** Listes avec ces comptes dans « Ma liste perso », créée s'il le faut. */
+export function withManualHandles(lists: readonly ListDef[], handles: readonly string[], at: number): ListDef[] {
+  if (!handles.length) return [...lists];
+  const manual = lists.find((list) => list.id === MANUAL_ID);
+  if (manual) {
+    const next = { ...manual, handles: [...new Set([...manual.handles, ...handles])] };
+    return lists.map((list) => (list === manual ? next : list));
+  }
+  const fresh = manualList([...handles], at);
+  return [...lists, { ...fresh, name: uniqueName(fresh.name, lists.map((list) => list.name)) }];
+}
+
 /** La liste s'applique sur ce réseau. */
 export const coversNetwork = (list: ListDef, network: NetworkId): boolean =>
   list.active && list.networks.includes(network);

@@ -3,20 +3,38 @@
 // juste après, voir syncAllBadges.
 import { readStorage, strings } from "../../core/state.ts";
 import { isNewer } from "../updates/version.ts";
-import { manualList, officialList, type ListDef } from "./lists.ts";
+import { officialList, readLists, withManualHandles } from "./lists.ts";
 
 const LISTS_VERSION = "1.4.0";
 
-/** Idempotente : une fois `onboarded` enregistré, elle ne change plus rien. */
-export async function migrate(previousVersion: string | undefined): Promise<void> {
-  if (!previousVersion || !isNewer(LISTS_VERSION, previousVersion)) return;
+/** Clé de résultat, écrite seulement une fois une liste en place : jamais avant l'accueil de la 1.4.0. */
+const RESULT_KEY_RE = /^(?:acct:\d+\/)?result:/;
+
+/**
+ * Décidée sur les données, à chaque démarrage : un événement onInstalled manqué
+ * ou une écriture échouée se rattrapent au démarrage suivant. `previousVersion`
+ * ne sert qu'à reconnaître une ancienne installation sans rien de stocké.
+ *
+ * Idempotente, et rien n'est retiré avant d'être écrit : un arrêt en cours de
+ * route ne perd aucun compte.
+ */
+export async function migrate(previousVersion?: string): Promise<void> {
+  // Cas courant, à chaque réveil du service worker : sans lire tout le stockage.
+  const { onboarded, handles } = await chrome.storage.local.get(["onboarded", "handles"]);
+  const upgraded = previousVersion !== undefined && isNewer(LISTS_VERSION, previousVersion);
+  if (onboarded === true && !Array.isArray(handles)) return;
+
   const stored = await readStorage();
-  if (stored.onboarded === true) return;
+  const old = upgraded || Array.isArray(handles) || Object.keys(stored).some((key) => RESULT_KEY_RE.test(key));
+  if (!old) return;
 
   const at = Date.now();
-  const handles = strings(stored.handles);
-  const lists: ListDef[] = [officialList(true, ["x"], at)];
-  if (handles.length) lists.push(manualList(handles, at));
-  await chrome.storage.local.set({ lists, onboarded: true, notifyBadges: true });
+  // Listes déjà là (accueil terminé, migration interrompue) : seule `handles` reste à reprendre.
+  const lists = Array.isArray(stored.lists) ? readLists(stored.lists) : [officialList(true, ["x"], at)];
+  await chrome.storage.local.set({
+    lists: withManualHandles(lists, strings(handles), at),
+    onboarded: true,
+    ...(stored.notifyBadges === undefined ? { notifyBadges: true } : {}),
+  });
   await chrome.storage.local.remove("handles");
 }

@@ -383,11 +383,18 @@ test("la migration est idempotente", async () => {
   assert.deepEqual(store, after);
 });
 
-test("la migration ignore une version déjà à jour et une installation neuve", async () => {
-  store = { handles: ["perso"] };
+test("la migration ignore une installation neuve, qu'une mise à jour vers la 1.4.0 ou plus ne change pas", async () => {
+  store = {};
   await migrate("1.4.0");
   await migrate(undefined);
   assert.equal("lists" in store, false);
+});
+
+test("une ancienne clé handles est migrée quelle que soit la version annoncée", async () => {
+  store = { handles: ["perso"] };
+  await migrate("1.4.0");
+  assert.equal(store.onboarded, true);
+  assert.deepEqual((store.lists as { handles: string[] }[])[1]?.handles, ["perso"]);
 });
 
 // Texte libre
