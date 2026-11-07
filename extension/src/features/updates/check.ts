@@ -1,6 +1,7 @@
 // Service worker : relève la dernière version publiée de l'extension, aux
 // mêmes moments que les listes (voir entries/background.ts).
 import { RELEASES_URL } from "../../core/config.ts";
+import { serial } from "../../core/writer.ts";
 import { parseVersion } from "./version.ts";
 
 /** Hors ligne ou réponse illisible : la version déjà relevée reste. */
@@ -19,5 +20,5 @@ export async function checkLatestVersion(): Promise<void> {
     return;
   }
   const latestVersion = parseVersion((body as { tag_name?: unknown } | null)?.tag_name);
-  if (latestVersion) await chrome.storage.local.set({ latestVersion });
+  if (latestVersion) await serial(() => chrome.storage.local.set({ latestVersion }));
 }

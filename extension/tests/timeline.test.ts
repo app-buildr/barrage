@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
 import { getState, resultKey } from "../src/core/state.ts";
 import { serveWrites } from "../src/core/writer.ts";
+import { WRITES } from "../src/features/writes.ts";
 import { HIDDEN_ATTR } from "../src/features/timeline/selectors.ts";
 import { officialList } from "../src/features/lists/lists.ts";
-import { installChrome } from "./helpers/chrome.ts";
+import { installChrome, X_TAB } from "./helpers/chrome.ts";
 import { FakeElement, fixture, installDom } from "./helpers/dom.ts";
 import { installX, type FakeX } from "./helpers/x.ts";
 
@@ -23,8 +24,8 @@ beforeEach(() => {
     legacy: "1",
     accounts: { "1": {} },
   };
-  installChrome(() => store);
-  serveWrites();
+  installChrome(() => store, { sender: X_TAB });
+  serveWrites(WRITES);
   x = installX();
 });
 

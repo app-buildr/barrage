@@ -4,7 +4,13 @@
 // Une liste qui s'écarte trop de sa référence attend une confirmation dans les
 // options, voir compareLists.
 import { LIST_MAX_BYTES, LISTS_RECHECK_MS, LISTS_REFRESH_MINUTES, LISTS_URL } from "../../core/config.ts";
-import { isImportListRequest, isRefreshListsRequest, type ImportListReply, type RefreshListsReply } from "../../core/messages.ts";
+import {
+  fromOptions,
+  isImportListRequest,
+  isRefreshListsRequest,
+  type ImportListReply,
+  type RefreshListsReply,
+} from "../../core/messages.ts";
 import { DOWNLOAD_ERROR, analyzeList, validateListUrl } from "./import.ts";
 import { OFFICIAL_ID, readListSync, readLists } from "./lists.ts";
 import { parseList } from "./remote.ts";
@@ -113,16 +119,16 @@ export function syncLists(refresh: () => Promise<unknown>): () => void {
   chrome.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === ALARM) void refresh();
   });
-  chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse: (reply: RefreshListsReply) => void) => {
-    if (!isRefreshListsRequest(message)) return false;
+  chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse: (reply: RefreshListsReply) => void) => {
+    if (!isRefreshListsRequest(message) || !fromOptions(sender)) return false;
     void checkedRecently()
       .then((recent) => (recent ? undefined : refresh()))
       .catch((err: unknown) => console.warn("[Barrage]", err))
       .finally(() => sendResponse(true));
     return true; // réponse asynchrone
   });
-  chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse: (reply: ImportListReply) => void) => {
-    if (!isImportListRequest(message)) return false;
+  chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse: (reply: ImportListReply) => void) => {
+    if (!isImportListRequest(message) || !fromOptions(sender)) return false;
     void importList(message.url).then(sendResponse);
     return true; // réponse asynchrone
   });

@@ -1,12 +1,14 @@
 // Le chemin de production d'une écriture : write(), message, serveWrites.
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
-import { WRITE } from "../src/core/messages.ts";
+import { IMPORT_LIST, REFRESH_LISTS, WRITE } from "../src/core/messages.ts";
 import { getState } from "../src/core/state.ts";
 import { write } from "../src/core/write.ts";
 import { serial, serveWrites } from "../src/core/writer.ts";
+import { WRITES } from "../src/features/writes.ts";
 import { officialList } from "../src/features/lists/lists.ts";
-import { installChrome } from "./helpers/chrome.ts";
+import { syncLists } from "../src/features/lists/sync.ts";
+import { installChrome, X_TAB } from "./helpers/chrome.ts";
 
 let store: Record<string, unknown>;
 let send: (message: unknown) => Promise<unknown>;
@@ -14,7 +16,7 @@ let send: (message: unknown) => Promise<unknown>;
 beforeEach(() => {
   store = { remote: ["a", "b", "c"], lists: [officialList(true)], onboarded: true };
   send = installChrome(() => store).sendMessage;
-  serveWrites();
+  serveWrites(WRITES);
 });
 
 for (const name of ["__proto__", "constructor", "toString", "inconnu"]) {
@@ -81,4 +83,124 @@ test("une tâche rejetée n'arrête pas la file, et son appelant la voit", async
   const next = serial(async () => "suite");
   await assert.rejects(failed, /échec/);
   assert.equal(await next, "suite");
+});
+
+/** Même faux chrome, l'expéditeur étant un onglet x.com. */
+function fromTab(sender: object = X_TAB) {
+  const { sendMessage } = installChrome(() => store, { sender });
+  serveWrites(WRITES);
+  return sendMessage;
+}
+
+const CONTENT_WRITES = [
+  "addSeen",
+  "dismissBadge",
+  "finishUnblock",
+  "holdLookups",
+  "markAlreadyBlocked",
+  "recordAudit",
+  "recordBlockFailure",
+  "recordBlockSuccess",
+  "recordChecks",
+  "recordRequest",
+  "refuseUnblock",
+  "setEnabled",
+  "setHealth",
+  "syncBadges",
+  "useAccount",
+];
+
+test("un onglet x.com n'a accès qu'aux écritures du traitement et du fil", () => {
+  const permitted = Object.entries(WRITES).filter(([, entry]) => entry.content).map(([name]) => name);
+  assert.deepEqual(permitted, CONTENT_WRITES);
+  assert.equal(Object.hasOwn(WRITES, "updateListHandles"), false);
+});
+
+for (const [name, args] of [
+  ["addList", [{ source: "file", handles: ["z"], networks: ["x"] }]],
+  ["removeList", ["official"]],
+  ["requestUnblock", ["a"]],
+  ["restoreBackup", [{}]],
+  ["setNotifications", [{ notify: false }]],
+] as const) {
+  test(`un onglet x.com ne peut pas demander ${name}`, async (t) => {
+    t.mock.method(console, "warn", () => {});
+    const before = JSON.stringify(store);
+    const reply = await fromTab()({ type: WRITE, name, args });
+    assert.deepEqual(reply, { ok: false, error: `Écriture refusée : ${name}.` });
+    assert.equal(JSON.stringify(store), before);
+  });
+}
+
+test("un message venu d'une autre extension n'est pas servi", async () => {
+  const send = fromTab({ id: "autre", url: "chrome-extension://barrage/options.html" });
+  assert.equal(await send({ type: WRITE, name: "addSeen", args: [["a"]] }), undefined);
+  assert.equal(store.seen, undefined);
+});
+
+test("une page qui imite l'adresse des options n'y gagne rien", async (t) => {
+  t.mock.method(console, "warn", () => {});
+  const send = fromTab({ id: "barrage", url: "https://x.com/chrome-extension://barrage/options.html" });
+  assert.equal(((await send({ type: WRITE, name: "removeList", args: ["l"] })) as { ok: boolean }).ok, false);
+});
+
+for (const [name, args] of [
+  ["addHandles", [["@Nom"]]],
+  ["addHandles", ["a"]],
+  ["addSeen", [["pas valide"]]],
+  ["addSeen", [["a"], "nom"]],
+  ["addSeen", [["a"], "1", "de trop"]],
+  ["finishUnblock", ["a", { state: "inventé", at: 1 }, {}]],
+  ["finishUnblock", ["a", null, { lists: [] }]],
+  ["finishUnblock", ["a", null, { error: false }]],
+  ["recordAudit", [["a"], [], [], { remote: [] }]],
+  ["recordChecks", [{ "pas valide": { state: "not_found", at: 1 } }, {}]],
+  ["recordBlockFailure", ["a", { param: 1 }, 1]],
+  ["recordRequest", ["autre"]],
+  ["setHealth", ["autre"]],
+  ["useAccount", ["nom", null]],
+  ["setNotifications", [{ lists: [] }]],
+  ["setNotifications", [{ notify: "oui" }]],
+  ["addList", [{ source: "github", url: "https://exemple.com/x.json", handles: ["a"], networks: ["x"] }]],
+  ["addList", [{ source: "official", handles: ["a"], networks: ["x"] }]],
+  ["setListNetworks", ["official", ["myspace"]]],
+  ["completeOnboarding", [{ kind: "official", networks: "x" }]],
+] as const) {
+  test(`arguments refusés pour ${name} : ${JSON.stringify(args)}`, async (t) => {
+    t.mock.method(console, "warn", () => {});
+    const before = JSON.stringify(store);
+    const reply = await send({ type: WRITE, name, args });
+    assert.deepEqual(reply, { ok: false, error: `Écriture refusée : ${name}.` });
+    assert.equal(JSON.stringify(store), before);
+  });
+}
+
+test("les écritures des options passent leurs contrôles, avec des arguments réels", async () => {
+  store.lists = [officialList(true), { id: "l", name: "l", source: "file", handles: ["z"], active: false, networks: ["x"], addedAt: 0 }];
+  const github = "https://raw.githubusercontent.com/compte/depot/main/x.txt";
+  await write("addList", { source: "github", url: github, handles: ["y"], networks: ["x"] });
+  await write("addList", { source: "file", handles: ["w"], networks: ["x"] });
+  await write("addHandles", ["v"]);
+  await write("setListActive", "l", true);
+  await write("setListNetworks", "l", ["x"]);
+  await write("renameList", "l", "Amis");
+  await write("setListActive", "l", false);
+  await write("removeList", "l");
+  await write("requestBlock", "a");
+  await write("requestUnblock", "b");
+  await write("setEnabled", "b", true);
+  await write("setNotifications", { notify: false });
+  await write("setNotifications", { notifyBadges: true });
+  await write("resumeBlocking");
+  await write("completeOnboarding", { kind: "later" });
+  assert.deepEqual(await write("restoreBackup", {}), { ok: false, reason: "Ce fichier n'est pas une sauvegarde de Barrage." });
+});
+
+test("rafraîchir ou analyser une liste n'est permis qu'aux options", async () => {
+  let refreshes = 0;
+  const { sendMessage } = installChrome(() => store, { sender: X_TAB });
+  syncLists(async () => void refreshes++);
+  assert.equal(await sendMessage({ type: REFRESH_LISTS }), undefined);
+  assert.equal(await sendMessage({ type: IMPORT_LIST, url: "https://raw.githubusercontent.com/a/b/main/c.txt" }), undefined);
+  assert.equal(refreshes, 0);
 });

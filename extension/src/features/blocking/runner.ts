@@ -25,7 +25,6 @@ import {
   coalesced,
   getState,
   onStateChange,
-  type AccountValues,
   type BlockingError,
   type ErrorCause,
   type State,
@@ -43,7 +42,7 @@ import { failureOf, type Failure, type Lookup, type Outcome } from "./outcome.ts
 import { nextAction, type Action } from "./plan.ts";
 import type { Result, Results } from "./queue.ts";
 import { write } from "../../core/write.ts";
-import { recordAutomation, setError, setFailures, setPauseUntil, setResults } from "./store.ts";
+import { clearedValues, recordAutomation, setError, setFailures, setPauseUntil, setResults, type Cleared } from "./store.ts";
 import { contextAlive } from "../../core/context.ts";
 
 /**
@@ -229,8 +228,8 @@ async function check(state: State, batch: string[]): Promise<Next> {
     } else checked.set(handle, at);
   }
   // Le cas courant, comptes trouvés et non bloqués, n'écrit rien.
-  const extra = recovered(state);
-  if (Object.keys(entries).length || Object.keys(extra).length) await setResults(state.prefix, entries, extra);
+  const cleared = recovered(state);
+  if (Object.keys(entries).length || Object.keys(cleared).length) await write("recordChecks", entries, cleared, state.account);
   if (Object.values(entries).some((entry) => entry.state === "already_blocked")) await updateBadges("syncBadges", state);
   return continueIn();
 }
@@ -241,18 +240,18 @@ async function updateBadges(name: "recordBlockSuccess" | "syncBadges", state: St
 }
 
 /** L'appel a abouti : une erreur affichée n'est plus d'actualité. */
-function recovered(state: State): AccountValues {
-  return state.error ? { error: null } : {};
+function recovered(state: State): Cleared {
+  return state.error ? { error: true } : {};
 }
 
 /** X a répondu sur ce compte : la série de refus s'arrête là. */
-function answered(state: State): AccountValues {
-  return { ...recovered(state), ...(state.failures.length ? { failures: [] } : {}) };
+function answered(state: State): Cleared {
+  return { ...recovered(state), ...(state.failures.length ? { failures: true } : {}) };
 }
 
 /** L'action a abouti : seul un blocage ou un déblocage réussi lève le soupçon d'automatisation. */
-function succeeded(state: State): AccountValues {
-  return { ...answered(state), ...(state.strikes ? { strikes: 0 } : {}) };
+function succeeded(state: State): Cleared {
+  return { ...answered(state), ...(state.strikes ? { strikes: true } : {}) };
 }
 
 /** Refus de ce compte : au dernier permis, tout s'arrête sans le lui imputer. */
@@ -280,11 +279,11 @@ async function block(state: State, handle: string): Promise<Next> {
   reconnected = false;
   const at = Date.now();
   if (outcome.kind === "ok") {
-    await setResults(state.prefix, { [handle]: { state: "blocked", at } }, succeeded(state));
+    await setResults(state.prefix, { [handle]: { state: "blocked", at } }, clearedValues(succeeded(state)));
     await updateBadges("recordBlockSuccess", state);
   } else if (outcome.kind === "not_found") {
     const result: Result = { state: "not_found", at, ...failureOf(outcome) };
-    await setResults(state.prefix, { [handle]: result }, answered(state));
+    await setResults(state.prefix, { [handle]: result }, clearedValues(answered(state)));
   } else {
     logRefusal(handle, outcome);
     if (await tripped(state, handle, failureOf(outcome))) return STOP;

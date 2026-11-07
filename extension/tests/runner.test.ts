@@ -20,8 +20,10 @@ import {
 import { getState, resultKey } from "../src/core/state.ts";
 import { write } from "../src/core/write.ts";
 import { serveWrites } from "../src/core/writer.ts";
+import { WRITES } from "../src/features/writes.ts";
+import { resumeBlocking } from "../src/features/blocking/store.ts";
 import { officialList } from "../src/features/lists/lists.ts";
-import { installChrome } from "./helpers/chrome.ts";
+import { installChrome, X_TAB } from "./helpers/chrome.ts";
 import { apiError, BLOCK, installX, LOOKUP, lookupReply, UNBLOCK, type FakeX } from "./helpers/x.ts";
 
 const T0 = Date.UTC(2026, 10, 7);
@@ -67,8 +69,8 @@ beforeEach(() => {
     legacy: "1",
     accounts: { "1": {} },
   };
-  installChrome(() => store);
-  serveWrites();
+  installChrome(() => store, { sender: X_TAB });
+  serveWrites(WRITES);
   x = installX();
 });
 
@@ -165,7 +167,7 @@ test("le code 226 arrête tout, même une fois la pause finie, jusqu'à la repri
   assert.equal(x.requests.length, requests);
 
   // Rechute après la reprise : pause doublée, le compteur a survécu.
-  await write("resumeBlocking");
+  await resumeBlocking();
   await advance(STATE_COALESCE_MS);
   assert.deepEqual(x.posts(BLOCK), ["a", "a"]);
   const relapse = await getState("1");
@@ -419,6 +421,31 @@ test("une réponse de X entre la reconnexion et le 401 écarte le jeton web", as
   assert.equal((await getState("1")).error?.context, undefined);
 });
 
+test("sans service worker, un blocage fait et une limite de X restent notés", async (t) => {
+  t.mock.method(console, "warn", () => {});
+  t.mock.method(console, "error", () => {});
+  store.seen = ["a", "b"];
+  const silence = () => {
+    (chrome.runtime as any).sendMessage = async () => undefined;
+  };
+  x.routes[BLOCK] = (request) => {
+    silence();
+    return request.handle === "a" ? { json: {} } : { status: 429, text: "" };
+  };
+  await openTab();
+  assert.equal((await getState("1")).results.a?.state, "blocked");
+
+  // La suite part d'un onglet neuf, le service worker répondant de nouveau pour la note d'avant envoi.
+  const blocked = store[resultKey("a")];
+  installChrome(() => store, { sender: X_TAB });
+  serveWrites(WRITES);
+  await advance(BLOCK_DELAY_MS * 2);
+  await openTab();
+  await advance(BLOCK_DELAY_MS * 2);
+  assert.deepEqual(store[resultKey("a")], blocked);
+  assert.ok(((await getState("1")).pauseUntil) > Date.now());
+});
+
 test("un refus sans code connu arrête tout dès le premier, sans rien imputer au compte", async () => {
   store.seen = ["a", "b", "c"];
   x.routes[BLOCK] = () => ({ status: 403, text: "" });
@@ -446,7 +473,7 @@ test("trois comptes refusés de suite déclenchent le disjoncteur, sans toucher 
 
   // La reprise dans les options relance, série remise à zéro.
   x.routes[BLOCK] = () => ({ json: {} });
-  await write("resumeBlocking");
+  await resumeBlocking();
   await advance(STATE_COALESCE_MS);
   assert.deepEqual((await getState("1")).failures, []);
   assert.equal((await getState("1")).results.c?.state, "blocked");

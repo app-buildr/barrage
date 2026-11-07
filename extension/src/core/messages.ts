@@ -6,6 +6,13 @@ export const PING = "barrage/ping";
 
 export type PingRequest = { type: typeof PING };
 
+/**
+ * Message venu de la page d'options de cette extension. L'adresse de l'expéditeur
+ * vient du navigateur : un onglet x.com compromis ne peut pas se faire passer pour elle.
+ */
+export const fromOptions = (sender: chrome.runtime.MessageSender): boolean =>
+  sender.id === chrome.runtime.id && sender.url?.startsWith(chrome.runtime.getURL("options.html")) === true;
+
 const hasType = (message: unknown, type: string): boolean =>
   typeof message === "object" && message !== null && (message as { type?: unknown }).type === type;
 

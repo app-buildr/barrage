@@ -3,6 +3,7 @@ import { beforeEach, test } from "node:test";
 import { onStateChange } from "../src/core/state.ts";
 import { write } from "../src/core/write.ts";
 import { serveWrites } from "../src/core/writer.ts";
+import { WRITES } from "../src/features/writes.ts";
 import { installChrome } from "./helpers/chrome.ts";
 
 let store: Record<string, unknown>;
@@ -52,7 +53,7 @@ test("un champ propre à un compte X réveille les écouteurs, quel que soit le 
 });
 
 test("write passe par serveWrites, et une écriture inconnue reste sans réponse", async () => {
-  serveWrites();
+  serveWrites(WRITES);
   await write("setNotifications", { notifyBadges: false });
   assert.equal(store.notifyBadges, false);
   await assert.rejects((write as any)("__proto__"), /sans réponse/);

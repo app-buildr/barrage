@@ -5,14 +5,13 @@
 // de plus, et les listes en ligne repassent par leurs gardes.
 import { LIST_MAX_SIZE } from "../../core/config.ts";
 import { plural } from "../../core/format.ts";
-import type { ResultState } from "../blocking/queue.ts";
+import { isResult } from "../blocking/queue.ts";
 import { parseHandle } from "../lists/handles.ts";
 import { validateListUrl } from "../lists/import.ts";
 import { readLists, type ListDef } from "../lists/lists.ts";
 
 const APP = "barrage";
 const FORMAT = 1;
-const RESULT_STATES: readonly ResultState[] = ["blocked", "already_blocked", "unblocked", "not_found", "failed"];
 
 /** Taille maximale d'un fichier de sauvegarde. */
 export const BACKUP_MAX_BYTES = 10_000_000;
@@ -43,11 +42,6 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const isCount = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value) && value >= 0;
-
-function validResult(value: unknown): boolean {
-  if (!isRecord(value)) return false;
-  return RESULT_STATES.includes(value.state as ResultState) && isCount(value.at);
-}
 
 /** Comptes valides d'un tableau, sans doublon. */
 function handlesOf(value: unknown): string[] {
@@ -97,7 +91,7 @@ function cleanValue(key: string, value: unknown): unknown {
   if (field === "badges") return isRecord(value) && Object.values(value).every(isCount) ? value : undefined;
   if (field) return isCount(value) ? value : undefined;
   const handle = RESULT_KEY_RE.exec(key)?.[1];
-  return handle && parseHandle(handle) === handle && validResult(value) ? value : undefined;
+  return handle && parseHandle(handle) === handle && isResult(value) ? value : undefined;
 }
 
 export type BackupCheck =

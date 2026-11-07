@@ -1,7 +1,7 @@
 // Onglets x.com et options : écriture confiée au service worker, qui les
 // applique une à la fois (voir core/writer.ts).
 import { WRITE, type Message, type WriteReply } from "./messages.ts";
-import type { Writes } from "./writer.ts";
+import type { Writes } from "../features/writes.ts";
 
 export async function write<K extends keyof Writes>(
   name: K,

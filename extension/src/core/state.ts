@@ -1,7 +1,10 @@
 // État de l'extension, partagé par les trois surfaces (service worker, onglets
-// x.com, options). Chaque fonctionnalité écrit sa part dans son propre store.ts ;
-// ce fichier décrit la forme de l'état, le lit et en dérive ce que toutes les
-// surfaces partagent (files de blocage et de déblocage, comptes hors liste).
+// x.com, options). Chaque fonctionnalité écrit sa part dans son propre store.ts,
+// et les files d'un compte X (`seen`, `audit`, `unblock`, `retired`) n'ont de sens
+// que pour features/blocking : les autres n'y ajoutent ou n'en retirent que des
+// comptes, sans en changer les règles. Ce fichier décrit la forme de l'état, le
+// lit et en dérive ce que toutes les surfaces partagent (files de blocage et de
+// déblocage, comptes hors liste).
 //
 // chrome.storage.local plutôt que sync : sync plafonne chaque valeur à 8 Ko,
 // trop peu pour une longue liste.

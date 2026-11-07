@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, mock, test } from "node:test";
 import { HEALTH_PROBE_MS } from "../src/core/config.ts";
 import { serveWrites } from "../src/core/writer.ts";
+import { WRITES } from "../src/features/writes.ts";
 import { healthVerdict, type PageView } from "../src/features/timeline/health.ts";
-import { installChrome } from "./helpers/chrome.ts";
+import { installChrome, X_TAB } from "./helpers/chrome.ts";
 import { installDom } from "./helpers/dom.ts";
 import { installX, type FakeX } from "./helpers/x.ts";
 
@@ -61,8 +62,8 @@ async function settle(): Promise<void> {
 beforeEach(() => {
   mock.timers.enable({ apis: ["setTimeout"] });
   store = {};
-  installChrome(() => store);
-  serveWrites();
+  installChrome(() => store, { sender: X_TAB });
+  serveWrites(WRITES);
   x = installX();
 });
 

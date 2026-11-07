@@ -1,13 +1,22 @@
 // Écritures du moteur de blocage : résultats, file de déblocage, pause imposée
-// par X et erreur bloquante. Toutes visent un compte X : celles qui reçoivent
-// un préfixe de clés l'exigent ; celles qui reçoivent un compte visent par
-// défaut le dernier connecté sur x.com.
+// par X et erreur bloquante. Toutes visent un compte X, et la façon de le désigner
+// dit par où elles passent.
+//
+// Un `account`, ou par défaut le dernier connecté sur x.com : l'écriture lit puis
+// réécrit l'état, elle passe par le service worker (voir core/writer.ts).
+//
+// Un `prefix` de clés : l'écriture part directement de l'onglet qui traite la
+// liste, sans rien lire. Ce sont le résultat d'un blocage (setResults) et tout ce
+// qui arrête le traitement (setPauseUntil, setFailures, recordAutomation,
+// setError) : un blocage a eu lieu, ou X a dit stop, même si le service worker ne
+// répond pas. Perdre cette trace relancerait des requêtes à X.
 import { ACTIONS_WINDOW_MS, LOOKUP_WINDOW_MS, MAX_ATTEMPTS, RUNNER_GRACE_MS } from "../../core/config.ts";
 import {
   accountStates,
   accountsOf,
   active,
   getState,
+  prefixFor,
   readState,
   readStorage,
   resultEntries,
@@ -55,6 +64,19 @@ export async function setHealth(health: HealthIssue | null): Promise<void> {
 }
 
 /**
+ * Ce qu'une réponse de X permet de lever. Décidé par le traitement, d'après
+ * l'état qu'il a lu : relu ici, il pourrait lever un arrêt qu'il n'a pas vu.
+ */
+export type Cleared = { error?: true; failures?: true; strikes?: true };
+
+/** Champs à écrire pour lever ce qui est donné. */
+export const clearedValues = ({ error, failures, strikes }: Cleared): AccountValues => ({
+  ...(error ? { error: null } : {}),
+  ...(failures ? { failures: [] } : {}),
+  ...(strikes ? { strikes: 0 } : {}),
+});
+
+/**
  * Enregistre des résultats en une écriture, avec d'autres champs à écrire en
  * même temps. Seules les clés de ces comptes sont écrites.
  * @param prefix préfixe des clés du compte X, voir State.prefix
@@ -63,11 +85,25 @@ export async function setResults(prefix: string, entries: Results, extra: Accoun
   await chrome.storage.local.set({ ...resultEntries(entries, prefix), ...scoped(prefix, extra) });
 }
 
+/** Comptes vérifiés avant blocage : déjà bloqués ou introuvables. */
+export async function recordChecks(entries: Results, cleared: Cleared, account?: string | null): Promise<void> {
+  await setResults(await prefixFor(account), entries, clearedValues(cleared));
+}
+
 /** Déblocage terminé (ou sans objet) : le compte sort de la file. */
-export async function finishUnblock(
+export function finishUnblock(
   handle: string,
   result: Result | null,
-  extra: AccountValues = {},
+  cleared: Cleared = {},
+  account?: string | null,
+): Promise<void> {
+  return leaveUnblockQueue(handle, result, clearedValues(cleared), account);
+}
+
+async function leaveUnblockQueue(
+  handle: string,
+  result: Result | null,
+  extra: AccountValues,
   account?: string | null,
 ): Promise<void> {
   const { unblock, retired, prefix } = await getState(account);
@@ -105,7 +141,7 @@ export async function refuseUnblock(handle: string, cause: Failure, account?: st
     return;
   }
   const result = previous ? refused(previous, { unblockFailed: true }, cause) : null;
-  await finishUnblock(handle, result, { error }, account);
+  await leaveUnblockQueue(handle, result, { error }, account);
 }
 
 /**
@@ -245,7 +281,7 @@ export async function recordAudit(
   batch: readonly string[],
   found: readonly string[],
   blocking: readonly string[],
-  extra: AccountValues,
+  cleared: Cleared,
   account?: string | null,
 ): Promise<void> {
   // Des tableaux plutôt que des Set : les messages entre contextes ne transportent que du JSON.
@@ -265,7 +301,7 @@ export async function recordAudit(
   }
   const done = new Set(batch);
   if (stale.length) await chrome.storage.local.remove(stale.map((h) => resultKey(h, state.prefix)));
-  await setResults(state.prefix, entries, { audit: state.audit.filter((h) => !done.has(h)), ...extra });
+  await setResults(state.prefix, entries, { audit: state.audit.filter((h) => !done.has(h)), ...clearedValues(cleared) });
   await syncBadges(account);
 }
 

@@ -8,6 +8,7 @@ import { refreshLists, syncLists } from "../features/lists/sync.ts";
 import { serveCommands } from "../features/notifications/command.ts";
 import { servePages } from "../features/onboarding/open.ts";
 import { checkLatestVersion } from "../features/updates/check.ts";
+import { WRITES } from "../features/writes.ts";
 import { serial, serveWrites } from "../core/writer.ts";
 
 const logFailure = (err: unknown): void => console.error("[Barrage]", err);
@@ -38,5 +39,5 @@ chrome.runtime.onStartup.addListener(schedule);
 
 servePages();
 serveCommands();
-serveWrites();
+serveWrites(WRITES);
 watchActionBadge();

@@ -17,6 +17,16 @@ export type Result =
 
 export type ResultState = Result["state"];
 
+const RESULT_STATES: readonly unknown[] = ["blocked", "already_blocked", "unblocked", "not_found", "failed"] satisfies ResultState[];
+
+/** Résultat venu d'un fichier ou d'un autre contexte : son état et sa date sont lisibles. */
+export function isResult(value: unknown): value is Result {
+  const result = value as Partial<Result> | null;
+  if (typeof result !== "object" || result === null || Array.isArray(result)) return false;
+  const { at } = result;
+  return RESULT_STATES.includes(result.state) && typeof at === "number" && Number.isFinite(at) && at >= 0;
+}
+
 /** Résultat d'un compte que X dit introuvable ou a refusé. */
 export type FailedResult = Extract<Result, { state: "not_found" | "failed" }>;
 

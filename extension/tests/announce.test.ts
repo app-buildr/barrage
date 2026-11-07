@@ -2,10 +2,11 @@ import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
 import { getState, resultKey } from "../src/core/state.ts";
 import { serveWrites } from "../src/core/writer.ts";
+import { WRITES } from "../src/features/writes.ts";
 import { officialList } from "../src/features/lists/lists.ts";
 import { createAnnouncer } from "../src/features/notifications/announce.ts";
 import type { Content } from "../src/features/notifications/toasts.ts";
-import { installChrome } from "./helpers/chrome.ts";
+import { installChrome, X_TAB } from "./helpers/chrome.ts";
 import { installX } from "./helpers/x.ts";
 
 let store: Record<string, unknown>;
@@ -22,8 +23,8 @@ const change = (handle: string, oldState: string | null, newState: string, prefi
 beforeEach(() => {
   store = { remote: ["a", "b"], lists: [officialList(true)], onboarded: true, account: "1", legacy: "1", accounts: { "1": {} } };
   shown = [];
-  installChrome(() => store);
-  serveWrites();
+  installChrome(() => store, { sender: X_TAB });
+  serveWrites(WRITES);
   installX();
   announce = createAnnouncer((handle, content) => shown.push({ handle, content }));
 });
