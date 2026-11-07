@@ -1,27 +1,30 @@
-// Section « Comptes » des options : un onglet par réseau. X, seul réseau pris
-// en charge, affiche la liste de l'état et le formulaire d'ajout ; les autres
-// réseaux disponibles, leur liste à venir.
+// Onglet Comptes des options : en tête, les comptes retirés des listes qui
+// attendent un choix, puis un onglet par réseau. X, seul réseau pris en
+// charge, affiche sa liste effective et le formulaire d'ajout ; les autres sont
+// grisés « Bientôt ».
 import type { State } from "@/core/state.ts";
+import type { XTabStatus } from "../blocking/x-tab.ts";
+import { ENGINE_NETWORK } from "../networks/networks.ts";
 import { NetworkTabs } from "../networks/NetworkTabs.tsx";
 import { AccountList } from "./AccountList.tsx";
 import { AddForm } from "./AddForm.tsx";
-import { Upcoming } from "./Upcoming.tsx";
+import { RetiredReview } from "./RetiredReview.tsx";
 
-export function AccountsSection({ state }: { state: State }) {
+export function AccountsSection({ state, connection }: { state: State; connection: XTabStatus | null }) {
   return (
     <section className="min-w-0">
-      <h2 className="mb-4 text-2xl leading-tight">Comptes</h2>
+      <h2 className="mb-4">Comptes</h2>
+      <RetiredReview state={state} />
       <NetworkTabs
-        count={(network) => (network.id === "x" ? state.handles.length : network.defaults.length)}
+        // L'état ne porte que les comptes de X : aucun autre réseau ne doit les afficher.
+        count={(network) => (network.id === ENGINE_NETWORK ? state.handles.length : 0)}
         panel={(network) =>
-          network.id === "x" ? (
+          network.id === ENGINE_NETWORK ? (
             <>
-              <AccountList state={state} network={network} />
+              <AccountList state={state} network={network} connection={connection} />
               <AddForm />
             </>
-          ) : (
-            <Upcoming network={network} />
-          )
+          ) : null
         }
       />
     </section>

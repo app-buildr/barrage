@@ -1,7 +1,17 @@
 // Appels à l'API interne de X, celle qu'utilise le site lui-même.
 // C'est le point qui casse si X change son API : un seul fichier à relire.
-import { handleFromUserNameText } from "../timeline/authors.ts";
-import { classify, noUserMatch, readLookup, type Lookup, type Outcome } from "./outcome.ts";
+import { X_REQUEST_TIMEOUT_MS } from "../../core/config.ts";
+import { readCsrfToken } from "../x/session.ts";
+import {
+  classify,
+  failureOf,
+  noUserMatch,
+  quotaEnd,
+  readLookup,
+  routeMaybeGone,
+  type Lookup,
+  type Outcome,
+} from "./outcome.ts";
 
 /**
  * Jeton public du client web de X, identique pour tous les visiteurs et présent
@@ -15,77 +25,21 @@ const BLOCK_PATH = "/i/api/1.1/blocks/create.json";
 const UNBLOCK_PATH = "/i/api/1.1/blocks/destroy.json";
 const LOOKUP_PATH = "/i/api/1.1/friendships/lookup.json";
 
-function cookie(name: string): string | null {
-  const match = new RegExp(`(?:^|;\\s*)${name}=([^;]+)`).exec(document.cookie);
-  return match?.[1] ?? null;
-}
-
-/** Le cookie ct0 sert de jeton anti-CSRF, X exige de le recopier en en-tête. */
-const readCsrfToken = (): string | null => cookie("ct0");
-
-/**
- * Un compte X est connecté dans cet onglet. Le cookie twid porte son
- * identifiant ; à défaut, le bouton de compte de la barre latérale n'existe
- * que pour un compte connecté.
- */
-export function signedIn(): boolean {
-  return cookie("twid") !== null || document.querySelector(ACCOUNT_BUTTON_SELECTOR) !== null;
-}
-
-/** Identifiant @ du compte connecté, affiché dans les options, ou null tant que la barre latérale n'est pas là. */
-export function accountHandle(): string | null {
-  return handleFromUserNameText(document.querySelector(ACCOUNT_BUTTON_SELECTOR)?.textContent ?? "");
-}
-
-/**
- * Identifiant numérique du compte X connecté, lu à chaque appel : changer de
- * compte sur x.com change le cookie twid (« u=123… ») de tous les onglets.
- */
-export function accountId(): string | null {
-  // Valeur encodée ou non, entre guillemets ou non : « u%3D123 », « "u=123" ».
-  return /^"?u(?:=|%3D)(\d+)"?$/i.exec(cookie("twid") ?? "")?.[1] ?? null;
-}
-
-let loadedAccount: string | null | undefined;
-
-/**
- * Compte X connecté au chargement de la page, lu au premier appel : le
- * traitement et le fil le demandent dès leur démarrage. Ce que la page affiche
- * (fil, barre latérale) vaut pour lui, même si la session passe ensuite sur
- * un autre compte.
- */
-export function pageAccount(): string | null {
-  if (loadedAccount === undefined) loadedAccount = accountId();
-  return loadedAccount;
-}
-
-/** Bouton de compte de la barre latérale : « Nom @identifiant ». */
-const ACCOUNT_BUTTON_SELECTOR = '[data-testid="SideNav_AccountSwitcher_Button"]';
-
-/**
- * Empreinte de la session X, ou null sans session. Le jeton lui-même n'est
- * jamais stocké : seule une empreinte courte permet de voir qu'il a changé
- * (reconnexion).
- */
-export async function sessionId(): Promise<string | null> {
-  const csrf = readCsrfToken();
-  if (!csrf) return null;
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(csrf));
-  return [...new Uint8Array(digest).slice(0, 8)].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
 /**
  * Requête de même origine que la page : le cookie de session part avec.
- * Renvoie l'issue classée, et le corps pour qui doit le lire.
+ * Renvoie l'issue classée, le corps pour qui doit le lire, et la fin du quota
+ * si X annonce qu'il est épuisé.
  */
-async function call(path: string, init: RequestInit): Promise<{ outcome: Outcome; body?: unknown }> {
+async function call(path: string, init: RequestInit): Promise<{ outcome: Outcome; body?: unknown; quota?: number | null }> {
   const csrf = readCsrfToken();
-  if (!csrf) return { outcome: { kind: "auth", message: "Aucune session X : connectez-vous à x.com." } };
+  if (!csrf) return { outcome: { kind: "auth", code: "session_missing" } };
   let response: Response;
   try {
     response = await fetch(location.origin + path, {
       ...init,
       credentials: "include",
+      // Sans réponse, l'onglet garderait le verrou : aucun autre ne prendrait la file.
+      signal: AbortSignal.timeout(X_REQUEST_TIMEOUT_MS),
       headers: {
         authorization: `Bearer ${WEB_BEARER}`,
         "content-type": "application/x-www-form-urlencoded",
@@ -95,28 +49,40 @@ async function call(path: string, init: RequestInit): Promise<{ outcome: Outcome
       },
     });
   } catch {
-    return { outcome: { kind: "network", message: "Réseau indisponible." } };
+    return { outcome: { kind: "network", code: "network_down" } };
   }
   const body: unknown = await response.json().catch(() => null);
-  const outcome = classify(response.status, body, response.headers.get("x-rate-limit-reset"), Date.now());
-  return { outcome, body };
+  const reset = response.headers.get("x-rate-limit-reset");
+  const outcome = classify(response.status, body, reset, Date.now());
+  return { outcome, body, quota: quotaEnd(response.headers.get("x-rate-limit-remaining"), reset, Date.now()) };
 }
 
-async function post(path: string, handle: string): Promise<Outcome> {
-  const { outcome } = await call(path, {
+/** @param beforeLookup appelé avant la vérification d'une route disparue, une requête lookup de plus */
+async function post(path: string, handle: string, beforeLookup: () => Promise<unknown>): Promise<Outcome> {
+  const { outcome, body } = await call(path, {
     method: "POST",
     body: new URLSearchParams({ screen_name: handle, skip_status: "1" }),
   });
-  return outcome;
+  if (!routeMaybeGone(body)) return outcome;
+  // Un compte qui existe encore prouve que c'est la route qui a disparu : sans
+  // cette vérification, un déblocage serait noté fait sans avoir eu lieu.
+  await beforeLookup();
+  const reply = await lookupBlocking([handle]);
+  if ("kind" in reply) return reply.kind === "failed" ? { kind: "broken", ...failureOf(reply) } : reply;
+  return reply.found.has(handle) ? { kind: "broken", code: "route_gone" } : outcome;
 }
 
-export const blockUser = (handle: string): Promise<Outcome> => post(BLOCK_PATH, handle);
+const noCount = async (): Promise<void> => {};
+
+export const blockUser = (handle: string, beforeLookup: () => Promise<unknown> = noCount): Promise<Outcome> =>
+  post(BLOCK_PATH, handle, beforeLookup);
 
 /**
  * Débloque un compte. Issue "ok" : le compte est débloqué. Issue "not_found" :
  * compte disparu, rien à débloquer.
  */
-export const unblockUser = (handle: string): Promise<Outcome> => post(UNBLOCK_PATH, handle);
+export const unblockUser = (handle: string, beforeLookup: () => Promise<unknown> = noCount): Promise<Outcome> =>
+  post(UNBLOCK_PATH, handle, beforeLookup);
 
 export type LookupReply = Lookup | Exclude<Outcome, { kind: "ok" }>;
 
@@ -126,11 +92,13 @@ export type LookupReply = Lookup | Exclude<Outcome, { kind: "ok" }>;
  */
 export async function lookupBlocking(handles: readonly string[]): Promise<LookupReply> {
   const query = new URLSearchParams({ screen_name: handles.join(",") });
-  const { outcome, body } = await call(`${LOOKUP_PATH}?${query}`, { method: "GET" });
+  const { outcome, body, quota } = await call(`${LOOKUP_PATH}?${query}`, { method: "GET" });
+  const quotaInfo = typeof quota === "number" ? { quotaEnd: quota } : {};
   // Seul ce code prouve qu'aucun compte du paquet n'existe. Un autre (route
   // disparue après un changement de l'API…) marquerait à tort 100 comptes introuvables.
-  if (noUserMatch(body)) return { found: new Set(), blocking: new Set() };
-  if (outcome.kind === "not_found") return { kind: "failed", message: outcome.message };
+  if (noUserMatch(body)) return { found: new Set(), blocking: new Set(), ...quotaInfo };
+  if (outcome.kind === "not_found") return { kind: "failed", ...failureOf(outcome) };
   if (outcome.kind !== "ok") return outcome;
-  return readLookup(body) ?? { kind: "failed", message: "Réponse de X illisible." };
+  const lookup = readLookup(body);
+  return lookup ? { ...lookup, ...quotaInfo } : { kind: "failed", code: "unreadable_reply" };
 }

@@ -1,6 +1,7 @@
 // Puces de filtre par état : Tous, Bloqués, Visibles, Problèmes, Désactivés.
-import { ToggleGroup, ToggleGroupItem } from "@/ui/components/toggle-group";
-import { cn } from "@/ui/lib/utils";
+import { formatCount } from "@/core/format.ts";
+import { ToggleGroup, ToggleGroupItem } from "@/ui/components/toggle-group.tsx";
+import { cn } from "@/ui/lib/utils.ts";
 import { CATEGORIES, totalCount, type Category, type Counts } from "./status.ts";
 
 const LABELS: Record<Category, string> = {
@@ -37,8 +38,8 @@ export function StatusChips({ counts, selected, onSelect }: Props) {
           key={category ?? ALL}
           value={category ?? ALL}
           className={cn(
-            "group h-11 gap-2 rounded-full border border-line bg-card px-4 text-[15px] font-bold text-ink",
-            "hover:bg-cream hover:text-ink data-[state=on]:border-coral data-[state=on]:bg-coral data-[state=on]:text-white",
+            "group h-11 gap-2 rounded-full border border-line bg-card px-4 text-body font-bold text-ink",
+            "hover:bg-cream hover:text-ink data-[state=on]:border-coral-deep data-[state=on]:bg-coral-deep data-[state=on]:text-white",
           )}
         >
           {category ? (
@@ -49,7 +50,7 @@ export function StatusChips({ counts, selected, onSelect }: Props) {
           ) : null}
           {category ? LABELS[category] : "Tous"}
           <span className="font-medium text-muted-foreground group-data-[state=on]:font-bold group-data-[state=on]:text-white">
-            {category ? counts[category] : totalCount(counts)}
+            {formatCount(category ? counts[category] : totalCount(counts))}
           </span>
         </ToggleGroupItem>
       ))}

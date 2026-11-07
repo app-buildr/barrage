@@ -1,27 +1,53 @@
 // État de traitement de la liste : quels comptes restent à bloquer. Fonctions
 // pures, couvertes par les tests.
-import { NOT_FOUND_RETRY_MS } from "../../core/config.ts";
-
-/** Au-delà, un compte en échec n'est plus retenté sans action de l'utilisateur. */
-export const MAX_ATTEMPTS = 3;
+import { MAX_ATTEMPTS, NOT_FOUND_RETRY_MS } from "../../core/config.ts";
+import type { State } from "../../core/state.ts";
+import type { Failure, FailureCode } from "./outcome.ts";
 
 /**
  * "blocked" : bloqué par Barrage. "already_blocked" : X a indiqué que le compte
  * était déjà bloqué, Barrage n'a rien envoyé. "unblocked" : bloqué par Barrage
  * puis débloqué par lui, après désactivation du compte dans les options.
  */
-export type ResultState = "blocked" | "already_blocked" | "unblocked" | "not_found" | "failed";
+export type Result =
+  | (Dated & Cause & { state: "blocked" | "already_blocked" } & UnblockRefusal)
+  | (Dated & { state: "unblocked" })
+  | (Dated & Cause & { state: "not_found" })
+  // `attempts` n'est pas garanti : un résultat stocké n'est pas relu champ par champ.
+  | (Dated & Cause & { state: "failed"; /** Nombre de tentatives échouées. */ attempts?: number });
 
-export type Result = {
-  state: ResultState;
+export type ResultState = Result["state"];
+
+const RESULT_STATES: readonly unknown[] = ["blocked", "already_blocked", "unblocked", "not_found", "failed"] satisfies ResultState[];
+
+/** Résultat venu d'un fichier ou d'un autre contexte : son état et sa date sont lisibles. */
+export function isResult(value: unknown): value is Result {
+  const result = value as Partial<Result> | null;
+  if (typeof result !== "object" || result === null || Array.isArray(result)) return false;
+  const { at } = result;
+  return RESULT_STATES.includes(result.state) && typeof at === "number" && Number.isFinite(at) && at >= 0;
+}
+
+/** Résultat d'un compte que X dit introuvable ou a refusé. */
+export type FailedResult = Extract<Result, { state: "not_found" | "failed" }>;
+
+type Dated = {
   /** Horodatage de la dernière tentative, en millisecondes. */
   at: number;
+};
+
+type Cause = {
+  /** Cause d'un échec, voir Failure. Texte résolu à l'affichage, voir resultText. */
+  code?: FailureCode;
+  param?: number;
+  /** Lecture seule : texte rédigé par une version antérieure, qui n'avait pas de code. */
   message?: string;
-  /** Nombre de tentatives échouées, renseigné pour l'état "failed". */
-  attempts?: number;
+};
+
+export type UnblockRefusal = {
   /**
-   * État "blocked" : X a refusé de débloquer ce compte. Il n'est plus retenté
-   * automatiquement, seul un clic sur « Débloquer » relance la demande.
+   * X a refusé de débloquer ce compte. Il n'est plus retenté automatiquement,
+   * seul un clic sur « Débloquer » relance la demande.
    */
   unblockFailed?: boolean;
 };
@@ -91,15 +117,18 @@ export function uncheckedPending(
 }
 
 /** Résultat après un échec : le compteur de tentatives progresse. */
-export function failure(previous: Result | undefined, message: string, now: number): Result {
+export function failure(previous: Result | undefined, cause: Failure, now: number): Extract<Result, { state: "failed" }> {
   const attempts = previous?.state === "failed" ? (previous.attempts ?? 1) + 1 : 1;
-  return { state: "failed", at: now, message, attempts };
+  return { state: "failed", at: now, ...cause, attempts };
 }
 
 /** Compte bloqué sur X, par Barrage ou déjà avant lui. */
-export function isBlocked(result: Result | undefined): boolean {
+export function isBlocked(result: Result | undefined): result is Extract<Result, { state: "blocked" | "already_blocked" }> {
   return result?.state === "blocked" || result?.state === "already_blocked";
 }
+
+/** Nombre de comptes bloqués sur X, par Barrage ou déjà avant lui. */
+export const blockedCount = (results: Results): number => Object.values(results).filter(isBlocked).length;
 
 /**
  * Comptes bloqués par Barrage parmi ceux donnés. Un compte que l'utilisateur
@@ -122,5 +151,49 @@ export function newlyBlocked(before: Results, after: Results): string[] {
 export function newlyUnblocked(before: Results, after: Results): string[] {
   return Object.keys(after).filter(
     (h) => resultOf(after, h)?.state === "unblocked" && resultOf(before, h)?.state === "blocked",
+  );
+}
+
+/** Comptes que Barrage traite : la liste moins ceux désactivés. */
+export function active(state: State): string[] {
+  return activeHandles(state.handles, state.disabled);
+}
+
+/** File de blocage : comptes de la liste vus dans le fil ou demandés à la main. */
+export function queueOrder(state: State): string[] {
+  return eligible(active(state), state.seen);
+}
+
+/**
+ * Comptes à débloquer sur X : demandes à la main encore sur Off (ou sorties
+ * de la liste depuis, la demande reste due), puis tout compte sur Off que
+ * Barrage a bloqué. Calculée plutôt que stockée, la file ne peut pas manquer un
+ * blocage qui aboutit juste après le passage sur Off. Un déblocage refusé par X
+ * n'est relancé que par une nouvelle demande. Un compte retiré d'une liste n'y
+ * entre que si l'utilisateur choisit de le débloquer, voir resolveRetired.
+ */
+export function unblockQueue(state: State): string[] {
+  const disabled = new Set(state.disabled);
+  const blockedByUs = (h: string) => {
+    const result = resultOf(state.results, h);
+    return result?.state === "blocked" && !result.unblockFailed;
+  };
+  const listed = new Set(state.handles);
+  return [
+    ...new Set([...state.unblock.filter((h) => disabled.has(h) || !listed.has(h)), ...state.disabled.filter(blockedByUs)]),
+  ];
+}
+
+/**
+ * Comptes bloqués sortis de la liste effective (liste désactivée, supprimée ou
+ * mise à jour) : ils restent bloqués et déblocables. Ceux qui attendent le
+ * choix de l'utilisateur après une mise à jour n'en sont pas : ils sont
+ * présentés à part, voir State.retired.
+ */
+export function offListHandles(state: State): string[] {
+  const listed = new Set(state.handles);
+  const retired = new Set(state.retired);
+  return Object.keys(state.results).filter(
+    (h) => !listed.has(h) && !retired.has(h) && isBlocked(resultOf(state.results, h)),
   );
 }

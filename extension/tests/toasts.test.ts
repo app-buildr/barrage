@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createToastStore, MAX_TOASTS, type Content } from "../src/features/notifications/toasts.ts";
+import { createBadgeStore, createToastStore, type Content } from "../src/features/notifications/toasts.ts";
 
 const blocked: Content = { kind: "blocked", title: " vient d'être bloqué", detail: "par Barrage" };
 const unblocked: Content = { kind: "unblocked", title: " a été débloqué.", detail: "" };
@@ -28,7 +28,7 @@ test("au-delà du maximum, les plus anciennes cèdent la place", () => {
   for (const handle of ["a", "b", "c", "d"]) store.show(handle, blocked);
   assert.deepEqual(
     store.getSnapshot().map((t) => t.handle),
-    ["b", "c", "d"].slice(-MAX_TOASTS),
+    ["b", "c", "d"],
   );
 });
 
@@ -42,4 +42,40 @@ test("les abonnés sont prévenus, et plus après désabonnement", () => {
   store.show("b", blocked);
   store.clear();
   assert.equal(calls, 2);
+});
+
+test("la notification de badge ne prévient que si le palier change", () => {
+  const store = createBadgeStore();
+  let calls = 0;
+  const unsubscribe = store.subscribe(() => calls++);
+  store.set(10);
+  store.set(10);
+  assert.equal(store.getSnapshot(), 10);
+  assert.equal(calls, 1);
+  unsubscribe();
+  store.set(null);
+  assert.equal(calls, 1);
+});
+
+test("le raccourci annule la notification la plus récente qui le propose", () => {
+  const store = createToastStore();
+  const undone: string[] = [];
+  const withUndo = (name: string): Content => ({ ...blocked, undo: () => undone.push(name) });
+  store.show("a", withUndo("a"));
+  store.show("b", withUndo("b"));
+  store.show("c", unblocked);
+  store.undoLast();
+  assert.deepEqual(undone, ["b"]);
+  const last = store.getSnapshot().find((t) => t.handle === "b");
+  store.leave(last?.id ?? 0);
+  store.undoLast();
+  assert.deepEqual(undone, ["b", "a"]);
+});
+
+test("le raccourci ne fait rien sans notification à annuler", () => {
+  const store = createToastStore();
+  store.undoLast();
+  store.show("a", unblocked);
+  store.undoLast();
+  assert.equal(store.getSnapshot().length, 1);
 });

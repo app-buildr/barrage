@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { handleFromHref, handleFromUserNameText, profileHandleFromPath } from "../src/features/timeline/authors.ts";
+import { handleFromHref, handleFromUserNameText, profileHandleFromPath } from "../src/features/x/authors.ts";
 
 test("seul un lien direct vers un profil donne un identifiant", () => {
   assert.equal(handleFromHref("/Exemple_1"), "exemple_1");

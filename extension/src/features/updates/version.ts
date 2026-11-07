@@ -1,5 +1,5 @@
-// Comparaison de versions « 1.2.3 ». Fonctions pures, testées dans
-// tests/version.test.ts.
+// Comparaison de versions « 1.2.3 », testée dans tests/version.test.ts. Fonctions
+// pures, sauf updateAvailable, qui lit la version installée dans le manifest.
 
 /** `v1.2.3` ou `1.2.3` → `1.2.3`, ou null pour autre chose. */
 export function parseVersion(tag: unknown): string | null {

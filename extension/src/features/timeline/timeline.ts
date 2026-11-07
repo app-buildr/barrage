@@ -1,6 +1,6 @@
 // Surveillance du fil : dès qu'un compte de la liste apparaît (auteur d'un
 // tweet, d'un tweet cité, ou suggestion de compte), son contenu est masqué et
-// le compte passe en tête de la file de blocage.
+// le compte entre dans la file de blocage.
 //
 // Seul l'auteur compte : un tweet qui mentionne un compte de la liste, ou un
 // retweet par un compte hors liste, n'est pas visé par le nom du retweeteur.
@@ -12,11 +12,12 @@
 // Ce qu'affiche la page vaut pour le compte X connecté à son chargement : si
 // la session passe sur un autre compte entre-temps, plus rien n'est signalé.
 import { contextAlive } from "../../core/context.ts";
-import { active, getState, onStateChange, resultChanges, strings, type StateChanges } from "../../core/state.ts";
+import { accountKey, getState, onStateChange, resultChanges, stringArray, type StateChanges } from "../../core/state.ts";
 import { write } from "../../core/write.ts";
-import { accountId, pageAccount } from "../blocking/api.ts";
-import { isPending, resultOf, type Results } from "../blocking/queue.ts";
-import { handleFromHref, handleFromUserNameText, profileHandleFromPath } from "./authors.ts";
+import { active, isPending, resultOf, type Results } from "../blocking/queue.ts";
+import { handleFromHref, handleFromUserNameText, profileHandleFromPath } from "../x/authors.ts";
+import { accountId, pageAccount } from "../x/session.ts";
+import { Batch } from "./batch.ts";
 import {
   HIDDEN_ATTR,
   PRIMARY_COLUMN_SELECTOR,
@@ -25,8 +26,7 @@ import {
   UNBLOCK_BUTTON_SELECTOR,
   USER_CELL_SELECTOR,
   USER_NAME_SELECTOR,
-} from "./selectors.ts";
-import "./timeline.css";
+} from "../x/selectors.ts";
 
 let listed = new Set<string>();
 let results: Results = Object.create(null);
@@ -34,40 +34,15 @@ let results: Results = Object.create(null);
 let prefix = "";
 
 /**
- * Comptes à envoyer en une écriture, et ceux déjà envoyés par cet onglet :
- * une écriture par compte, pas par tweet. Un envoi perdu est retenté.
+ * La session a changé de compte : ce que la page affiche ne vaut plus pour le
+ * compte connecté, rien n'est envoyé. Le rechargement de la page reprendra.
  */
-class Batch {
-  readonly sent = new Set<string>();
-  private pending = new Set<string>();
-
-  constructor(private readonly name: "addSeen" | "markAlreadyBlocked") {}
-
-  add(handle: string): void {
-    if (!this.sent.has(handle)) this.pending.add(handle);
-  }
-
-  flush(): void {
-    if (!this.pending.size) return;
-    // La session a changé de compte : ce que la page affiche ne vaut plus pour
-    // le compte connecté, rien n'est envoyé. Le rechargement de la page reprendra.
-    if (accountId() !== pageAccount()) {
-      this.pending.clear();
-      return;
-    }
-    const batch = [...this.pending];
-    this.pending = new Set();
-    for (const handle of batch) this.sent.add(handle);
-    void write(this.name, batch, pageAccount()).catch(() => {
-      for (const handle of batch) this.sent.delete(handle);
-    });
-  }
-}
+const sameAccount = (): boolean => accountId() === pageAccount();
 
 /** Comptes vus dans le fil, à mettre en file. L'écriture réveille le traitement. */
-const seenBatch = new Batch("addSeen");
+const seenBatch = new Batch((handles) => write("addSeen", handles, pageAccount()), sameAccount);
 /** Comptes de la liste vus comme déjà bloqués sur X. */
-const knownBatch = new Batch("markAlreadyBlocked");
+const knownBatch = new Batch((handles) => write("markAlreadyBlocked", handles, pageAccount()), sameAccount);
 
 /**
  * Un compte débloqué par Barrage depuis le chargement de la page peut encore y
@@ -175,8 +150,16 @@ function scanWithin(root: ParentNode & Node, deep: boolean, done: Set<Element>):
 let dirtyRoots: Map<Node, boolean> | null = null;
 let lastPath = "";
 
+/**
+ * Au-delà, tout sera relu. Dans un onglet caché, les passages sont suspendus
+ * alors que les mutations continuent : la Map retiendrait des nœuds détachés.
+ */
+const MAX_DIRTY_ROOTS = 2000;
+
 function markDirty(node: Node, deep: boolean): void {
-  if (dirtyRoots && !dirtyRoots.get(node)) dirtyRoots.set(node, deep);
+  if (!dirtyRoots || dirtyRoots.get(node)) return;
+  dirtyRoots.set(node, deep);
+  if (dirtyRoots.size > MAX_DIRTY_ROOTS) dirtyRoots = null;
 }
 
 function scan(): void {
@@ -189,11 +172,7 @@ function scan(): void {
   }
   const roots = dirtyRoots;
   dirtyRoots = new Map();
-  if (!listed.size) {
-    // Plus aucun compte suivi : ce qui avait été masqué réapparaît.
-    for (const el of document.querySelectorAll(`[${HIDDEN_ATTR}]`)) el.removeAttribute(HIDDEN_ATTR);
-    return;
-  }
+  if (!listed.size) return;
   const done = new Set<Element>();
   if (roots === null) scanWithin(document, true, done);
   else for (const [root, deep] of roots) if (root.isConnected) scanWithin(root as ParentNode & Node, deep, done);
@@ -219,6 +198,8 @@ async function loadList(): Promise<void> {
   listed = new Set(active(state));
   results = state.results;
   prefix = state.prefix;
+  // Plus aucun compte suivi : ce qui avait été masqué réapparaît.
+  if (!listed.size) for (const el of document.querySelectorAll(`[${HIDDEN_ATTR}]`)) el.removeAttribute(HIDDEN_ATTR);
   dirtyRoots = null;
   scheduleScan();
 }
@@ -233,23 +214,23 @@ function onQueueChange(changes: StateChanges): void {
   Object.assign(results, after);
   // Un compte sorti de la file (traité, désactivé, écriture perdue) pourra être
   // signalé de nouveau s'il réapparaît en attente dans le fil.
-  const seenChange = changes[prefix + "seen"];
-  if (seenChange) {
-    const seen = new Set(strings(seenChange.newValue));
-    for (const handle of seenBatch.sent) if (!seen.has(handle)) seenBatch.sent.delete(handle);
-  }
+  const seenChange = changes[accountKey(prefix, "seen")];
+  if (seenChange) seenBatch.keepOnly(new Set(stringArray(seenChange.newValue)));
 }
 
 export function watchTimeline(): void {
   void loadList();
   // Premier compte X vu : ses clés de stockage peuvent changer de préfixe.
-  onStateChange(() => void loadList(), ["handles", "remote", "disabled", "account"]);
+  onStateChange(() => void loadList(), ["lists", "remote", "bundled", "disabled", "account"]);
   onStateChange(onQueueChange, ["results", "seen"]);
   // Le fil est virtualisé : les tweets entrent et sortent du DOM au défilement.
   const observer = new MutationObserver((records) => {
     // Extension rechargée ou désinstallée : ce script orphelin s'arrête au lieu
-    // d'échouer à chaque mutation. Le nouveau script injecté prend le relais.
+    // d'échouer à chaque mutation. Rien ne le remplace avant le rechargement de
+    // l'onglet : sans permission scripting, un onglet ouvert n'est pas réinjecté.
     if (!contextAlive()) return observer.disconnect();
+    // Sans liste, rien à relire : le retour d'une liste fait tout relire, voir loadList.
+    if (!listed.size) return;
     // Seules les zones modifiées sont relues, pas toute la page.
     for (const record of records) {
       markDirty(record.target, false);

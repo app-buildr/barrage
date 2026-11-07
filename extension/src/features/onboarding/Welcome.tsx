@@ -1,0 +1,129 @@
+// Accueil du premier lancement : choix de la liste à bloquer.
+import { useState, type ReactNode } from "react";
+import { ArrowRight } from "lucide-react";
+import { plural } from "@/core/format.ts";
+import type { State } from "@/core/state.ts";
+import { useSafeWrite } from "@/ui/use-safe-write.ts";
+import { write } from "@/core/write.ts";
+import { Badge } from "@/ui/components/badge.tsx";
+import { Button } from "@/ui/components/button.tsx";
+import { Header } from "@/ui/layout/Header.tsx";
+import { Panel, StatusMessage } from "@/ui/layout/Section.tsx";
+import { cn } from "@/ui/lib/utils.ts";
+import { AutoUpdateNotice, FilePicker, FormatHint, ListPreview, ListUrlForm, NetworkChips } from "../lists/ListFields.tsx";
+import { LIST_FILE_EXTENSIONS_TEXT, LIST_HOSTS_TEXT } from "../lists/import.ts";
+import { LIST_NETWORKS, OFFICIAL_NAME } from "../lists/lists.ts";
+import { useListAnalysis } from "../lists/use-list-analysis.ts";
+import type { NetworkId } from "../networks/networks.ts";
+
+type Choice = "official" | "own";
+
+type OptionProps = { selected: boolean; onSelect: () => void; title: ReactNode; children: ReactNode };
+
+function Option({ selected, onSelect, title, children }: OptionProps) {
+  return (
+    <label
+      className={cn(
+        "flex cursor-pointer gap-3.5 rounded-step border p-5",
+        selected ? "border-2 border-coral bg-cream" : "border-line-strong",
+      )}
+    >
+      <input type="radio" name="list" checked={selected} onChange={onSelect} className="mt-1 size-5 accent-coral" />
+      <span className="min-w-0 flex-1">
+        <span className="flex flex-wrap items-center gap-2 text-lg font-bold text-ink">{title}</span>
+        <span className="mt-1 block text-body text-muted-foreground">{children}</span>
+      </span>
+    </label>
+  );
+}
+
+export function Welcome({ state }: { state: State }) {
+  const [choice, setChoice] = useState<Choice>("official");
+  const [url, setUrl] = useState("");
+  const [networks, setNetworks] = useState<NetworkId[]>([...LIST_NETWORKS]);
+  const { outcome, analysis, busy, analyzeUrl, analyzeFile, reset } = useListAnalysis();
+  const { error, attempt } = useSafeWrite();
+
+  const ready = choice === "official" || analysis !== null;
+
+  function start(): void {
+    if (analysis && choice === "own") {
+      const { warning: _warning, ...list } = analysis;
+      void attempt(write("completeOnboarding", { kind: "list", list: { ...list, networks } }));
+    } else void attempt(write("completeOnboarding", { kind: "official", networks }));
+  }
+
+  return (
+    <div className="mx-auto flex max-w-[680px] flex-col gap-7 px-6 pt-12 pb-16">
+      <Header
+        title="Bienvenue sur Barrage"
+        description="Vos réseaux sociaux, vos règles. Commençons par choisir les comptes à bloquer."
+      />
+      <main className="flex flex-col gap-7">
+        <Panel className="flex flex-col gap-4">
+          <div>
+            <h2>Importez une liste de comptes</h2>
+            <p className="mt-1.5 mb-0 text-body text-muted-foreground">
+              Barrage bloque les comptes de cette liste quand ils apparaissent dans votre fil. Vous pourrez ajouter ou
+              retirer des listes plus tard, dans Réglages.
+            </p>
+          </div>
+          <fieldset className="m-0 flex flex-col gap-4 border-0 p-0">
+            <legend className="sr-only">Liste de comptes à bloquer</legend>
+            <Option
+              selected={choice === "official"}
+              onSelect={() => setChoice("official")}
+              title={
+                <>
+                  {OFFICIAL_NAME}
+                  <Badge variant="coral">Recommandée</Badge>
+                </>
+              }
+            >
+              {plural(state.official.length, "compte")}, maintenue sur GitHub et relue par la communauté. Mise à jour automatique.
+            </Option>
+            <Option selected={choice === "own"} onSelect={() => setChoice("own")} title="Importer ma propre liste">
+              Depuis un fichier hébergé sur GitHub ({LIST_HOSTS_TEXT}), ou un fichier texte ({LIST_FILE_EXTENSIONS_TEXT})
+              de votre ordinateur.
+            </Option>
+          </fieldset>
+          {choice === "own" ? (
+            <div className="flex flex-col gap-3">
+              <ListUrlForm
+                value={url}
+                onChange={(value) => {
+                  setUrl(value);
+                  reset();
+                }}
+                onSubmit={() => void analyzeUrl(url)}
+                busy={busy}
+                submitLabel="Analyser"
+                variant="outline"
+              />
+              <AutoUpdateNotice />
+              <FilePicker busy={busy} onFile={(file) => void analyzeFile(file)} />
+              <StatusMessage kind={outcome?.kind} message={outcome?.message} />
+              {analysis ? <ListPreview analysis={analysis} /> : null}
+            </div>
+          ) : null}
+          <FormatHint />
+          <NetworkChips value={networks} onChange={setNetworks} />
+        </Panel>
+        <StatusMessage kind="error" message={error} />
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <button
+            type="button"
+            onClick={() => void attempt(write("completeOnboarding", { kind: "later" }))}
+            className="cursor-pointer border-0 bg-transparent p-0 font-bold text-muted-foreground underline underline-offset-2 hover:text-ink"
+          >
+            Je le ferai plus tard
+          </button>
+          <Button variant="cta" size="lg" disabled={!ready} onClick={start}>
+            Importer et commencer
+            <ArrowRight />
+          </Button>
+        </div>
+      </main>
+    </div>
+  );
+}

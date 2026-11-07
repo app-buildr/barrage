@@ -1,8 +1,8 @@
-import { active, getState, scoped } from "../../core/state.ts";
-import { pendingIn } from "../blocking/queue.ts";
+import { getState, scoped } from "../../core/state.ts";
+import { active, pendingIn } from "../blocking/queue.ts";
 
 /**
- * Ajoute des comptes vus dans le fil à la file prioritaire. Ceux qui ne sont
+ * Ajoute des comptes vus dans le fil à la file de blocage. Ceux qui ne sont
  * plus dans la liste ou déjà traités en sortent : la file reste courte.
  */
 export async function addSeen(handles: readonly string[], account?: string | null): Promise<void> {

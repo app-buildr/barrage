@@ -1,22 +1,25 @@
 // État affiché d'un compte dans la liste : libellé, pastille, bouton possible,
 // et catégorie pour la progression et les filtres. Fonctions pures, testées
 // dans tests/status.test.ts.
+import { resultText } from "../blocking/error-text.ts";
 import { isPending, type Result } from "../blocking/queue.ts";
+import type { Tone } from "../../ui/layout/Section.tsx";
 
 /** Catégories exclusives : leur somme est le nombre de comptes de la liste. */
-export type Category = "blocked" | "visible" | "problem" | "disabled";
+export const CATEGORIES = ["blocked", "visible", "problem", "disabled"] as const;
 
-export const CATEGORIES: readonly Category[] = ["blocked", "visible", "problem", "disabled"];
+export type Category = (typeof CATEGORIES)[number];
 
 /**
  * `tag` : l'état s'affiche en pastille ; `note` le précise à côté.
- * `className` colore un état affiché en texte.
+ * `tone` colore un état affiché en texte. `busy` : une demande est dans la file.
  */
 export type Status = {
   label: string;
-  className: string;
+  tone?: Tone;
   action: "block" | "unblock" | null;
   category: Category;
+  busy?: boolean;
   tag?: "blocked" | "visible";
   note?: string;
 };
@@ -24,29 +27,33 @@ export type Status = {
 const text = (
   label: string,
   category: Category,
-  className = "",
+  tone: Tone,
   action: Status["action"] = null,
-): Status => ({ label, className, action, category });
+): Status => ({ label, tone, action, category });
 
-const BLOCKED: Status = { label: "Bloqué", className: "", action: "unblock", category: "blocked", tag: "blocked" };
-const UNBLOCKING = text("Déblocage en cours…", "disabled", "muted");
-const VISIBLE: Status = { label: "Visible", className: "", action: "block", category: "visible", tag: "visible" };
+const BLOCKED: Status = { label: "Bloqué", action: "unblock", category: "blocked", tag: "blocked" };
+const UNBLOCKING: Status = { ...text("Déblocage en cours…", "disabled", "muted"), busy: true };
+const WAITING: Status = { ...text("En attente", "visible", "muted"), busy: true };
+const BLOCKING: Status = { ...text("Blocage en cours…", "visible", "muted"), busy: true };
+const VISIBLE: Status = { label: "Visible", action: "block", category: "visible", tag: "visible" };
 
 /**
  * Compte dont le blocage automatique est sur On. « Bloqué », qu'il l'ait été
  * par l'extension ou déjà par l'utilisateur : la distinction, qui décide d'un
- * déblocage au passage sur Off, n'est pas affichée.
+ * déblocage au passage sur Off, n'est pas affichée. `paused` : rien ne part
+ * vers X pour l'instant : limite de X, plafond horaire atteint, traitement
+ * arrêté ou aucun onglet x.com connecté pour le faire.
  */
-export function describe(result: Result | undefined, queued: boolean): Status {
-  if (queued && isPending(result)) return text("Blocage en cours…", "visible", "muted");
+export function describe(result: Result | undefined, queued: boolean, paused = false): Status {
+  if (queued && isPending(result)) return paused ? WAITING : BLOCKING;
   switch (result?.state) {
     case "blocked":
     case "already_blocked":
       return BLOCKED;
     case "not_found":
-      return text(result.message ?? "Introuvable", "problem", "warn", "block");
+      return text(resultText(result) ?? "Introuvable", "problem", "warn", "block");
     case "failed":
-      return text(`Échec : ${result.message ?? "refus de X"}`, "problem", "error", "block");
+      return text(`Échec : ${resultText(result) ?? "refus de X"}`, "problem", "error", "block");
     default:
       return VISIBLE;
   }

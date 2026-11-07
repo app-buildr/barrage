@@ -3,7 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Les liens vers x.com et GitHub ne transmettent pas l'adresse chrome-extension:// de cette page. -->
+  <meta name="referrer" content="no-referrer">
   <title>Barrage</title>
+  <!-- Avant tout script : ni flash blanc, ni page sans style. Le contenu apparaît
+       en fondu une fois React monté et les polices chargées, voir options.tsx. -->
+  <style>
+    html { background: #FFF6EE; }
+    #root { opacity: 0; transition: opacity 200ms cubic-bezier(0.2, 0, 0, 1); }
+    html.ready #root { opacity: 1; }
+    @media (prefers-reduced-motion: reduce) { #root { transition: none; } }
+  </style>
 </head>
 <body>
   <!-- Rendue par React, voir src/entries/options.tsx. -->

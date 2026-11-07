@@ -1,4 +1,4 @@
-/* Thème « Corail » de l'extension, voir resources/barrage-theme-corail.md.
+/* Thème « Corail » de l'extension.
    Thème clair uniquement. Les couleurs de marque alimentent les variables de
    shadcn/ui : les composants de src/ui/components s'habillent tout seuls. */
 @import "tailwindcss";
@@ -19,9 +19,6 @@
   --color-background: var(--color-cream);
   --color-foreground: var(--color-ink);
   --color-card: #FFFFFF;
-  --color-card-foreground: var(--color-ink);
-  --color-popover: #FFFFFF;
-  --color-popover-foreground: var(--color-ink);
   --color-primary: var(--color-coral-deep);
   --color-primary-foreground: #FFFFFF;
   --color-secondary: var(--color-cream);
@@ -32,11 +29,14 @@
   --color-accent-foreground: var(--color-ink);
   --color-destructive: var(--color-state-problem);
   --color-border: var(--color-line);
-  --color-input: var(--color-line-strong);
+  /* Contrôles à repérer : 3,95:1 sur la carte blanche, 3,70:1 sur le crème. */
+  --color-input: #907C72;
   --color-ring: var(--color-coral-deep);
 
-  --radius-step: 14px;
-  --radius-card: 18px;
+  --ease-barrage: cubic-bezier(0.2, 0, 0, 1);
+
+  --breakpoint-xs: 35rem;
+
   --shadow-soft: 0 12px 32px rgba(120, 60, 30, 0.10);
   --shadow-cta: 0 10px 24px rgba(120, 40, 10, 0.22);
 
@@ -51,5 +51,58 @@
     @apply bg-background font-sans text-base text-foreground antialiased;
   }
   h1, h2, h3 { @apply font-display font-extrabold tracking-tight text-ink; }
+  h2 { @apply text-2xl leading-tight; }
   :focus-visible { outline: 2px solid var(--color-coral-deep); outline-offset: 2px; }
+}
+
+/* Hors couche : outline-none, dans la couche utilities, neutraliserait la règle
+   de base sur ces composants générés, et leur anneau translucide ne suffit pas. */
+:is(
+  [data-slot="button"],
+  [data-slot="switch"],
+  [data-slot="checkbox"],
+  [data-slot="toggle-group-item"],
+  [data-slot="tabs-trigger"],
+  [data-slot="tabs-content"]
+):focus-visible {
+  outline: 2px solid var(--color-coral-deep);
+  outline-offset: 2px;
+}
+
+/* Changement d'onglet, voir ui/transition.ts. La page reste vivante pendant la
+   transition, pour que la pastille de l'onglet actif glisse (MainTabs.tsx) :
+   seuls le contenu et le pied de page, qui suit sa hauteur, sont animés. */
+.tab-content { view-transition-name: tab-content; }
+.page-footer { view-transition-name: page-footer; }
+
+::view-transition-old(root) { display: none; }
+::view-transition-new(root) { animation: none; }
+::view-transition-group(tab-content),
+::view-transition-group(page-footer) {
+  animation-duration: 200ms;
+  animation-timing-function: var(--ease-barrage);
+}
+::view-transition-old(tab-content) {
+  animation: tab-out 120ms var(--ease-barrage) both;
+}
+::view-transition-new(tab-content) {
+  animation: tab-in 200ms var(--ease-barrage) both;
+}
+@keyframes tab-out { to { opacity: 0; } }
+@keyframes tab-in { from { opacity: 0; transform: translateY(8px); } }
+@keyframes tab-fade { from { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(tab-content),
+  ::view-transition-group(page-footer) { animation: none; }
+  ::view-transition-old(tab-content) { animation: tab-out 100ms both; }
+  ::view-transition-new(tab-content) { animation: tab-fade 100ms both; }
+}
+
+/* Apparition des infobulles (ui/components/tooltip.tsx). */
+@keyframes tooltip-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px) scale(0.97);
+  }
 }

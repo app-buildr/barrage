@@ -1,68 +1,78 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
-import { DEFAULT_HANDLES } from "../src/features/accounts/defaults.ts";
-import { parseHandle } from "../src/features/accounts/handles.ts";
-import { active, getState, resultChanges, resultHandle, resultKey, unblockQueue } from "../src/core/state.ts";
-import { addHandles, requestBlock, requestUnblock, setEnabled } from "../src/features/accounts/store.ts";
+import { installChrome } from "./helpers/chrome.ts";
+import { putResults } from "./helpers/fixtures.ts";
+import { DEFAULT_HANDLES } from "../src/features/lists/defaults.ts";
+import { parseHandle } from "../src/features/lists/handles.ts";
+import { MAX_ATTEMPTS } from "../src/core/config.ts";
+import {
+  getState,
+  resultChanges,
+  resultHandle,
+  resultKey,
+  scoped,
+  type BlockingError,
+  type StateKey,
+} from "../src/core/state.ts";
+import { errorText } from "../src/features/blocking/error-text.ts";
+import { requestBlock, requestUnblock, setEnabled } from "../src/features/accounts/store.ts";
+import { addHandles } from "../src/features/lists/store.ts";
 import {
   finishUnblock,
   markAlreadyBlocked,
   recordAudit,
+  recordBlockFailure,
+  refuseUnblock,
   repairInheritedBlocks,
+  setError,
+  setPauseUntil,
   useAccount,
 } from "../src/features/blocking/store.ts";
-import { setNotify } from "../src/features/notifications/store.ts";
+import { halted, resumable } from "../src/features/blocking/plan.ts";
+import { active, pendingIn, unblockQueue } from "../src/features/blocking/queue.ts";
+import { setNotifications } from "../src/features/notifications/store.ts";
+import { manualList, officialList } from "../src/features/lists/lists.ts";
 import { addSeen } from "../src/features/timeline/store.ts";
 
-/**
- * Faux chrome.storage.local. Le vrai `get` prend un objet de valeurs par défaut
- * et ne renvoie la valeur stockée que si la clé existe : le stub reproduit ce
- * contrat, c'est lui que le code sous test exerce.
- */
 let store: Record<string, unknown>;
 
-/** Remplace les résultats enregistrés, stockés un par compte. */
-function putResults(results: Record<string, unknown>): void {
+/** Remplace les résultats enregistrés. */
+function replaceResults(results: Record<string, unknown>): void {
   for (const key of Object.keys(store)) if (resultHandle(key) !== null) delete store[key];
-  for (const [handle, result] of Object.entries(results)) store[resultKey(handle)] = result;
+  putResults(store, results);
+}
+
+/** Comptes de « Ma liste perso », à côté de la liste collaborative active. */
+function setManual(handles: string[]): void {
+  store.lists = [officialList(true), manualList(handles, 0)];
 }
 
 beforeEach(() => {
-  store = {};
-  (globalThis as any).chrome = {
-    storage: {
-      local: {
-        get: async (defaults: Record<string, unknown> | null) =>
-          defaults === null
-            ? { ...store }
-            : Object.fromEntries(Object.entries(defaults).map(([k, v]) => [k, k in store ? store[k] : v])),
-        set: async (values: Record<string, unknown>) => {
-          Object.assign(store, values);
-        },
-        remove: async (keys: string | string[]) => {
-          for (const key of [keys].flat()) delete store[key];
-        },
-      },
-    },
-  };
+  // État d'une installation dont l'accueil est terminé, sur la liste collaborative.
+  store = { bundled: [...DEFAULT_HANDLES], lists: [officialList(true)], onboarded: true };
+  installChrome(() => store);
 });
 
-test("une installation neuve part de la liste par défaut", async () => {
-  assert.deepEqual((await getState()).handles, DEFAULT_HANDLES);
+test("une installation neuve ne bloque rien avant le choix de l'accueil", async () => {
+  store = { bundled: [...DEFAULT_HANDLES] };
+  const state = await getState();
+  assert.deepEqual(state.handles, []);
+  assert.equal(state.onboarded, false);
+  assert.deepEqual(state.official, DEFAULT_HANDLES);
 });
 
-test("les comptes par défaut s'ajoutent à une liste déjà enregistrée", async () => {
+test("les comptes de la liste collaborative s'ajoutent à une liste perso, sans doublon", async () => {
   // Cas réel : installation antérieure, liste enregistrée avant l'ajout de
   // nouveaux comptes par défaut. Ils doivent apparaître sans réinstaller.
-  store.handles = ["ancien", DEFAULT_HANDLES[0]];
+  setManual(["ancien", DEFAULT_HANDLES[0] ?? ""]);
   const { handles } = await getState();
   assert.deepEqual(handles, [...DEFAULT_HANDLES, "ancien"]);
 });
 
 test("des comptes ajoutés rejoignent la fin de la liste, une seule fois", async () => {
   const first = await addHandles(["un", "deux", "un", DEFAULT_HANDLES[0] ?? ""]);
-  assert.deepEqual(first, { added: ["un", "deux"], existing: [DEFAULT_HANDLES[0]] });
-  assert.deepEqual(await addHandles(["deux", "trois"]), { added: ["trois"], existing: ["deux"] });
+  assert.deepEqual(first, { added: ["un", "deux"], existing: [DEFAULT_HANDLES[0]], inactiveList: null });
+  assert.deepEqual(await addHandles(["deux", "trois"]), { added: ["trois"], existing: ["deux"], inactiveList: null });
   const { handles } = await getState();
   assert.deepEqual(handles.slice(-3), ["un", "deux", "trois"]);
   assert.equal(handles.length, DEFAULT_HANDLES.length + 3);
@@ -74,13 +84,13 @@ test("la liste par défaut est déjà normalisée et sans doublon", () => {
 });
 
 test("la file des comptes vus ne garde que des comptes de la liste encore à bloquer", async () => {
-  store.handles = ["a", "b", "c"];
-  putResults({ b: { state: "blocked", at: 1 } });
+  setManual(["a", "b", "c"]);
+  replaceResults({ b: { state: "blocked", at: 1 } });
   await addSeen(["a", "b", "hors_liste", "a"]);
   assert.deepEqual((await getState()).seen, ["a"]);
 
   // Une fois bloqué, le compte sort de la file au prochain ajout.
-  putResults({ a: { state: "blocked", at: 2 } });
+  replaceResults({ a: { state: "blocked", at: 2 } });
   await addSeen(["c"]);
   assert.deepEqual((await getState()).seen, ["c"]);
 });
@@ -92,7 +102,7 @@ test("bloquer à la main place le compte en tête de file", async () => {
 });
 
 test("bloquer à la main oublie un échec définitif pour retenter", async () => {
-  putResults({ a: { state: "failed", at: 1, attempts: 3 }, b: { state: "blocked", at: 1 } });
+  replaceResults({ a: { state: "failed", at: 1, attempts: 3 }, b: { state: "blocked", at: 1 } });
   await requestBlock("a");
   const state = await getState();
   assert.deepEqual({ ...state.results }, { b: { state: "blocked", at: 1 } });
@@ -100,19 +110,19 @@ test("bloquer à la main oublie un échec définitif pour retenter", async () =>
 });
 
 test("bloquer à la main un compte déjà bloqué ne change rien", async () => {
-  putResults({ a: { state: "already_blocked", at: 1 } });
+  replaceResults({ a: { state: "already_blocked", at: 1 } });
   await requestBlock("a");
   assert.deepEqual((await getState()).seen, []);
 });
 
 test("les notifications sont actives par défaut et se désactivent", async () => {
   assert.equal((await getState()).notify, true);
-  await setNotify(false);
+  await setNotifications({ notify: false });
   assert.equal((await getState()).notify, false);
 });
 
 test("désactiver un compte bloqué par Barrage le met en file de déblocage", async () => {
-  putResults({ a: { state: "blocked", at: 1 } });
+  replaceResults({ a: { state: "blocked", at: 1 } });
   store.seen = ["a", "b"];
   await setEnabled("a", false);
   const state = await getState();
@@ -124,26 +134,26 @@ test("désactiver un compte bloqué par Barrage le met en file de déblocage", a
 
 test("un blocage qui aboutit après le passage sur Off est débloqué quand même", async () => {
   await setEnabled("a", false);
-  putResults({ a: { state: "blocked", at: 2 } });
+  replaceResults({ a: { state: "blocked", at: 2 } });
   assert.deepEqual(unblockQueue(await getState()), ["a"]);
 });
 
 test("un déblocage refusé par X n'est relancé qu'à la main", async () => {
   store.disabled = ["a"];
-  putResults({ a: { state: "blocked", at: 1, unblockFailed: true } });
+  replaceResults({ a: { state: "blocked", at: 1, unblockFailed: true } });
   assert.deepEqual(unblockQueue(await getState()), []);
   await requestUnblock("a");
   assert.deepEqual(unblockQueue(await getState()), ["a"]);
 });
 
 test("un compte bloqué avant Barrage n'est jamais débloqué", async () => {
-  putResults({ a: { state: "already_blocked", at: 1 } });
+  replaceResults({ a: { state: "already_blocked", at: 1 } });
   await setEnabled("a", false);
   assert.deepEqual(unblockQueue(await getState()), []);
 });
 
 test("réactiver un compte annule son déblocage pas encore fait", async () => {
-  putResults({ a: { state: "blocked", at: 1 } });
+  replaceResults({ a: { state: "blocked", at: 1 } });
   await setEnabled("a", false);
   await setEnabled("a", true);
   const state = await getState();
@@ -152,7 +162,7 @@ test("réactiver un compte annule son déblocage pas encore fait", async () => {
 });
 
 test("« Bloquer » relance un compte débloqué puis réactivé", async () => {
-  putResults({ a: { state: "unblocked", at: 1 } });
+  replaceResults({ a: { state: "unblocked", at: 1 } });
   await requestBlock("a");
   const state = await getState();
   assert.deepEqual(state.seen, ["a"]);
@@ -168,14 +178,14 @@ test("un déblocage terminé sort de la file et enregistre le résultat", async 
 });
 
 test("un compte désactivé vu dans le fil n'entre pas dans la file", async () => {
-  store.handles = ["a"];
+  setManual(["a"]);
   store.disabled = ["a"];
   await addSeen(["a"]);
   assert.deepEqual((await getState()).seen, []);
 });
 
 test("débloquer à la main vaut aussi pour un compte bloqué avant Barrage", async () => {
-  putResults({ a: { state: "already_blocked", at: 1 } });
+  replaceResults({ a: { state: "already_blocked", at: 1 } });
   store.seen = ["a", "b"];
   await requestUnblock("a");
   const state = await getState();
@@ -184,31 +194,19 @@ test("débloquer à la main vaut aussi pour un compte bloqué avant Barrage", as
   assert.deepEqual(state.seen, ["b"]);
 });
 
-test("un compte retiré de la liste partagée que Barrage a bloqué est débloqué", async () => {
+test("un compte retiré de la liste partagée n'est pas débloqué sans choix de l'utilisateur", async () => {
   store.remote = ["b"];
-  store.retired = ["a", "c"];
-  putResults({ a: { state: "blocked", at: 1 }, c: { state: "already_blocked", at: 1 } });
+  store.retired = ["a"];
+  store.retiredAt = { a: 1 };
+  replaceResults({ a: { state: "blocked", at: 1 } });
   const state = await getState();
   assert.deepEqual(state.handles, ["b"]);
-  assert.deepEqual(unblockQueue(state), ["a"]);
-});
-
-test("un compte remis dans la liste partagée n'est plus à débloquer", async () => {
-  store.remote = ["a"];
-  store.retired = ["a"];
-  putResults({ a: { state: "blocked", at: 1 } });
-  assert.deepEqual(unblockQueue(await getState()), []);
-});
-
-test("un déblocage terminé sort aussi les comptes retirés de la file", async () => {
-  store.retired = ["a"];
-  await finishUnblock("a", { state: "unblocked", at: 2 });
-  assert.deepEqual((await getState()).retired, []);
+  assert.deepEqual(unblockQueue(state), []);
 });
 
 test("un compte vu comme déjà bloqué sur X passe sur « bloqué avant Barrage »", async () => {
   store.remote = ["a", "b", "c"];
-  putResults({ b: { state: "blocked", at: 1 } });
+  replaceResults({ b: { state: "blocked", at: 1 } });
   store.seen = ["a"];
   await markAlreadyBlocked(["a", "b", "hors_liste"]);
   const state = await getState();
@@ -226,14 +224,14 @@ test("chaque résultat est stocké sous sa propre clé", async () => {
 });
 
 test("un compte introuvable depuis longtemps qui réapparaît dans le fil est retenté", async () => {
-  store.handles = ["a", "b"];
-  putResults({ a: { state: "not_found", at: 0 }, b: { state: "not_found", at: Date.now() } });
+  setManual(["a", "b"]);
+  replaceResults({ a: { state: "not_found", at: 0 }, b: { state: "not_found", at: Date.now() } });
   await addSeen(["a", "b"]);
   assert.deepEqual((await getState()).seen, ["a"]);
 });
 
 test("« Bloquer » relance un compte introuvable", async () => {
-  putResults({ a: { state: "not_found", at: 1 } });
+  replaceResults({ a: { state: "not_found", at: 1 } });
   await requestBlock("a");
   const state = await getState();
   assert.equal(state.results.a, undefined);
@@ -243,7 +241,7 @@ test("« Bloquer » relance un compte introuvable", async () => {
 test("un déblocage demandé à la main reste dû après la sortie du compte de la liste", async () => {
   store.remote = ["b"];
   store.unblock = ["a"];
-  putResults({ a: { state: "already_blocked", at: 1 } });
+  replaceResults({ a: { state: "already_blocked", at: 1 } });
   assert.deepEqual(unblockQueue(await getState()), ["a"]);
   await finishUnblock("a", { state: "unblocked", at: 2 });
   assert.deepEqual(unblockQueue(await getState()), []);
@@ -251,7 +249,7 @@ test("un déblocage demandé à la main reste dû après la sortie du compte de 
 
 test("le premier compte X vu garde l'état existant, à vérifier auprès de X", async () => {
   store.remote = ["a", "b"];
-  putResults({ a: { state: "blocked", at: 1 } });
+  replaceResults({ a: { state: "blocked", at: 1 } });
   store.seen = ["b"];
   await useAccount("1", "moi");
   const state = await getState();
@@ -266,7 +264,7 @@ test("le premier compte X vu garde l'état existant, à vérifier auprès de X",
 test("un second compte X a son propre état, sans les blocages du premier", async () => {
   store.remote = ["a", "b"];
   await useAccount("1", "un");
-  putResults({ a: { state: "blocked", at: 1 } });
+  replaceResults({ a: { state: "blocked", at: 1 } });
   await useAccount("2", "deux");
   const second = await getState();
   assert.equal(second.account, "2");
@@ -297,7 +295,7 @@ test("revenir sur un compte X déjà vu ne relance pas sa vérification", async 
 test("la vérification auprès de X remplace l'état supposé par l'état réel", async () => {
   store.remote = ["a", "b", "c", "d"];
   await useAccount("1", null);
-  putResults({ a: { state: "blocked", at: 1 }, b: { state: "already_blocked", at: 1 }, d: { state: "blocked", at: 1 } });
+  replaceResults({ a: { state: "blocked", at: 1 }, b: { state: "already_blocked", at: 1 }, d: { state: "blocked", at: 1 } });
   await recordAudit(["a", "b", "c", "d"], ["a", "b", "c"], ["b", "c"], {}, "1");
   const state = await getState();
   // Bloqué d'après Barrage mais pas d'après X : à bloquer de nouveau.
@@ -321,7 +319,7 @@ test("les changements de résultats se lisent pour un seul compte X", () => {
 test("sur un autre compte X, un blocage que l'état commun attribuait à Barrage lui revient", async () => {
   store.remote = ["a", "b"];
   await useAccount("1", null);
-  putResults({ a: { state: "blocked", at: 1 } });
+  replaceResults({ a: { state: "blocked", at: 1 } });
   await useAccount("2", null);
   await recordAudit(["a", "b"], ["a", "b"], ["a", "b"], {}, "2");
   const second = await getState("2");
@@ -333,16 +331,57 @@ test("sur un autre compte X, un blocage que l'état commun attribuait à Barrage
 test("la réparation rend à Barrage les blocages hérités marqués « avant Barrage » par la 1.1.0", async () => {
   store.remote = ["a", "b"];
   await useAccount("1", null);
-  putResults({ a: { state: "blocked", at: 1 } });
+  replaceResults({ a: { state: "blocked", at: 1 } });
   await useAccount("2", null);
   store[resultKey("a", "acct:2/")] = { state: "already_blocked", at: 5 };
   store[resultKey("b", "acct:2/")] = { state: "already_blocked", at: 5 };
-  await repairInheritedBlocks();
+  await repairInheritedBlocks("1.1.0");
   const second = await getState("2");
   assert.deepEqual(second.results.a, { state: "blocked", at: 5 });
   assert.equal(second.results.b?.state, "already_blocked");
   // Le premier compte n'est pas touché.
   assert.equal((await getState("1")).results.a?.state, "blocked");
+});
+
+test("la réparation ne concerne que les versions qui en ont besoin", async () => {
+  store.remote = ["a"];
+  await useAccount("1", null);
+  replaceResults({ a: { state: "blocked", at: 1 } });
+  await useAccount("2", null);
+  const key = resultKey("a", "acct:2/");
+  for (const version of ["1.1.1", "1.3.0", "1.4.0", undefined, "illisible"]) {
+    store[key] = { state: "already_blocked", at: 5 };
+    await repairInheritedBlocks(version);
+    assert.equal((store[key] as { state: string }).state, "already_blocked");
+  }
+  store[key] = { state: "already_blocked", at: 5 };
+  await repairInheritedBlocks("1.0.2");
+  assert.equal((store[key] as { state: string }).state, "blocked");
+});
+
+test("une seconde réparation ne s'attribue pas un blocage récent de l'utilisateur", async () => {
+  store.remote = ["a", "b"];
+  await useAccount("1", null);
+  // Bloqué par Barrage après la séparation des comptes, sur le premier compte seulement.
+  replaceResults({ a: { state: "blocked", at: 1 }, b: { state: "blocked", at: Date.now() } });
+  await useAccount("2", null);
+  store[resultKey("b", "acct:2/")] = { state: "already_blocked", at: 5 };
+  await repairInheritedBlocks("1.1.0");
+  await repairInheritedBlocks("1.1.0");
+  const second = await getState("2");
+  assert.equal(second.results.b?.state, "already_blocked");
+  store.disabled = ["b"];
+  store["acct:2/retired"] = ["b"];
+  assert.deepEqual(unblockQueue(await getState("2")), []);
+});
+
+test("la vérification d'un compte X vu après coup ne s'attribue pas un blocage récent", async () => {
+  store.remote = ["a"];
+  await useAccount("1", null);
+  replaceResults({ a: { state: "blocked", at: Date.now() } });
+  await useAccount("2", null);
+  await recordAudit(["a"], ["a"], ["a"], {}, "2");
+  assert.equal((await getState("2")).results.a?.state, "already_blocked");
 });
 
 test("réactiver un compte annule son déblocage en attente sur chaque compte X", async () => {
@@ -378,4 +417,115 @@ test("un nouveau compte X est enregistré et à vérifier en une seule écriture
   const second = await getState("2");
   assert.deepEqual(second.audit, ["a", "b"]);
   assert.deepEqual(second.accounts["2"], { handle: "deux" });
+});
+
+test("des refus répétés sortent le compte de la file au dernier essai permis", async () => {
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    assert.deepEqual(pendingIn(["a"], (await getState()).results), ["a"], `avant l'essai ${attempt}`);
+    await recordBlockFailure("a", { code: "refused", param: 9 }, attempt);
+  }
+  const { results } = await getState();
+  assert.deepEqual(results.a, { state: "failed", at: MAX_ATTEMPTS, code: "refused", param: 9, attempts: MAX_ATTEMPTS });
+  assert.deepEqual(pendingIn(["a"], results), []);
+});
+
+test("un déblocage refusé sort de la file, reste bloqué et se signale", async () => {
+  replaceResults({ a: { state: "blocked", at: 1 } });
+  store.disabled = ["a"];
+  store.unblock = ["a"];
+  await refuseUnblock("a", { code: "refused", param: 9 });
+  const state = await getState();
+  assert.equal(state.results.a?.state, "blocked");
+  assert.equal(state.results.a?.unblockFailed, true);
+  assert.deepEqual(unblockQueue(state), []);
+  assert.deepEqual(state.unblock, []);
+  assert.deepEqual(state.error?.context, { unblock: "a" });
+  assert.equal(state.error?.message, undefined);
+  assert.match(errorText(state.error as BlockingError), /Déblocage de @a impossible : Refus de X \(code 9\)/);
+});
+
+test("une erreur permanente garde une échéance finie, après le passage en JSON", async () => {
+  await setError("", { code: "route_gone" }, "api", Infinity);
+  const { error } = await getState();
+  assert.equal(error?.staleAt, Number.MAX_SAFE_INTEGER);
+  await setError("", null);
+  assert.equal((await getState()).error, null);
+});
+
+test("une erreur passagère expire après son délai, marge comprise", async () => {
+  const before = Date.now();
+  await setError("", { code: "network_down" }, "network", 1000);
+  const { error } = await getState();
+  assert.ok((error?.staleAt ?? 0) > before + 1000);
+  assert.ok((error?.staleAt ?? Infinity) < Number.MAX_SAFE_INTEGER);
+});
+
+test("une pause est écrite sous le préfixe du compte X", async () => {
+  await setPauseUntil("acct:2/", 42);
+  assert.equal(store["acct:2/pauseUntil"], 42);
+  assert.equal((await getState()).pauseUntil, 0);
+});
+
+test("une erreur stockée illisible garde le traitement arrêté, et se lève dans les options", async () => {
+  for (const value of [{ reason: "network" }, { message: "sans échéance", reason: "other" }, { staleAt: 1 }]) {
+    store.error = value;
+    const { error } = await getState();
+    assert.equal(halted(error, Date.now()), true, JSON.stringify(value));
+    assert.equal(resumable(error), true, JSON.stringify(value));
+    assert.equal(error?.code, "unreadable_error", JSON.stringify(value));
+  }
+});
+
+test("une erreur stockée qui n'est pas un objet ne vaut pas arrêt", async () => {
+  store.error = null;
+  assert.equal((await getState()).error, null);
+  store.error = "texte";
+  assert.equal((await getState()).error, null);
+});
+
+test("cadence absente ou abîmée : vide, relue dans l'ordre, et propre à chaque compte X", async () => {
+  const empty = await getState();
+  assert.deepEqual([empty.actions, empty.lookups, empty.lookupPauseUntil, empty.health], [[], [], 0, null]);
+  Object.assign(store, { account: "2", legacy: "1", actions: [9], "acct:2/actions": [3, "x", null, 1], health: "autre" });
+  const state = await getState("2");
+  assert.deepEqual(state.actions, [1, 3]);
+  assert.equal(state.health, null);
+  assert.deepEqual((await getState("1")).actions, [9]);
+});
+
+test("Off à la main : `disabled` reste commun à tous les comptes X, les files restent celles du compte", async () => {
+  Object.assign(store, { account: "2", legacy: "1", accounts: { "1": {}, "2": {} }, "acct:2/seen": ["a"] });
+  await requestUnblock("a");
+  assert.deepEqual(store.disabled, ["a"]);
+  assert.equal(store["acct:2/disabled"], undefined);
+  assert.deepEqual(store["acct:2/seen"], []);
+  assert.deepEqual(store["acct:2/unblock"], ["a"]);
+});
+
+test("les clés de compte reçoivent le préfixe, jamais une autre clé", () => {
+  assert.deepEqual(scoped("acct:2/", { seen: [], error: null }), { "acct:2/seen": [], "acct:2/error": null });
+  assert.deepEqual(scoped("", { seen: [] }), { seen: [] });
+  // @ts-expect-error une faute de frappe ne compile plus.
+  scoped("", { sen: [] });
+  // @ts-expect-error un champ commun non plus.
+  scoped("", { disabled: [] });
+  // @ts-expect-error `handles` n'est pas une clé stockée : personne ne verrait son changement.
+  const never: StateKey = "handles";
+  assert.ok(never);
+});
+
+test("un ajout à la main met le compte à vérifier, sans toucher aux files en place", async () => {
+  store.seen = ["vu"];
+  store.audit = ["c"];
+  store.lists = [officialList(true), manualList(["vu", "c"], 0)];
+  await addHandles(["nouveau"]);
+  assert.deepEqual(store.audit, ["c", "nouveau"]);
+  assert.deepEqual(store.seen, ["vu"]);
+  assert.ok((await getState()).handles.includes("nouveau"));
+});
+
+test("un ajout à la main ne recopie pas les dates de synchronisation dans les listes", async () => {
+  store.listSync = { official: 5 };
+  await addHandles(["nouveau"]);
+  assert.equal((store.lists as Array<{ syncedAt?: number }>)[0]?.syncedAt, undefined);
 });
