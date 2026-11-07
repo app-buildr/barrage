@@ -2,7 +2,7 @@
 // relu à chaque écriture, et à l'échéance d'une erreur ou d'une limite de X
 // pour qu'elles disparaissent de l'affichage, même sans nouvelle écriture.
 import { useEffect, useState } from "react";
-import { getState, onStateChange, type State } from "@/core/state.ts";
+import { coalesced, getState, onStateChange, type State } from "@/core/state.ts";
 
 /** La pause la plus longue, marge comprise. */
 const MAX_TIMER_MS = 2 * 24 * 60 * 60_000;
@@ -26,7 +26,7 @@ export function useExtensionState(): State | null {
       if (deadlines.length) expiry = setTimeout(() => void refresh(), Math.min(...deadlines) - time + 50);
     }
 
-    const unsubscribe = onStateChange(() => void refresh());
+    const unsubscribe = onStateChange(coalesced(() => void refresh()));
     void refresh();
     return () => {
       alive = false;

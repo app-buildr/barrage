@@ -13,21 +13,27 @@ export async function recordBlockSuccess(account?: string | null): Promise<void>
   await chrome.storage.local.set(scoped(prefix, { blockCount: count, badges: awardBadges(count, badges, Date.now()) }));
 }
 
-/** Rattrape le compteur sur les comptes bloqués sur X, y compris avant Barrage. */
+/** Rattrape le compteur sur les comptes bloqués sur X, y compris avant Barrage : ce qui change, à écrire. */
 function caughtUp({ blockCount, badges, prefix, results }: State, at: number): Record<string, unknown> {
   const count = Math.max(blockCount, blockedCount(results));
-  return scoped(prefix, { blockCount: count, badges: awardBadges(count, badges, at) });
+  const earned = awardBadges(count, badges, at);
+  if (count === blockCount && Object.keys(earned).length === Object.keys(badges).length) return {};
+  return scoped(prefix, { blockCount: count, badges: earned });
+}
+
+async function saveBadges(values: Record<string, unknown>): Promise<void> {
+  if (Object.keys(values).length) await chrome.storage.local.set(values);
 }
 
 /** Comptes reconnus comme bloqués sur X : les badges suivent. */
 export async function syncBadges(account?: string | null): Promise<void> {
-  await chrome.storage.local.set(caughtUp(await getState(account), Date.now()));
+  await saveBadges(caughtUp(await getState(account), Date.now()));
 }
 
 /** Installation ou mise à jour : les badges de chaque compte X sont rattrapés. */
 export async function syncAllBadges(): Promise<void> {
   const at = Date.now();
-  await chrome.storage.local.set(Object.assign({}, ...accountStates(await readStorage()).map((state) => caughtUp(state, at))));
+  await saveBadges(Object.assign({}, ...accountStates(await readStorage()).map((state) => caughtUp(state, at))));
 }
 
 /** Notification de badge fermée ou partagée : ce palier et les inférieurs ne reviennent plus. */

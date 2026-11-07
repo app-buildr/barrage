@@ -23,6 +23,7 @@ import {
 import {
   QUEUE_KEYS,
   accountsOf,
+  coalesced,
   getState,
   onStateChange,
   type BlockingError,
@@ -196,8 +197,10 @@ async function check(state: State, batch: string[]): Promise<Next> {
       entries[handle] = { state: "not_found", at, message: "Compte introuvable ou suspendu." };
     } else checked.set(handle, at);
   }
-  await setResults(state.prefix, entries, recovered(state));
-  await updateBadges("syncBadges", state);
+  // Le cas courant, comptes trouvés et non bloqués, n'écrit rien.
+  const extra = recovered(state);
+  if (Object.keys(entries).length || Object.keys(extra).length) await setResults(state.prefix, entries, extra);
+  if (Object.values(entries).some((entry) => entry.state === "already_blocked")) await updateBadges("syncBadges", state);
   return continueIn();
 }
 
@@ -361,6 +364,6 @@ async function start(pageLoad = false): Promise<void> {
 
 /** Traite la file maintenant, puis à chaque modification qui la concerne. */
 export function startRunner(): void {
-  onStateChange(() => void start(), QUEUE_KEYS);
+  onStateChange(coalesced(() => void start()), QUEUE_KEYS);
   void start(true);
 }

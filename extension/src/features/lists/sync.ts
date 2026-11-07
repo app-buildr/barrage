@@ -3,10 +3,10 @@
 // est relevé en même temps se décident dans entries/background.ts.
 // Une liste qui s'écarte trop de sa référence attend une confirmation dans les
 // options, voir compareLists.
-import { LIST_MAX_BYTES, LISTS_REFRESH_MINUTES, LISTS_URL } from "../../core/config.ts";
+import { LIST_MAX_BYTES, LISTS_RECHECK_MS, LISTS_REFRESH_MINUTES, LISTS_URL } from "../../core/config.ts";
 import { isImportListRequest, isRefreshListsRequest, type ImportListReply, type RefreshListsReply } from "../../core/messages.ts";
 import { DOWNLOAD_ERROR, analyzeList, validateListUrl } from "./import.ts";
-import { OFFICIAL_ID, readLists } from "./lists.ts";
+import { OFFICIAL_ID, readListSync, readLists } from "./lists.ts";
 import { parseList } from "./remote.ts";
 import { receiveOfficial, recordListRefusal, updateListHandles } from "./store.ts";
 import { serial } from "../../core/writer.ts";
@@ -23,7 +23,8 @@ function warnDownload(url: string, err: unknown): void {
  * doit jamais quitter les hôtes acceptés. Lève une erreur si la réponse n'est pas lisible.
  */
 async function fetchListText(url: string): Promise<string> {
-  const response = await fetch(url, { cache: "no-store", credentials: "omit", redirect: "error" });
+  // no-cache : toujours revalidé auprès de GitHub, sans retélécharger un fichier inchangé (ETag).
+  const response = await fetch(url, { cache: "no-cache", credentials: "omit", redirect: "error" });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   // Même règle qu'un fichier local, en octets. L'en-tête évite de tout télécharger pour rien.
   if (Number(response.headers.get("content-length")) > LIST_MAX_BYTES) throw new Error("fichier trop gros");
@@ -95,6 +96,12 @@ async function importList(raw: string): Promise<ImportListReply> {
 /** Toutes les listes en ligne. */
 export const refreshLists = (): Promise<unknown> => Promise.all([refreshOfficial(), refreshImported()]);
 
+/** La collaborative vient d'être vérifiée : rouvrir les options ne relance rien. */
+async function checkedRecently(): Promise<boolean> {
+  const { listSync } = await chrome.storage.local.get({ listSync: null });
+  return Date.now() - (readListSync(listSync)[OFFICIAL_ID] ?? 0) < LISTS_RECHECK_MS;
+}
+
 /**
  * Écoute l'alarme et les messages des options.
  * @param refresh rafraîchissement complet, composé par entries/background.ts
@@ -106,7 +113,9 @@ export function syncLists(refresh: () => Promise<unknown>): () => void {
   });
   chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse: (reply: RefreshListsReply) => void) => {
     if (!isRefreshListsRequest(message)) return false;
-    void refresh().finally(() => sendResponse(true));
+    void checkedRecently()
+      .then((recent) => (recent ? undefined : refresh()))
+      .finally(() => sendResponse(true));
     return true; // réponse asynchrone
   });
   chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse: (reply: ImportListReply) => void) => {

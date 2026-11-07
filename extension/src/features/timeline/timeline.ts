@@ -177,8 +177,16 @@ function scanWithin(root: ParentNode & Node, deep: boolean, done: Set<Element>):
 let dirtyRoots: Map<Node, boolean> | null = null;
 let lastPath = "";
 
+/**
+ * Au-delà, tout sera relu. Dans un onglet caché, les passages sont suspendus
+ * alors que les mutations continuent : la Map retiendrait des nœuds détachés.
+ */
+const MAX_DIRTY_ROOTS = 2000;
+
 function markDirty(node: Node, deep: boolean): void {
-  if (dirtyRoots && !dirtyRoots.get(node)) dirtyRoots.set(node, deep);
+  if (!dirtyRoots || dirtyRoots.get(node)) return;
+  dirtyRoots.set(node, deep);
+  if (dirtyRoots.size > MAX_DIRTY_ROOTS) dirtyRoots = null;
 }
 
 function scan(): void {
@@ -191,11 +199,7 @@ function scan(): void {
   }
   const roots = dirtyRoots;
   dirtyRoots = new Map();
-  if (!listed.size) {
-    // Plus aucun compte suivi : ce qui avait été masqué réapparaît.
-    for (const el of document.querySelectorAll(`[${HIDDEN_ATTR}]`)) el.removeAttribute(HIDDEN_ATTR);
-    return;
-  }
+  if (!listed.size) return;
   const done = new Set<Element>();
   if (roots === null) scanWithin(document, true, done);
   else for (const [root, deep] of roots) if (root.isConnected) scanWithin(root as ParentNode & Node, deep, done);
@@ -221,6 +225,8 @@ async function loadList(): Promise<void> {
   listed = new Set(active(state));
   results = state.results;
   prefix = state.prefix;
+  // Plus aucun compte suivi : ce qui avait été masqué réapparaît.
+  if (!listed.size) for (const el of document.querySelectorAll(`[${HIDDEN_ATTR}]`)) el.removeAttribute(HIDDEN_ATTR);
   dirtyRoots = null;
   scheduleScan();
 }
@@ -252,6 +258,8 @@ export function watchTimeline(): void {
     // Extension rechargée ou désinstallée : ce script orphelin s'arrête au lieu
     // d'échouer à chaque mutation. Le nouveau script injecté prend le relais.
     if (!contextAlive()) return observer.disconnect();
+    // Sans liste, rien à relire : le retour d'une liste fait tout relire, voir loadList.
+    if (!listed.size) return;
     // Seules les zones modifiées sont relues, pas toute la page.
     for (const record of records) {
       markDirty(record.target, false);

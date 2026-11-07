@@ -3,7 +3,7 @@ import { beforeEach, test } from "node:test";
 import { installChrome } from "./helpers/chrome.ts";
 import { getState, resultKey } from "../src/core/state.ts";
 import { awardBadges, earnedCount, nextBadge, nextStepText, pendingBadge, shareText, shareUrl, BADGES } from "../src/features/badges/badges.ts";
-import { dismissBadge, recordBlockSuccess, setNotifyBadges, syncAllBadges } from "../src/features/badges/store.ts";
+import { dismissBadge, recordBlockSuccess, setNotifyBadges, syncAllBadges, syncBadges } from "../src/features/badges/store.ts";
 import { markAlreadyBlocked } from "../src/features/blocking/store.ts";
 import { manualList } from "../src/features/lists/lists.ts";
 
@@ -58,9 +58,23 @@ test("fermer une notification dépassée ne fait pas redescendre le palier notif
   assert.equal((await getState("1")).badgeNotified, 25);
 });
 
-test("le réglage des notifications de badge est enregistré", async () => {
+test("le réglage des notifications de badge est actif par défaut et vaut pour tous les comptes X", async () => {
+  assert.equal((await getState("1")).notifyBadges, true);
   await setNotifyBadges(false);
   assert.equal((await getState("1")).notifyBadges, false);
+  assert.equal((await getState("2")).notifyBadges, false);
+});
+
+test("des badges déjà à jour ne provoquent aucune écriture", async () => {
+  store[resultKey("a")] = { state: "blocked", at: 1 };
+  await syncBadges("1");
+  const set = chrome.storage.local.set;
+  let writes = 0;
+  (chrome.storage.local as any).set = async () => void writes++;
+  await syncBadges("1");
+  await syncAllBadges();
+  (chrome.storage.local as any).set = set;
+  assert.equal(writes, 0);
 });
 
 test("le palier suivant se lit depuis le compteur", () => {

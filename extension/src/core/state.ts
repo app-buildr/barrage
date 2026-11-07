@@ -5,11 +5,11 @@
 //
 // chrome.storage.local plutôt que sync : sync plafonne chaque valeur à 8 Ko,
 // trop peu pour une longue liste.
-import { RETIRE_GRACE_MS } from "./config.ts";
+import { RETIRE_GRACE_MS, STATE_COALESCE_MS } from "./config.ts";
 import { DEFAULT_HANDLES } from "../features/lists/defaults.ts";
 import type { Earned } from "../features/badges/badges.ts";
 import { activeHandles, eligible, isBlocked, resultOf, type Result, type Results } from "../features/blocking/queue.ts";
-import { effectiveHandles, readLists, type ListDef } from "../features/lists/lists.ts";
+import { effectiveHandles, readListSync, readLists, withSyncDates, type ListDef } from "../features/lists/lists.ts";
 import { readGuards, type ListGuard } from "../features/lists/remote.ts";
 
 /** "automation" : soupçon d'automatisation par X. "api" : réponses de X que Barrage ne sait plus lire. */
@@ -286,7 +286,7 @@ export function readState(stored: Record<string, unknown>, account?: string | nu
   const own = (field: AccountField) => stored[prefix + field];
   const remote = Array.isArray(stored.remote) ? stringArray(stored.remote) : null;
   const official = remote ?? DEFAULT_HANDLES;
-  const lists = readLists(stored.lists);
+  const lists = withSyncDates(readLists(stored.lists), readListSync(stored.listSync));
   const blockCount = own("blockCount");
   const badges = own("badges");
   const badgeNotified = own("badgeNotified");
@@ -374,6 +374,19 @@ export function onStateChange(
   };
   chrome.storage.onChanged.addListener(onChanged);
   return () => chrome.storage.onChanged.removeListener(onChanged);
+}
+
+/** `task`, une seule fois pour une rafale d'appels : il part STATE_COALESCE_MS après le premier. */
+export function coalesced(task: () => void): () => void {
+  let pending = false;
+  return () => {
+    if (pending) return;
+    pending = true;
+    setTimeout(() => {
+      pending = false;
+      task();
+    }, STATE_COALESCE_MS);
+  };
 }
 
 /**

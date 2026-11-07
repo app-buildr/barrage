@@ -72,6 +72,12 @@ export const NOT_FOUND_RETRY_MS = 24 * 60 * 60_000;
  */
 export const RUNNER_GRACE_MS = 2 * 60_000;
 
+/**
+ * Regroupement des relectures de l'état : une rafale d'écritures ne provoque
+ * qu'une lecture par onglet et par page d'options.
+ */
+export const STATE_COALESCE_MS = 100;
+
 /** Comptes vérifiés par requête auprès de X, le maximum qu'accepte l'API. */
 export const LOOKUP_BATCH = 100;
 
@@ -93,6 +99,8 @@ export const AUDIT_INTERVAL_MS = 70_000;
 export const LISTS_URL = `https://raw.githubusercontent.com/${REPO}/main/lists`;
 /** Intervalle entre deux téléchargements. */
 export const LISTS_REFRESH_MINUTES = 6 * 60;
+/** À l'ouverture des options, une vérification plus récente que ce délai n'est pas refaite. */
+export const LISTS_RECHECK_MS = 10 * 60_000;
 /** Au-delà, une liste reçue est jugée anormale et ignorée. */
 export const LIST_MAX_SIZE = 5000;
 /** Seuls hôtes acceptés pour une liste importée : ils répondent avec CORS ouvert, sans nouvelle permission. */

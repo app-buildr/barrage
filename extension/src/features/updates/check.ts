@@ -8,7 +8,7 @@ export async function checkLatestVersion(): Promise<void> {
   if (!RELEASES_URL) return;
   let body: unknown;
   try {
-    const response = await fetch(RELEASES_URL, { cache: "no-store", credentials: "omit", redirect: "error" });
+    const response = await fetch(RELEASES_URL, { cache: "no-cache", credentials: "omit", redirect: "error" });
     if (!response.ok) {
       console.warn("[Barrage] téléchargement refusé :", RELEASES_URL, response.status);
       return;

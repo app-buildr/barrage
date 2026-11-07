@@ -5,7 +5,7 @@ import { serveWrites } from "../src/core/writer.ts";
 import { HIDDEN_ATTR } from "../src/features/timeline/selectors.ts";
 import { officialList } from "../src/features/lists/lists.ts";
 import { installChrome } from "./helpers/chrome.ts";
-import { fixture, installDom, type FakeElement } from "./helpers/dom.ts";
+import { FakeElement, fixture, installDom } from "./helpers/dom.ts";
 import { installX, type FakeX } from "./helpers/x.ts";
 
 let store: Record<string, unknown>;
@@ -119,4 +119,75 @@ test("après un changement de session, la page ne signale plus rien", async () =
   assert.equal(root.querySelector(`[${HIDDEN_ATTR}]`) !== null, true);
   assert.deepEqual((await getState("1")).seen, []);
   assert.deepEqual((await getState("2")).seen, []);
+});
+
+/** Onglet dont les passages n'ont lieu qu'à la demande, comme un onglet caché qu'on réaffiche. */
+async function openHeld(name: string) {
+  const root = installDom(fixture(name));
+  (globalThis as any).location.pathname = "/home";
+  let mutate: (records: unknown[]) => void = () => {};
+  const frames: Array<() => void> = [];
+  Object.assign(globalThis, {
+    MutationObserver: class {
+      constructor(callback: (records: unknown[]) => void) {
+        mutate = callback;
+      }
+      observe() {}
+      disconnect() {}
+    },
+    requestAnimationFrame: (task: () => void) => void frames.push(task),
+  });
+  const { watchTimeline } = await import(`../src/features/timeline/timeline.ts?tab=${++tab}`);
+  watchTimeline();
+  await settle();
+  const drawFrames = () => {
+    for (const frame of frames.splice(0)) frame();
+  };
+  drawFrames();
+  const element = (id: string) => root.querySelector(`[id="${id}"]`) as FakeElement;
+  /** `count` nœuds différents, tous détachés, signalés modifiés. */
+  const mutations = (count: number) =>
+    mutate(Array.from({ length: count }, () => ({ target: new FakeElement("div", new Map()), addedNodes: [] })));
+  return { element, mutations, drawFrames };
+}
+
+test("des mutations sans passage ne s'accumulent pas : au-delà du plafond, tout est relu", async () => {
+  const { element, mutations, drawFrames } = await openHeld("tweet");
+  assert.equal(element("listed").hasAttribute(HIDDEN_ATTR), true);
+
+  // X recycle ce nœud sans qu'aucune mutation ne le désigne.
+  element("listed").removeAttribute(HIDDEN_ATTR);
+  mutations(2000);
+  drawFrames();
+  assert.equal(element("listed").hasAttribute(HIDDEN_ATTR), false);
+
+  mutations(2001);
+  drawFrames();
+  assert.equal(element("listed").hasAttribute(HIDDEN_ATTR), true);
+});
+
+test("sans liste active, ce qui était masqué réapparaît et les mutations ne lisent plus le document", async () => {
+  const { element, mutations, drawFrames } = await openHeld("tweet");
+  assert.equal(element("listed").hasAttribute(HIDDEN_ATTR), true);
+
+  await chrome.storage.local.set({ lists: [officialList(false)] });
+  await settle();
+  drawFrames();
+  assert.equal(element("listed").hasAttribute(HIDDEN_ATTR), false);
+
+  const read = (globalThis as any).document.querySelectorAll;
+  let reads = 0;
+  (globalThis as any).document.querySelectorAll = (selector: string) => {
+    reads++;
+    return read(selector);
+  };
+  mutations(3);
+  drawFrames();
+  assert.equal(reads, 0);
+
+  // La liste revient : la page est relue.
+  await chrome.storage.local.set({ lists: [officialList(true)] });
+  await settle();
+  drawFrames();
+  assert.equal(element("listed").hasAttribute(HIDDEN_ATTR), true);
 });

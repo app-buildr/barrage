@@ -166,7 +166,7 @@ test("une ancienne installation sans liste perso se reconnaît à ses résultats
 
 test("l'installation enchaîne badges et liste intégrée avant le premier téléchargement", async () => {
   const order: string[] = [];
-  start({ account: "1", legacy: "1", accounts: { "1": {} }, blockCount: 0 });
+  start({ account: "1", legacy: "1", accounts: { "1": {} }, [resultKey("a")]: { state: "blocked", at: 1 } });
   const set = chrome.storage.local.set;
   (chrome.storage.local as any).set = async (values: Stored) => {
     order.push(...Object.keys(values).filter((key) => key === "bundled" || key === "blockCount"));

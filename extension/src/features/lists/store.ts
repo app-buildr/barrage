@@ -12,6 +12,7 @@ import {
   effectiveHandles,
   officialList,
   otherActiveHandles,
+  readListSync,
   readLists,
   uniqueName,
   withManualHandles,
@@ -124,8 +125,17 @@ export async function removeList(id: string): Promise<void> {
   if (list.active) throw new Error("Une liste active ne peut pas être supprimée.");
   const [shared] = accountStates(stored);
   const { [id]: _removed, ...listGuards } = shared.listGuards;
-  await saveLists(stored, lists.filter((l) => l.id !== id), false, { listGuards });
+  const { [id]: _date, ...listSync } = readListSync(stored.listSync);
+  await saveLists(stored, lists.filter((l) => l.id !== id), false, { listGuards, listSync });
 }
+
+/** Date de synchronisation de la liste `id` à écrire, les autres inchangées. */
+const withSync = (stored: Stored, id: string, at: number): Stored => ({
+  listSync: { ...readListSync(stored.listSync), [id]: at },
+});
+
+const sameHandles = (a: readonly string[] | null, b: readonly string[]): boolean =>
+  a !== null && a.length === b.length && a.every((handle, i) => handle === b[i]);
 
 /** Garde de la liste `id` à écrire, les autres inchangées. */
 const withGuard = (shared: State, id: string, guard: ListGuard): Stored => ({
@@ -186,17 +196,15 @@ export async function syncBundled(): Promise<void> {
   await chrome.storage.local.set(bundled);
 }
 
-/** Listes avec cette date de synchronisation pour la liste collaborative. */
-const syncedOfficial = (shared: State, syncedAt: number): ListDef[] =>
-  shared.lists.map((list) => (list.id === OFFICIAL_ID ? { ...list, syncedAt } : list));
-
 /**
  * Liste collaborative téléchargée : appliquée, ou mise de côté si elle s'écarte
- * trop de ses références.
+ * trop de ses références. Identique à celle en place, seule sa date change, sauf
+ * s'il reste un compte retiré à dater, voir unblockQueue.
  * @returns faux si la nouvelle liste est refusée
  */
 export async function receiveOfficial(handles: string[], syncedAt: number): Promise<boolean> {
-  const states = accountStates(await readStorage());
+  const stored = await readStorage();
+  const states = accountStates(stored);
   const [shared] = states;
   const guard = renewGuard(shared.listGuards[OFFICIAL_ID], shared.official, syncedAt);
   const covered = otherActiveHandles(shared.lists, "x");
@@ -207,11 +215,10 @@ export async function receiveOfficial(handles: string[], syncedAt: number): Prom
     await chrome.storage.local.set(withGuard(shared, OFFICIAL_ID, { ...guard, pending }));
     return false;
   }
-  await replaceOfficial(states, handles, update, {
-    remote: handles,
-    lists: syncedOfficial(shared, syncedAt),
-    ...withGuard(shared, OFFICIAL_ID, settledGuard(guard)),
-  });
+  const settled = { ...withSync(stored, OFFICIAL_ID, syncedAt), ...withGuard(shared, OFFICIAL_ID, settledGuard(guard)) };
+  const undated = states.some(({ retired, retiredAt }) => retired.some((h) => retiredAt[h] === undefined));
+  if (sameHandles(shared.remote, handles) && !undated) await chrome.storage.local.set(settled);
+  else await replaceOfficial(states, handles, update, { remote: handles, ...settled });
   return true;
 }
 
@@ -235,7 +242,9 @@ export async function updateListHandles(id: string, handles: string[], syncedAt:
     await chrome.storage.local.set(withGuard(shared, id, { ...guard, pending }));
     return false;
   }
-  await saveLists(stored, replace(lists, { ...list, handles, syncedAt }), false, withGuard(shared, id, settledGuard(guard)));
+  const settled = { ...withSync(stored, id, syncedAt), ...withGuard(shared, id, settledGuard(guard)) };
+  if (sameHandles(list.handles, handles)) await chrome.storage.local.set(settled);
+  else await saveLists(stored, replace(lists, { ...list, handles }), false, settled);
   return true;
 }
 
@@ -262,15 +271,15 @@ export async function acceptPendingList(id: string): Promise<void> {
   const handles = guard?.pending?.handles;
   if (!handles) throw new Error(`Aucune mise à jour à accepter : ${id}`);
   const at = Date.now();
-  const extra = withGuard(shared, id, confirmedGuard(guard, handles, at));
+  const extra = { ...withSync(stored, id, at), ...withGuard(shared, id, confirmedGuard(guard, handles, at)) };
   if (id === OFFICIAL_ID) {
     const update = compareLists(shared.official, handles, otherActiveHandles(shared.lists, "x"), [handles]);
     if (!update.ok) throw new Error(update.reason);
-    await replaceOfficial(states, handles, update, { remote: handles, lists: syncedOfficial(shared, at), ...extra });
+    await replaceOfficial(states, handles, update, { remote: handles, ...extra });
     return;
   }
   const lists = readLists(stored.lists);
-  await saveLists(stored, replace(lists, { ...find(lists, id), handles, syncedAt: at }), false, extra);
+  await saveLists(stored, replace(lists, { ...find(lists, id), handles }), false, extra);
 }
 
 export type OnboardingChoice =

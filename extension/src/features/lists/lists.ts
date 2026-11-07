@@ -25,9 +25,29 @@ export type ListDef = {
   networks: NetworkId[];
   /** Date d'ajout ou d'import, en millisecondes. */
   addedAt: number;
-  /** Dernière synchronisation réussie (collaborative, GitHub). */
+  /**
+   * Dernière synchronisation réussie (collaborative, GitHub). Stockée à part,
+   * voir ListSync : `readState` la rapporte ici pour l'affichage.
+   */
   syncedAt?: number;
 };
+
+/**
+ * Dernières synchronisations, par identifiant de liste. Hors de `lists` : une
+ * liste vérifiée sans changement ne relance aucun onglet.
+ */
+export type ListSync = Record<string, number>;
+
+export function readListSync(value: unknown): ListSync {
+  const sync: ListSync = Object.create(null);
+  if (typeof value !== "object" || value === null) return sync;
+  for (const [id, at] of Object.entries(value)) if (typeof at === "number") sync[id] = at;
+  return sync;
+}
+
+/** Listes avec leur date de synchronisation. La date gardée dans `lists` vient d'une version antérieure, ou de l'import. */
+export const withSyncDates = (lists: readonly ListDef[], sync: ListSync): ListDef[] =>
+  lists.map((list) => (sync[list.id] === undefined ? list : { ...list, syncedAt: sync[list.id] as number }));
 
 const SOURCES: readonly ListSource[] = ["official", "manual", "github", "file"];
 

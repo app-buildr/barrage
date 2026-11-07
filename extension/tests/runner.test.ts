@@ -9,6 +9,7 @@ import {
   MAX_PAUSE_MS,
   NETWORK_RETRY_MS,
   RETIRE_GRACE_MS,
+  STATE_COALESCE_MS,
 } from "../src/core/config.ts";
 import { getState, resultKey } from "../src/core/state.ts";
 import { write } from "../src/core/write.ts";
@@ -103,12 +104,12 @@ test("un lookup refusé arrête tout, sans blocage, et ne se relance qu'après s
 
   // Un compte vu de plus ne relance pas de lookup.
   await write("addSeen", ["b"], "1");
-  await settle();
+  await advance(STATE_COALESCE_MS);
   assert.equal(x.requests.length, 1);
 
   await advance(CHECK_RETRY_MS, 60_000);
   await write("addSeen", ["c"], "1");
-  await settle();
+  await advance(STATE_COALESCE_MS);
   assert.equal(x.requests.length, 2);
 });
 
@@ -154,12 +155,12 @@ test("le code 226 arrête tout, même une fois la pause finie, jusqu'à la repri
   await advance(AUTOMATION_PAUSE_MS + 1000, 600_000);
   await openTab();
   await write("addSeen", ["c"], "1");
-  await settle();
+  await advance(STATE_COALESCE_MS);
   assert.equal(x.requests.length, requests);
 
   // Rechute après la reprise : pause doublée, le compteur a survécu.
   await write("resumeBlocking");
-  await settle();
+  await advance(STATE_COALESCE_MS);
   assert.deepEqual(x.posts(BLOCK), ["a", "a"]);
   const relapse = await getState("1");
   assert.equal(relapse.strikes, 2);
@@ -199,7 +200,7 @@ test("un 401 ne reprend qu'au chargement d'une nouvelle session ou après le dé
 
   // Nouveau compte vu, puis rechargement avant le délai : rien.
   await write("addSeen", ["b"], "1");
-  await settle();
+  await advance(STATE_COALESCE_MS);
   await advance(AUTH_RETRY_MS - 60_000, 600_000);
   await openTab();
   assert.equal(x.posts(BLOCK).length, 1);
@@ -207,7 +208,7 @@ test("un 401 ne reprend qu'au chargement d'une nouvelle session ou après le dé
   // Nouveau jeton : reconnexion.
   x.cookies.ct0 = "autre";
   await write("addSeen", ["c"], "1");
-  await settle();
+  await advance(STATE_COALESCE_MS);
   assert.equal(x.posts(BLOCK).length, 1);
   await openTab();
   assert.ok(x.posts(BLOCK).length > 1);
@@ -234,13 +235,13 @@ test("un changement de compte juste avant l'envoi annule l'envoi, et rien n'est 
   };
   (chrome.storage.local as any).get = async (query: any) => {
     const stored = await (get as any)(query);
-    // Après le lookup : lecture par syncBadges, puis lecture de l'état par le
-    // tour suivant. La session change juste après celle-ci, avant le POST.
-    if (reads !== null && query === null && ++reads === 2) x.cookies.twid = "u%3D2";
+    // Après le lookup, lecture de l'état par le tour suivant. La session change
+    // juste après celle-ci, avant le POST.
+    if (reads !== null && query === null && ++reads === 1) x.cookies.twid = "u%3D2";
     return stored;
   };
   await openTab();
-  assert.ok((reads ?? 0) >= 2);
+  assert.ok((reads ?? 0) >= 1);
   assert.deepEqual(x.posts(BLOCK), []);
   assert.equal((await getState("1")).results.a, undefined);
   assert.equal((await getState("2")).results.a, undefined);
@@ -294,7 +295,7 @@ test("trois comptes refusés de suite déclenchent le disjoncteur, sans toucher 
   // La reprise dans les options relance, série remise à zéro.
   x.routes[BLOCK] = () => ({ json: {} });
   await write("resumeBlocking");
-  await settle();
+  await advance(STATE_COALESCE_MS);
   assert.deepEqual((await getState("1")).failures, []);
   assert.equal((await getState("1")).results.c?.state, "blocked");
 });
@@ -355,4 +356,65 @@ test("la vérification d'un compte X passe par paquets, sans rien bloquer", asyn
   assert.deepEqual(x.posts(BLOCK), []);
   assert.deepEqual(state.audit, []);
   assert.equal(state.results.a?.state, "already_blocked");
+});
+
+test("une vérification sans rien à noter n'écrit rien et n'appelle pas le service worker", async () => {
+  store.seen = ["a"];
+  const written: string[][] = [];
+  const set = chrome.storage.local.set.bind(chrome.storage.local);
+  (chrome.storage.local as any).set = (values: Record<string, unknown>) => {
+    written.push(Object.keys(values));
+    return set(values);
+  };
+  const sent: string[] = [];
+  const sendMessage = chrome.runtime.sendMessage.bind(chrome.runtime) as (message: unknown) => Promise<unknown>;
+  (chrome.runtime as any).sendMessage = (message: { name: string }) => {
+    sent.push(message.name);
+    return sendMessage(message);
+  };
+  x.routes[LOOKUP] = (request) => {
+    written.length = 0;
+    sent.length = 0;
+    return lookupReply((request.handle ?? "").split(","));
+  };
+  // Relevé ici et vérifié après : une assertion levée dans la route passerait pour une panne réseau.
+  let beforePost: unknown = null;
+  x.routes[BLOCK] = () => {
+    beforePost = { written: [...written], sent: [...sent] };
+    return { json: {} };
+  };
+  await openTab();
+  assert.deepEqual(x.posts(BLOCK), ["a"]);
+  assert.deepEqual(beforePost, { written: [], sent: [] });
+});
+
+test("un compte déjà bloqué met les badges à jour, une vérification réussie lève l'erreur affichée", async () => {
+  store.seen = ["a"];
+  store.error = { message: "coupure", reason: "network", staleAt: T0 + 1000 };
+  x.routes[LOOKUP] = () => lookupReply(["a"], ["a"]);
+  await openTab();
+  const state = await getState("1");
+  assert.equal(state.results.a?.state, "already_blocked");
+  assert.equal(state.error, null);
+  assert.equal(state.blockCount, 1);
+  assert.deepEqual(x.posts(BLOCK), []);
+});
+
+test("des comptes X stockés corrompus n'empêchent pas de déclarer la session", async () => {
+  store.accounts = null;
+  await openTab();
+  assert.ok(Object.hasOwn(store.accounts as object, "1"));
+});
+
+test("une rafale d'écritures ne relit l'état qu'une fois par onglet", async () => {
+  await openTab();
+  let reads = 0;
+  const get = chrome.storage.local.get.bind(chrome.storage.local) as (query: unknown) => Promise<unknown>;
+  (chrome.storage.local as any).get = (query: unknown) => {
+    if (query === null) reads++;
+    return get(query);
+  };
+  for (let i = 0; i < 5; i++) await chrome.storage.local.set({ disabled: [`z${i}`] });
+  await advance(STATE_COALESCE_MS);
+  assert.equal(reads, 1);
 });
