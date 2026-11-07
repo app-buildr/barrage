@@ -23,16 +23,17 @@ import {
 
 let store: Record<string, unknown>;
 
-const list = (id: string, handles: string[], extra: Partial<ListDef> = {}): ListDef => ({
-  id,
-  name: id,
-  source: "file",
-  handles,
-  active: true,
-  networks: ["x"],
-  addedAt: 0,
-  ...extra,
-});
+const list = (id: string, handles: string[], extra: Partial<ListDef> = {}) =>
+  ({
+    id,
+    name: id,
+    source: "file",
+    handles,
+    active: true,
+    networks: ["x"],
+    addedAt: 0,
+    ...extra,
+  }) as ListDef;
 
 beforeEach(() => {
   store = { remote: ["a", "b"], lists: [officialList(true)], onboarded: true };
@@ -437,4 +438,11 @@ test("un compte en file est « En attente » tant qu'aucun onglet x.com connect�
   const [line] = accountLines(state, false).filter((l) => l.handle === "a");
   assert.equal(line?.status.label, "En attente");
   assert.equal(line?.status.busy, true);
+});
+
+test("une liste GitHub sans adresse garde ses comptes, et reste une liste GitHub", () => {
+  const [, read] = readLists([officialList(), { id: "g", name: "g", source: "github", handles: ["a"], active: true, networks: ["x"] }]);
+  assert.equal(read?.source, "github");
+  assert.deepEqual(read?.handles, ["a"]);
+  assert.equal(read?.source === "github" && read.url, "");
 });

@@ -13,6 +13,7 @@ import {
   resultEntries,
   resultKey,
   scoped,
+  type AccountValues,
   type BlockingError,
   type ErrorCause,
   type ErrorReason,
@@ -22,7 +23,7 @@ import { syncBadges } from "../badges/store.ts";
 import { isNewer } from "../updates/version.ts";
 import type { Failure } from "./outcome.ts";
 import { automationPause, resumable, withinWindow } from "./plan.ts";
-import { failure, isBlocked, isPending, resultOf, type Result, type Results } from "./queue.ts";
+import { failure, isBlocked, isPending, resultOf, type Result, type Results, type UnblockRefusal } from "./queue.ts";
 
 /**
  * Une requête à X va partir : noté avant l'envoi, pour qu'un onglet fermé
@@ -58,7 +59,7 @@ export async function setHealth(health: HealthIssue | null): Promise<void> {
  * même temps. Seules les clés de ces comptes sont écrites.
  * @param prefix préfixe des clés du compte X, voir State.prefix
  */
-export async function setResults(prefix: string, entries: Results, extra: Record<string, unknown> = {}): Promise<void> {
+export async function setResults(prefix: string, entries: Results, extra: AccountValues = {}): Promise<void> {
   await chrome.storage.local.set({ ...resultEntries(entries, prefix), ...scoped(prefix, extra) });
 }
 
@@ -66,7 +67,7 @@ export async function setResults(prefix: string, entries: Results, extra: Record
 export async function finishUnblock(
   handle: string,
   result: Result | null,
-  extra: Record<string, unknown> = {},
+  extra: AccountValues = {},
   account?: string | null,
 ): Promise<void> {
   const { unblock, retired, prefix } = await getState(account);
@@ -98,13 +99,21 @@ export async function refuseUnblock(handle: string, cause: Failure, account?: st
   const { results, retired, prefix } = await getState(account);
   const previous = resultOf(results, handle);
   const error = errorValue({ ...cause, context: { unblock: handle } }, "other", 0);
-  const attempts = (previous?.unblockAttempts ?? 0) + 1;
+  const attempts = (isBlocked(previous) ? (previous.unblockAttempts ?? 0) : 0) + 1;
   if (previous && retired.includes(handle) && attempts < MAX_ATTEMPTS) {
-    await setResults(prefix, { [handle]: { ...previous, unblockAttempts: attempts, ...cause } }, { error });
+    await setResults(prefix, { [handle]: refused(previous, { unblockAttempts: attempts }, cause) }, { error });
     return;
   }
-  await finishUnblock(handle, previous ? { ...previous, unblockFailed: true, ...cause } : null, { error }, account);
+  const result = previous ? refused(previous, { unblockFailed: true }, cause) : null;
+  await finishUnblock(handle, result, { error }, account);
 }
+
+/**
+ * Résultat après un déblocage refusé. Une demande à la main peut viser un compte
+ * dans n'importe quel état, mais seul un état bloqué lit ces champs.
+ */
+const refused = (previous: Result, refusal: UnblockRefusal, cause: Failure): Result =>
+  ({ ...previous, ...refusal, ...cause }) as Result;
 
 export async function setPauseUntil(prefix: string, pauseUntil: number): Promise<void> {
   await chrome.storage.local.set(scoped(prefix, { pauseUntil }));
@@ -236,7 +245,7 @@ export async function recordAudit(
   batch: readonly string[],
   found: readonly string[],
   blocking: readonly string[],
-  extra: Record<string, unknown>,
+  extra: AccountValues,
   account?: string | null,
 ): Promise<void> {
   // Des tableaux plutôt que des Set : les messages entre contextes ne transportent que du JSON.

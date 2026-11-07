@@ -12,7 +12,7 @@
 // Ce qu'affiche la page vaut pour le compte X connecté à son chargement : si
 // la session passe sur un autre compte entre-temps, plus rien n'est signalé.
 import { contextAlive } from "../../core/context.ts";
-import { active, getState, onStateChange, resultChanges, stringArray, type StateChanges } from "../../core/state.ts";
+import { accountKey, active, getState, onStateChange, resultChanges, stringArray, type StateChanges } from "../../core/state.ts";
 import { write } from "../../core/write.ts";
 import { accountId, pageAccount } from "../blocking/api.ts";
 import { isPending, resultOf, type Results } from "../blocking/queue.ts";
@@ -241,7 +241,7 @@ function onQueueChange(changes: StateChanges): void {
   Object.assign(results, after);
   // Un compte sorti de la file (traité, désactivé, écriture perdue) pourra être
   // signalé de nouveau s'il réapparaît en attente dans le fil.
-  const seenChange = changes[prefix + "seen"];
+  const seenChange = changes[accountKey(prefix, "seen")];
   if (seenChange) {
     const seen = new Set(stringArray(seenChange.newValue));
     for (const handle of seenBatch.sent) if (!seen.has(handle)) seenBatch.sent.delete(handle);

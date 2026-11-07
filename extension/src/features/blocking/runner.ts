@@ -25,6 +25,7 @@ import {
   coalesced,
   getState,
   onStateChange,
+  type AccountValues,
   type BlockingError,
   type ErrorCause,
   type State,
@@ -240,17 +241,17 @@ async function updateBadges(name: "recordBlockSuccess" | "syncBadges", state: St
 }
 
 /** L'appel a abouti : une erreur affichée n'est plus d'actualité. */
-function recovered(state: State): Record<string, unknown> {
+function recovered(state: State): AccountValues {
   return state.error ? { error: null } : {};
 }
 
 /** X a répondu sur ce compte : la série de refus s'arrête là. */
-function answered(state: State): Record<string, unknown> {
+function answered(state: State): AccountValues {
   return { ...recovered(state), ...(state.failures.length ? { failures: [] } : {}) };
 }
 
 /** L'action a abouti : seul un blocage ou un déblocage réussi lève le soupçon d'automatisation. */
-function succeeded(state: State): Record<string, unknown> {
+function succeeded(state: State): AccountValues {
   return { ...answered(state), ...(state.strikes ? { strikes: 0 } : {}) };
 }
 

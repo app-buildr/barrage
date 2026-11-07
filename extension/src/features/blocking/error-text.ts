@@ -5,7 +5,7 @@ import { CHECK_RETRY_MS, NETWORK_RETRY_MS } from "../../core/config.ts";
 import { plural } from "../../core/format.ts";
 import type { BlockingError, ErrorContext, ErrorReason, HealthIssue } from "../../core/state.ts";
 import type { Failure, FailureCode } from "./outcome.ts";
-import type { Result } from "./queue.ts";
+import type { FailedResult } from "./queue.ts";
 
 const SESSION_EXPIRED = "Session X absente ou expirée : reconnectez-vous à x.com.";
 
@@ -36,7 +36,7 @@ function failureText({ code, param }: Partial<Failure>): string | undefined {
 }
 
 /** Cause d'un résultat : son code, ou le texte qu'une version antérieure a stocké. */
-export const resultText = (result: Result): string | undefined => failureText(result) ?? result.message;
+export const resultText = (result: FailedResult): string | undefined => failureText(result) ?? result.message;
 
 const STOPPED = "Barrage s'est arrêté : X a peut-être changé.";
 

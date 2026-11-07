@@ -55,13 +55,13 @@ export async function requestBlock(handle: string): Promise<void> {
  */
 async function disable(handle: string, forceUnblock: boolean): Promise<void> {
   const { disabled, unblock, seen, prefix } = await getState();
-  await chrome.storage.local.set(
-    scoped(prefix, {
-      disabled: [...new Set([...disabled, handle])],
+  await chrome.storage.local.set({
+    disabled: [...new Set([...disabled, handle])],
+    ...scoped(prefix, {
       ...(forceUnblock ? { unblock: [...new Set([...unblock, handle])] } : {}),
       seen: seen.filter((h) => h !== handle),
     }),
-  );
+  });
 }
 
 /**

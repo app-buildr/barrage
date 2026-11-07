@@ -22,6 +22,7 @@ import {
   resumeBlocking,
   setError,
 } from "../src/features/blocking/store.ts";
+import type { UnblockRefusal } from "../src/features/blocking/queue.ts";
 import { accountLines } from "../src/features/accounts/lines.ts";
 import { officialList } from "../src/features/lists/lists.ts";
 import { installChrome } from "./helpers/chrome.ts";
@@ -46,6 +47,8 @@ beforeEach(() => {
 
 const plan = async (overrides: Partial<State> = {}, checked = {}) =>
   nextAction({ ...(await getState()), ...overrides }, context(checked));
+
+const refusal = (state: State, handle: string) => state.results[handle] as UnblockRefusal;
 
 const MIN_GAP = BLOCK_DELAY_MS * (1 - DELAY_JITTER);
 /** `count` requêtes régulièrement réparties sur la fin de la fenêtre. */
@@ -216,13 +219,13 @@ test("un compte retiré dont le déblocage est refusé reste en file pour trois 
     await refuseUnblock("z", { code: "refused", param: 1 });
     const state = await getState();
     assert.deepEqual(state.retired, ["z"]);
-    assert.equal(state.results.z?.unblockAttempts, attempts);
-    assert.equal(state.results.z?.unblockFailed, undefined);
+    assert.equal(refusal(state, "z").unblockAttempts, attempts);
+    assert.equal(refusal(state, "z").unblockFailed, undefined);
   }
   await refuseUnblock("z", { code: "refused", param: 1 });
   const state = await getState();
   assert.deepEqual(state.retired, []);
-  assert.equal(state.results.z?.unblockFailed, true);
+  assert.equal(refusal(state, "z").unblockFailed, true);
 });
 
 test("un compte sur Off dont le déblocage est refusé sort de la file aussitôt", async () => {
@@ -232,7 +235,7 @@ test("un compte sur Off dont le déblocage est refusé sort de la file aussitôt
   await refuseUnblock("a", { code: "refused", param: 1 });
   const state = await getState();
   assert.deepEqual(state.unblock, []);
-  assert.equal(state.results.a?.unblockFailed, true);
+  assert.equal(refusal(state, "a").unblockFailed, true);
 });
 
 test("pendant une pause ou un arrêt, les comptes en file sont en attente", async () => {

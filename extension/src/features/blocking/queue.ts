@@ -8,22 +8,35 @@ import type { Failure, FailureCode } from "./outcome.ts";
  * était déjà bloqué, Barrage n'a rien envoyé. "unblocked" : bloqué par Barrage
  * puis débloqué par lui, après désactivation du compte dans les options.
  */
-export type ResultState = "blocked" | "already_blocked" | "unblocked" | "not_found" | "failed";
+export type Result =
+  | (Dated & Cause & { state: "blocked" | "already_blocked" } & UnblockRefusal)
+  | (Dated & { state: "unblocked" })
+  | (Dated & Cause & { state: "not_found" })
+  // `attempts` n'est pas garanti : un résultat stocké n'est pas relu champ par champ.
+  | (Dated & Cause & { state: "failed"; /** Nombre de tentatives échouées. */ attempts?: number });
 
-export type Result = {
-  state: ResultState;
+export type ResultState = Result["state"];
+
+/** Résultat d'un compte que X dit introuvable ou a refusé. */
+export type FailedResult = Extract<Result, { state: "not_found" | "failed" }>;
+
+type Dated = {
   /** Horodatage de la dernière tentative, en millisecondes. */
   at: number;
+};
+
+type Cause = {
   /** Cause d'un échec, voir Failure. Texte résolu à l'affichage, voir resultText. */
   code?: FailureCode;
   param?: number;
   /** Lecture seule : texte rédigé par une version antérieure, qui n'avait pas de code. */
   message?: string;
-  /** Nombre de tentatives échouées, renseigné pour l'état "failed". */
-  attempts?: number;
+};
+
+export type UnblockRefusal = {
   /**
-   * État "blocked" : X a refusé de débloquer ce compte. Il n'est plus retenté
-   * automatiquement, seul un clic sur « Débloquer » relance la demande.
+   * X a refusé de débloquer ce compte. Il n'est plus retenté automatiquement,
+   * seul un clic sur « Débloquer » relance la demande.
    */
   unblockFailed?: boolean;
   /** Déblocages refusés d'un compte retiré de la liste, voir refuseUnblock. */
@@ -95,13 +108,13 @@ export function uncheckedPending(
 }
 
 /** Résultat après un échec : le compteur de tentatives progresse. */
-export function failure(previous: Result | undefined, cause: Failure, now: number): Result {
+export function failure(previous: Result | undefined, cause: Failure, now: number): Extract<Result, { state: "failed" }> {
   const attempts = previous?.state === "failed" ? (previous.attempts ?? 1) + 1 : 1;
   return { state: "failed", at: now, ...cause, attempts };
 }
 
 /** Compte bloqué sur X, par Barrage ou déjà avant lui. */
-export function isBlocked(result: Result | undefined): boolean {
+export function isBlocked(result: Result | undefined): result is Extract<Result, { state: "blocked" | "already_blocked" }> {
   return result?.state === "blocked" || result?.state === "already_blocked";
 }
 

@@ -60,7 +60,7 @@ function cleanLists(value: unknown): ListDef[] {
   return readLists(value)
     .map((list) => ({ ...list, handles: handlesOf(list.handles) }))
     .filter((list) => list.handles.length <= LIST_MAX_SIZE)
-    .filter((list) => list.source !== "github" || (list.url !== undefined && validateListUrl(list.url).ok));
+    .filter((list) => list.source !== "github" || validateListUrl(list.url).ok);
 }
 
 function cleanAccounts(value: unknown): Record<string, { handle?: string }> {

@@ -58,9 +58,11 @@ async function refreshOfficial(): Promise<void> {
 async function refreshImported(): Promise<void> {
   const stored = await chrome.storage.local.get({ lists: [] });
   await Promise.all(
-    readLists(stored.lists).map(async ({ id, url }) => {
-      const checked = url ? validateListUrl(url) : null;
-      if (!checked?.ok) return;
+    readLists(stored.lists).map(async (list) => {
+      if (list.source !== "github") return;
+      const { id } = list;
+      const checked = validateListUrl(list.url);
+      if (!checked.ok) return;
       let report;
       try {
         report = analyzeList(await fetchListText(checked.url));

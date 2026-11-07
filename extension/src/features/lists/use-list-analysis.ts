@@ -12,9 +12,9 @@ import {
   validateListUrl,
   type ImportReport,
 } from "./import.ts";
-import type { NewList } from "./store.ts";
+import type { ImportedList } from "./store.ts";
 
-export type Analysis = Omit<NewList, "networks"> & { warning?: string };
+export type Analysis = ImportedList & { warning?: string };
 
 const refused = (message: string): StatusReport => ({ message, kind: "error" });
 

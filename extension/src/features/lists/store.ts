@@ -1,7 +1,7 @@
 // Écritures des listes de comptes, appliquées une à la fois par le service
 // worker (voir core/writer.ts). Les listes valent pour tous les comptes X ;
 // les files, elles, sont propres à chacun.
-import { accountStates, readStorage, scoped, stringArray, type State } from "../../core/state.ts";
+import { accountStates, readStorage, scoped, stringArray, type SharedValues, type State } from "../../core/state.ts";
 import { blockedByBarrage, resultOf } from "../blocking/queue.ts";
 import type { NetworkId } from "../networks/networks.ts";
 import { DEFAULT_HANDLES } from "./defaults.ts";
@@ -36,7 +36,7 @@ type Stored = Record<string, unknown>;
  * quittent les files de chaque compte X, sans rien débloquer. Avec `audit`, ceux
  * qui y entrent sans résultat connu seront vérifiés auprès de X.
  */
-async function saveLists(stored: Stored, lists: ListDef[], audit: boolean, extra: Stored = {}): Promise<void> {
+async function saveLists(stored: Stored, lists: ListDef[], audit: boolean, extra: SharedValues = {}): Promise<void> {
   const states = accountStates(stored);
   const [shared] = states;
   const before = new Set(shared.handles);
@@ -68,20 +68,24 @@ function find(lists: readonly ListDef[], id: string): ListDef {
 const replace = (lists: readonly ListDef[], next: ListDef): ListDef[] =>
   lists.map((list) => (list.id === next.id ? next : list));
 
-export type NewList = { source: "github" | "file"; url?: string; handles: string[]; networks: NetworkId[] };
+/** Provenance d'une liste à importer, avec ses comptes. */
+export type ImportedList = { handles: string[] } & ({ source: "github"; url: string } | { source: "file" });
+
+export type NewList = ImportedList & { networks: NetworkId[] };
 
 function importedList(lists: readonly ListDef[], list: NewList): ListDef {
   const addedAt = Date.now();
-  return {
+  const base = {
     id: crypto.randomUUID(),
     name: uniqueName(IMPORTED_NAME, lists.map((l) => l.name)),
-    source: list.source,
-    ...(list.url ? { url: list.url, syncedAt: addedAt } : {}),
     handles: list.handles,
     active: true,
     networks: list.networks,
     addedAt,
   };
+  return list.source === "github"
+    ? { ...base, source: "github", url: list.url, syncedAt: addedAt }
+    : { ...base, source: "file" };
 }
 
 /** Ajoute une liste importée, active, sur ses réseaux. */
@@ -130,7 +134,7 @@ export async function removeList(id: string): Promise<void> {
 }
 
 /** Date de synchronisation de la liste `id` à écrire, les autres inchangées. */
-const withSync = (stored: Stored, id: string, at: number): Stored => ({
+const withSync = (stored: Stored, id: string, at: number): SharedValues => ({
   listSync: { ...readListSync(stored.listSync), [id]: at },
 });
 
@@ -138,7 +142,7 @@ const sameHandles = (a: readonly string[] | null, b: readonly string[]): boolean
   a !== null && a.length === b.length && a.every((handle, i) => handle === b[i]);
 
 /** Garde de la liste `id` à écrire, les autres inchangées. */
-const withGuard = (shared: State, id: string, guard: ListGuard): Stored => ({
+const withGuard = (shared: State, id: string, guard: ListGuard): SharedValues => ({
   listGuards: { ...shared.listGuards, [id]: guard },
 });
 
@@ -154,7 +158,7 @@ export async function replaceOfficial(
   states: readonly State[],
   next: readonly string[],
   update: Extract<Update, { ok: true }>,
-  extra: Stored,
+  extra: SharedValues,
 ): Promise<void> {
   const removed = new Set(update.removed);
   const listed = new Set(next);

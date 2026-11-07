@@ -14,13 +14,10 @@ const SOURCES = ["official", "manual", "github", "file"] as const;
 
 export type ListSource = (typeof SOURCES)[number];
 
-export type ListDef = {
+type ListBase = {
   /** OFFICIAL_ID, MANUAL_ID, sinon identifiant généré. */
   id: string;
   name: string;
-  source: ListSource;
-  /** Source "github" uniquement. */
-  url?: string;
   /** Vide pour la liste collaborative, qui lit `remote` ou la liste intégrée. */
   handles: string[];
   active: boolean;
@@ -34,6 +31,8 @@ export type ListDef = {
    */
   syncedAt?: number;
 };
+
+export type ListDef = ListBase & ({ source: "github"; url: string } | { source: "official" | "manual" | "file" });
 
 /**
  * Dernières synchronisations, par identifiant de liste. Hors de `lists` : une
@@ -87,22 +86,26 @@ export const listName = (list: ListDef): string => (list.id === OFFICIAL_ID ? OF
 export const coversNetwork = (list: ListDef, network: NetworkId): boolean =>
   list.active && list.networks.includes(network);
 
+type StoredList = Partial<ListBase & { source: ListSource; url: string }>;
+
 function readList(value: unknown): ListDef | null {
-  const list = value as Partial<ListDef> | null;
+  const list = value as StoredList | null;
   if (typeof list !== "object" || list === null) return null;
   if (typeof list.id !== "string" || typeof list.name !== "string") return null;
   if (!SOURCES.includes(list.source as ListSource)) return null;
-  return {
+  const base: ListBase = {
     id: list.id,
     name: list.name,
-    source: list.source as ListSource,
-    ...(typeof list.url === "string" ? { url: list.url } : {}),
     handles: Array.isArray(list.handles) ? list.handles.filter((h) => typeof h === "string") : [],
     active: list.active === true,
     networks: Array.isArray(list.networks) ? list.networks.filter((n) => LIST_NETWORKS.includes(n)) : [],
     addedAt: typeof list.addedAt === "number" ? list.addedAt : 0,
     ...(typeof list.syncedAt === "number" ? { syncedAt: list.syncedAt } : {}),
   };
+  const source = list.source as ListSource;
+  // Sans adresse lisible, une liste GitHub n'est plus téléchargée mais ses comptes restent.
+  if (source === "github") return { ...base, source, url: typeof list.url === "string" ? list.url : "" };
+  return { ...base, source };
 }
 
 /** Listes enregistrées, valeurs corrompues écartées. La collaborative est toujours présente. */

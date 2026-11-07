@@ -10,7 +10,7 @@ import { DEFAULT_HANDLES } from "../features/lists/defaults.ts";
 import type { Earned } from "../features/badges/badges.ts";
 import type { Failure } from "../features/blocking/outcome.ts";
 import { activeHandles, eligible, isBlocked, resultOf, type Result, type Results } from "../features/blocking/queue.ts";
-import { effectiveHandles, readListSync, readLists, withSyncDates, type ListDef } from "../features/lists/lists.ts";
+import { effectiveHandles, readListSync, readLists, withSyncDates, type ListDef, type ListSync } from "../features/lists/lists.ts";
 import { readGuards, type ListGuard } from "../features/lists/remote.ts";
 
 /** "automation" : soupçon d'automatisation par X. "api" : réponses de X que Barrage ne sait plus lire. */
@@ -51,7 +51,8 @@ export type Account = { handle?: string };
  */
 export type HealthIssue = "session" | "timeline";
 
-export type State = {
+/** Clés stockées communes à tous les comptes X. */
+export type SharedState = {
   /**
    * Compte X dont l'état est lu, identifiant numérique du cookie twid. null
    * tant qu'aucun onglet x.com connecté n'a été vu.
@@ -59,18 +60,31 @@ export type State = {
   account: string | null;
   /** Comptes X vus dans ce navigateur : chacun a son propre état de blocage. */
   accounts: Record<string, Account>;
-  /** Préfixe des clés de stockage du compte, voir scopePrefix. */
-  prefix: string;
-  /** Listes de comptes, communes à tous les comptes X. La collaborative est toujours présente. */
+  /** Listes de comptes. La collaborative est toujours présente. */
   lists: ListDef[];
-  /** Liste effective de X : union des listes actives qui couvrent ce réseau. */
-  handles: string[];
-  /** Comptes de la liste collaborative : celle de GitHub une fois reçue, sinon celle intégrée. */
-  official: readonly string[];
   /** Accueil terminé. */
   onboarded: boolean;
   /** Dernière liste X reçue de GitHub, ou null tant qu'aucune n'a été reçue. */
   remote: string[] | null;
+  /** Références et mises à jour refusées des listes en ligne, par identifiant de liste. */
+  listGuards: Record<string, ListGuard>;
+  /** Comptes désactivés dans les options : Barrage ne les bloque plus et ne masque plus leurs tweets. */
+  disabled: string[];
+  /** Notification sur x.com à chaque compte bloqué par Barrage. */
+  notify: boolean;
+  /** Notification sur x.com à chaque nouveau badge. */
+  notifyBadges: boolean;
+  /** Dernière version publiée de l'extension, voir features/updates. */
+  latestVersion: string | null;
+  /** Dernier signe que X a changé, ou null. */
+  health: HealthIssue | null;
+};
+
+/**
+ * Clés stockées propres à chaque compte X, voir scoped. Leur nom ne se répète
+ * nulle part ailleurs : un champ ajouté ici est aussitôt propre à chaque compte.
+ */
+export type AccountState = {
   /**
    * Comptes retirés de la liste collaborative alors que Barrage les avait bloqués :
    * à débloquer sur X, voir unblockQueue.
@@ -78,11 +92,6 @@ export type State = {
   retired: string[];
   /** Date de retrait de ces comptes, en millisecondes, voir RETIRE_GRACE_MS. */
   retiredAt: Record<string, number>;
-  /** Références et mises à jour refusées des listes en ligne, par identifiant de liste. */
-  listGuards: Record<string, ListGuard>;
-  results: Results;
-  /** Comptes désactivés dans les options : Barrage ne les bloque plus et ne masque plus leurs tweets. */
-  disabled: string[];
   /**
    * Déblocages demandés à la main, y compris pour un compte bloqué avant
    * Barrage. Les comptes désactivés que Barrage a bloqués s'y ajoutent d'eux-mêmes,
@@ -91,10 +100,6 @@ export type State = {
   unblock: string[];
   /** Comptes de la liste vus dans le fil ou demandés à la main, pas encore bloqués : la file de blocage. */
   seen: string[];
-  /** Notification sur x.com à chaque compte bloqué par Barrage. */
-  notify: boolean;
-  /** Notification sur x.com à chaque nouveau badge. */
-  notifyBadges: boolean;
   /** Comptes bloqués sur X par ce compte, avant Barrage compris. Jamais décrémenté. */
   blockCount: number;
   /** Badges obtenus par ce compte X. */
@@ -119,11 +124,34 @@ export type State = {
    * état de blocage réel remplace celui que Barrage supposait.
    */
   audit: string[];
-  /** Dernière version publiée de l'extension, voir features/updates. */
-  latestVersion: string | null;
-  /** Dernier signe que X a changé, ou null. */
-  health: HealthIssue | null;
 };
+
+/** Ce que readState calcule : aucune de ces clés n'est stockée telle quelle. */
+type DerivedState = {
+  /** Préfixe des clés de stockage du compte, voir scopePrefix. */
+  prefix: string;
+  /** Liste effective de X : union des listes actives qui couvrent ce réseau. */
+  handles: string[];
+  /** Comptes de la liste collaborative : celle de GitHub une fois reçue, sinon celle intégrée. */
+  official: readonly string[];
+  /** Résultats du compte X, stockés un par compte visé, voir RESULT_PREFIX. */
+  results: Results;
+};
+
+export type State = SharedState & AccountState & DerivedState;
+
+/**
+ * Clés stockées hors de State, lues là où elles servent : `legacy`, premier
+ * compte X vu, voir scopePrefix ; `bundled`, liste intégrée à la dernière version
+ * lancée ; `listSync`, voir ListSync ; `tipDismissed`, préférence d'affichage locale.
+ */
+export type StoredOnly = { legacy: string; bundled: string[]; listSync: ListSync; tipDismissed: boolean };
+
+/** Clés communes à écrire. Les champs de compte passent par scoped, les résultats par resultEntries. */
+export type SharedValues = Partial<SharedState & StoredOnly>;
+
+/** Champs d'un compte X à écrire. */
+export type AccountValues = Partial<AccountState>;
 
 // La liste collaborative n'est pas copiée dans `lists` : elle est lue dans
 // `remote`, ou dans lists/x.json intégré au build, pour que la modifier sur
@@ -141,26 +169,7 @@ const RESULT_PREFIX = "result:";
 // connecté, qui deviendra ce premier compte : son préfixe ne change jamais.
 const ACCOUNT_PREFIX_RE = /^acct:\d+\//;
 
-/** Champs de l'état propres à chaque compte X. La liste et les réglages sont communs. */
-const ACCOUNT_FIELDS = [
-  "retired",
-  "retiredAt",
-  "unblock",
-  "seen",
-  "pauseUntil",
-  "strikes",
-  "failures",
-  "actions",
-  "lookups",
-  "lookupPauseUntil",
-  "error",
-  "audit",
-  "blockCount",
-  "badges",
-  "badgeNotified",
-] as const;
-
-type AccountField = (typeof ACCOUNT_FIELDS)[number];
+type AccountField = keyof AccountState;
 
 /** Préfixe des clés d'un compte X. */
 export function scopePrefix(account: string | null, legacy: string | null): string {
@@ -192,27 +201,20 @@ export function resultHandle(key: string, prefix = ""): string | null {
 }
 
 /** Résultats à écrire, sous leurs clés de stockage. */
-export function resultEntries(results: Results, prefix = ""): Record<string, unknown> {
+export function resultEntries(results: Results, prefix = ""): Record<string, Result> {
   return Object.fromEntries(Object.entries(results).map(([handle, result]) => [resultKey(handle, prefix), result]));
 }
 
 /** Clé de stockage d'un champ propre à un compte X. */
 export const accountKey = (prefix: string, field: AccountField): string => prefix + field;
 
-/**
- * Valeurs à écrire, les champs propres à un compte X sous les clés de ce
- * compte. Les autres clés (liste, réglages) sont écrites telles quelles.
- */
-export function scoped(prefix: string, values: Record<string, unknown>): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(values).map(([key, value]) => [
-      (ACCOUNT_FIELDS as readonly string[]).includes(key) ? accountKey(prefix, key as AccountField) : key,
-      value,
-    ]),
-  );
+/** Champs à écrire, sous les clés de ce compte X. */
+export function scoped(prefix: string, values: AccountValues): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(values).map(([field, value]) => [prefix + field, value]));
 }
 
-export type StateKey = keyof State;
+/** Clés écoutées par onStateChange : celles que l'on peut réellement voir changer. */
+export type StateKey = keyof SharedState | keyof AccountState | "results";
 
 /**
  * Clés dont la modification relance le traitement : liste changée, compte vu
@@ -318,7 +320,7 @@ export function readState(stored: Record<string, unknown>, account?: string | nu
     const handle = resultHandle(key, prefix);
     if (handle !== null && isRecord(value)) results[handle] = value as Result;
   }
-  const own = (field: AccountField) => stored[prefix + field];
+  const own = (field: AccountField) => stored[accountKey(prefix, field)];
   const remote = Array.isArray(stored.remote) ? stringArray(stored.remote) : null;
   const official = remote ?? DEFAULT_HANDLES;
   const lists = withSyncDates(readLists(stored.lists), readListSync(stored.listSync));

@@ -4,7 +4,17 @@ import { installChrome } from "./helpers/chrome.ts";
 import { DEFAULT_HANDLES } from "../src/features/lists/defaults.ts";
 import { parseHandle } from "../src/features/lists/handles.ts";
 import { MAX_ATTEMPTS } from "../src/core/config.ts";
-import { active, getState, resultChanges, resultHandle, resultKey, unblockQueue, type BlockingError } from "../src/core/state.ts";
+import {
+  active,
+  getState,
+  resultChanges,
+  resultHandle,
+  resultKey,
+  scoped,
+  unblockQueue,
+  type BlockingError,
+  type StateKey,
+} from "../src/core/state.ts";
 import { errorText } from "../src/features/blocking/error-text.ts";
 import { addHandles, requestBlock, requestUnblock, setEnabled } from "../src/features/accounts/store.ts";
 import {
@@ -497,4 +507,25 @@ test("cadence absente ou abîmée : vide, relue dans l'ordre, et propre à chaqu
   assert.deepEqual(state.actions, [1, 3]);
   assert.equal(state.health, null);
   assert.deepEqual((await getState("1")).actions, [9]);
+});
+
+test("Off à la main : `disabled` reste commun à tous les comptes X, les files restent celles du compte", async () => {
+  Object.assign(store, { account: "2", legacy: "1", accounts: { "1": {}, "2": {} }, "acct:2/seen": ["a"] });
+  await requestUnblock("a");
+  assert.deepEqual(store.disabled, ["a"]);
+  assert.equal(store["acct:2/disabled"], undefined);
+  assert.deepEqual(store["acct:2/seen"], []);
+  assert.deepEqual(store["acct:2/unblock"], ["a"]);
+});
+
+test("les clés de compte reçoivent le préfixe, jamais une autre clé", () => {
+  assert.deepEqual(scoped("acct:2/", { seen: [], error: null }), { "acct:2/seen": [], "acct:2/error": null });
+  assert.deepEqual(scoped("", { seen: [] }), { seen: [] });
+  // @ts-expect-error une faute de frappe ne compile plus.
+  scoped("", { sen: [] });
+  // @ts-expect-error un champ commun non plus.
+  scoped("", { disabled: [] });
+  // @ts-expect-error `handles` n'est pas une clé stockée : personne ne verrait son changement.
+  const never: StateKey = "handles";
+  assert.ok(never);
 });

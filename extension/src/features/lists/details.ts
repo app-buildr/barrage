@@ -11,7 +11,8 @@ export function listDetails(list: ListDef, count: number, now: number): string {
       return `${size} · ${pluralWord(count, "ajouté")} à la main`;
     case "file":
       return `${size} · fichier importé le ${formatShortDate(list.addedAt)}`;
-    default:
+    case "official":
+    case "github":
       return list.syncedAt ? `${size} · GitHub · mise à jour ${formatAgo(now - list.syncedAt)}` : `${size} · GitHub`;
   }
 }
