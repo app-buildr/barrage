@@ -20,7 +20,7 @@ import {
 } from "../src/features/blocking/store.ts";
 import { halted, resumable } from "../src/features/blocking/plan.ts";
 import { pendingIn } from "../src/features/blocking/queue.ts";
-import { setNotify } from "../src/features/notifications/store.ts";
+import { setNotifications } from "../src/features/notifications/store.ts";
 import { officialList } from "../src/features/lists/lists.ts";
 import { addSeen } from "../src/features/timeline/store.ts";
 
@@ -110,7 +110,7 @@ test("bloquer à la main un compte déjà bloqué ne change rien", async () => {
 
 test("les notifications sont actives par défaut et se désactivent", async () => {
   assert.equal((await getState()).notify, true);
-  await setNotify(false);
+  await setNotifications({ notify: false });
   assert.equal((await getState()).notify, false);
 });
 

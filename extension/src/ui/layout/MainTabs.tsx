@@ -2,7 +2,7 @@
 // Radix. La pastille de l'onglet actif glisse d'un onglet à l'autre.
 import { type FocusEvent, useLayoutEffect, useRef, useState } from "react";
 import { TabsList, TabsTrigger } from "@/ui/components/tabs.tsx";
-import type { MainTab } from "./main-tab.ts";
+import { MAIN_TABS, TAB_LABELS, type MainTab } from "./main-tab.ts";
 
 type Pill = { left: number; width: number };
 
@@ -17,7 +17,7 @@ export function MainTabList({ tab, badgesLabel }: { tab: MainTab; badgesLabel: s
     const root = list.current;
     if (!root) return;
     const measure = () => {
-      const active = root.querySelector<HTMLElement>('[role="tab"][data-state="active"]');
+      const active = root.querySelector<HTMLElement>(`[data-tab="${tab}"]`);
       if (active) setPill({ left: active.offsetLeft, width: active.offsetWidth });
     };
     measure();
@@ -25,7 +25,7 @@ export function MainTabList({ tab, badgesLabel }: { tab: MainTab; badgesLabel: s
     const observer = new ResizeObserver(measure);
     for (const trigger of root.querySelectorAll('[role="tab"]')) observer.observe(trigger);
     return () => observer.disconnect();
-  }, [tab, badgesLabel]);
+  }, [tab]);
 
   // Pas de glissement à l'arrivée sur la page : la pastille est déjà en place.
   useLayoutEffect(() => {
@@ -37,7 +37,7 @@ export function MainTabList({ tab, badgesLabel }: { tab: MainTab; badgesLabel: s
   };
 
   const trigger =
-    "relative z-1 h-11 flex-none cursor-pointer rounded-full border-0 px-5 text-[15px] font-bold text-ink transition-colors duration-200 hover:text-ink data-[state=active]:bg-transparent data-[state=active]:text-white data-[state=active]:shadow-none group-data-pointer/tabs-list:outline-none! group-data-pointer/tabs-list:ring-0!";
+    "relative z-1 h-11 flex-none cursor-pointer rounded-full border-0 px-5 text-body font-bold text-ink transition-colors duration-200 hover:text-ink data-[state=active]:bg-transparent data-[state=active]:text-white data-[state=active]:shadow-none group-data-pointer/tabs-list:outline-none! group-data-pointer/tabs-list:ring-0!";
 
   return (
     <TabsList
@@ -56,15 +56,11 @@ export function MainTabList({ tab, badgesLabel }: { tab: MainTab; badgesLabel: s
           style={{ width: pill.width, transform: `translateX(${pill.left}px)` }}
         />
       ) : null}
-      <TabsTrigger value="comptes" className={trigger}>
-        Comptes
-      </TabsTrigger>
-      <TabsTrigger value="badges" className={trigger}>
-        {badgesLabel}
-      </TabsTrigger>
-      <TabsTrigger value="reglages" className={trigger}>
-        Réglages
-      </TabsTrigger>
+      {MAIN_TABS.map((value) => (
+        <TabsTrigger key={value} value={value} data-tab={value} className={trigger}>
+          {value === "badges" ? badgesLabel : TAB_LABELS[value]}
+        </TabsTrigger>
+      ))}
     </TabsList>
   );
 }

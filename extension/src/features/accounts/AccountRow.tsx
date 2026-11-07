@@ -6,6 +6,7 @@ import { Badge } from "@/ui/components/badge.tsx";
 import { Button } from "@/ui/components/button.tsx";
 import { Switch } from "@/ui/components/switch.tsx";
 import { TableCell, TableRow } from "@/ui/components/table.tsx";
+import { TONE_COLORS } from "@/ui/layout/Section.tsx";
 import { cn } from "@/ui/lib/utils.ts";
 import type { Network } from "../networks/networks.ts";
 import { blockNow, toggle, unblockNow } from "./actions.ts";
@@ -13,24 +14,14 @@ import { CELL } from "./AccountTable.tsx";
 import { ProfileLink } from "./ProfileLink.tsx";
 import type { Status } from "./status.ts";
 
-/** Couleur d'un état affiché en texte, voir Status.className. */
-const TEXT_COLORS: Record<string, string> = {
-  muted: "text-muted-foreground",
-  warn: "text-sun-soft-ink",
-  error: "text-state-problem",
-};
-
-const TAG_COLORS = {
-  blocked: "bg-coral-soft text-coral-deep",
-  visible: "bg-sun-soft text-sun-soft-ink",
-} as const;
-
 function StatusLabel({ status }: { status: Status }) {
   if (!status.tag) return <>{status.label}</>;
   return (
     <>
-      <Badge className={cn("px-2.5 py-0.5 text-sm leading-5 font-bold", TAG_COLORS[status.tag])}>{status.label}</Badge>
-      {status.note ? <span className="ml-2 text-[13px] text-muted-foreground">{status.note}</span> : null}
+      <Badge variant={status.tag === "blocked" ? "coral" : "sun"} className="leading-5">
+        {status.label}
+      </Badge>
+      {status.note ? <span className="ml-2 text-label text-muted-foreground">{status.note}</span> : null}
     </>
   );
 }
@@ -79,9 +70,9 @@ function Row(props: Props) {
             !enabled && "font-semibold text-muted-foreground",
           )}
         />
-        {offList ? <p className="m-0 text-[13px] text-muted-foreground">Hors liste · n'est plus dans une liste active</p> : null}
+        {offList ? <p className="m-0 text-label text-muted-foreground">Hors liste · n'est plus dans une liste active</p> : null}
       </TableCell>
-      <TableCell className={cn(CELL, "whitespace-normal", TEXT_COLORS[status.className])}>
+      <TableCell className={cn(CELL, "whitespace-normal", status.tone && TONE_COLORS[status.tone])}>
         <StatusLabel status={status} />
       </TableCell>
       <TableCell className={cn(CELL, "w-[1%] text-right")}>

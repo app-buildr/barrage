@@ -1,7 +1,7 @@
 // Écran affiché par la page d'options : l'accueil tant qu'il n'est pas terminé,
 // sinon l'onglet porté par le hash. Tout changement passe par une transition.
 import { useEffect, useState } from "react";
-import { tabFromHash } from "./main-tab.ts";
+import { routeHash, tabFromHash } from "./main-tab.ts";
 import { withTransition } from "@/ui/transition.ts";
 
 /** @param onboarded undefined le temps de la première lecture de l'état */
@@ -24,10 +24,10 @@ export function useMainRoute(onboarded: boolean | undefined) {
     if (onboarded === undefined) return;
     if (welcome === null) {
       setWelcome(!onboarded);
-      if (!onboarded) history.replaceState(null, "", "#accueil");
+      if (!onboarded) history.replaceState(null, "", routeHash("accueil"));
     } else if (welcome && onboarded) {
       // Accueil terminé : la page passe aux options sans se recharger.
-      history.replaceState(null, "", "#comptes");
+      history.replaceState(null, "", routeHash("comptes"));
       withTransition(() => {
         setWelcome(false);
         setTab("comptes");

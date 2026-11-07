@@ -3,7 +3,8 @@ import { beforeEach, test } from "node:test";
 import { installChrome } from "./helpers/chrome.ts";
 import { getState, resultKey } from "../src/core/state.ts";
 import { awardBadges, badgeDescription, earnedCount, nextBadge, nextStepText, pendingBadge, shareText, shareUrl, BADGES } from "../src/features/badges/badges.ts";
-import { dismissBadge, recordBlockSuccess, setNotifyBadges, syncAllBadges, syncBadges } from "../src/features/badges/store.ts";
+import { dismissBadge, recordBlockSuccess, syncAllBadges, syncBadges } from "../src/features/badges/store.ts";
+import { setNotifications } from "../src/features/notifications/store.ts";
 import { markAlreadyBlocked } from "../src/features/blocking/store.ts";
 import { manualList } from "../src/features/lists/lists.ts";
 
@@ -60,7 +61,7 @@ test("fermer une notification dépassée ne fait pas redescendre le palier notif
 
 test("le réglage des notifications de badge est actif par défaut et vaut pour tous les comptes X", async () => {
   assert.equal((await getState("1")).notifyBadges, true);
-  await setNotifyBadges(false);
+  await setNotifications({ notifyBadges: false });
   assert.equal((await getState("1")).notifyBadges, false);
   assert.equal((await getState("2")).notifyBadges, false);
 });

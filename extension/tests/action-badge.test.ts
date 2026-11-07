@@ -50,7 +50,7 @@ test("une mise à jour disponible passe avant le compte, et se lit dans le titre
   store.seen = ["a"];
   store.latestVersion = "99.0.0";
   await refreshBadge();
-  assert.deepEqual(shown, { color: "#f4212e", text: "!", title: `${TITLE} (mise à jour disponible)` });
+  assert.deepEqual(shown, { color: "#D7261E", text: "!", title: `${TITLE} (mise à jour disponible)` });
 });
 
 test("la version installée ne déclenche rien", async () => {

@@ -2,7 +2,7 @@
 // téléchargée par le service worker, ou fichier lu dans la page d'options.
 import { useRef, useState } from "react";
 import { IMPORT_LIST, type ImportListReply, type Message } from "@/core/messages.ts";
-import type { StatusKind } from "@/ui/layout/Section.tsx";
+import type { StatusReport } from "@/ui/layout/Section.tsx";
 import {
   DOWNLOAD_ERROR,
   FILE_ERROR,
@@ -15,23 +15,22 @@ import {
 import type { NewList } from "./store.ts";
 
 export type Analysis = Omit<NewList, "networks"> & { warning?: string };
-type AnalysisStatus = { message: string; kind: StatusKind };
 
-const refused = (message: string): AnalysisStatus => ({ message, kind: "error" });
+const refused = (message: string): StatusReport => ({ message, kind: "error" });
 
-const readReport = (report: ImportReport): AnalysisStatus =>
+const readReport = (report: ImportReport): StatusReport =>
   report.ok ? { message: describeReport(report), kind: report.warning ? "warn" : "ok" } : refused(report.reason);
 
 const warningOf = (report: Extract<ImportReport, { ok: true }>) => (report.warning ? { warning: report.warning } : {});
 
 export function useListAnalysis() {
-  const [outcome, setOutcome] = useState<AnalysisStatus | null>(null);
+  const [outcome, setOutcome] = useState<StatusReport | null>(null);
   const [busy, setBusy] = useState(false);
   /** Dernière analyse demandée : la réponse d'une analyse dépassée est ignorée. */
   const latest = useRef(0);
 
   /** Analyse en cours, ou null si elle est refusée ou dépassée. */
-  async function run(task: () => Promise<{ outcome: AnalysisStatus; analysis: Analysis | null }>, onError: string) {
+  async function run(task: () => Promise<{ outcome: StatusReport; analysis: Analysis | null }>, onError: string) {
     const id = ++latest.current;
     setBusy(true);
     let result: Awaited<ReturnType<typeof task>>;

@@ -37,9 +37,8 @@
 
   --ease-barrage: cubic-bezier(0.2, 0, 0, 1);
 
-  --radius-icon: 10px;
-  --radius-step: 14px;
-  --radius-card: 18px;
+  --breakpoint-xs: 35rem;
+
   --shadow-soft: 0 12px 32px rgba(120, 60, 30, 0.10);
   --shadow-cta: 0 10px 24px rgba(120, 40, 10, 0.22);
 
@@ -54,6 +53,7 @@
     @apply bg-background font-sans text-base text-foreground antialiased;
   }
   h1, h2, h3 { @apply font-display font-extrabold tracking-tight text-ink; }
+  h2 { @apply text-2xl leading-tight; }
   :focus-visible { outline: 2px solid var(--color-coral-deep); outline-offset: 2px; }
 }
 

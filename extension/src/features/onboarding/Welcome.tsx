@@ -5,13 +5,12 @@ import { plural } from "@/core/format.ts";
 import type { State } from "@/core/state.ts";
 import { useSafeWrite } from "@/ui/use-safe-write.ts";
 import { write } from "@/core/write.ts";
-import { CORAL_PILL } from "@/ui/classes.ts";
 import { Badge } from "@/ui/components/badge.tsx";
 import { Button } from "@/ui/components/button.tsx";
 import { Header } from "@/ui/layout/Header.tsx";
 import { Panel, StatusMessage } from "@/ui/layout/Section.tsx";
 import { cn } from "@/ui/lib/utils.ts";
-import { AutoUpdateNotice, FilePicker, FormatHint, ListPreview, ListUrlInput, NetworkChips } from "../lists/ListFields.tsx";
+import { AutoUpdateNotice, FilePicker, FormatHint, ListPreview, ListUrlForm, NetworkChips } from "../lists/ListFields.tsx";
 import { LIST_FILE_EXTENSIONS_TEXT, LIST_HOSTS_TEXT } from "../lists/import.ts";
 import { LIST_NETWORKS, OFFICIAL_NAME } from "../lists/lists.ts";
 import { useListAnalysis, type Analysis } from "../lists/use-list-analysis.ts";
@@ -32,7 +31,7 @@ function Option({ selected, onSelect, title, children }: OptionProps) {
       <input type="radio" name="list" checked={selected} onChange={onSelect} className="mt-1 size-5 accent-coral" />
       <span className="min-w-0 flex-1">
         <span className="flex flex-wrap items-center gap-2 text-lg font-bold text-ink">{title}</span>
-        <span className="mt-1 block text-[15px] text-muted-foreground">{children}</span>
+        <span className="mt-1 block text-body text-muted-foreground">{children}</span>
       </span>
     </label>
   );
@@ -63,8 +62,8 @@ export function Welcome({ state }: { state: State }) {
       />
       <Panel className="flex flex-col gap-4">
         <div>
-          <h2 className="text-2xl leading-tight">Importez une liste de comptes</h2>
-          <p className="mt-1.5 mb-0 text-[15px] text-muted-foreground">
+          <h2>Importez une liste de comptes</h2>
+          <p className="mt-1.5 mb-0 text-body text-muted-foreground">
             Barrage bloque les comptes de cette liste quand ils apparaissent dans votre fil. Vous pourrez ajouter ou
             retirer des listes plus tard, dans Réglages.
           </p>
@@ -77,7 +76,7 @@ export function Welcome({ state }: { state: State }) {
             title={
               <>
                 {OFFICIAL_NAME}
-                <Badge className={CORAL_PILL}>Recommandée</Badge>
+                <Badge variant="coral">Recommandée</Badge>
               </>
             }
           >
@@ -90,26 +89,18 @@ export function Welcome({ state }: { state: State }) {
         </fieldset>
         {choice === "own" ? (
           <div className="flex flex-col gap-3">
-            <form
-              className="flex gap-3 max-[560px]:flex-wrap"
-              noValidate
-              onSubmit={(event) => {
-                event.preventDefault();
-                void analyzeUrl(url).then(setAnalysis);
+            <ListUrlForm
+              value={url}
+              onChange={(value) => {
+                setUrl(value);
+                setAnalysis(null);
+                reset();
               }}
-            >
-              <ListUrlInput
-                value={url}
-                onChange={(value) => {
-                  setUrl(value);
-                  setAnalysis(null);
-                  reset();
-                }}
-              />
-              <Button type="submit" variant="outline" size="lg" disabled={busy || !url.trim()}>
-                Analyser
-              </Button>
-            </form>
+              onSubmit={() => void analyzeUrl(url).then(setAnalysis)}
+              busy={busy}
+              submitLabel="Analyser"
+              variant="outline"
+            />
             <AutoUpdateNotice />
             <FilePicker onFile={(file) => void analyzeFile(file).then(setAnalysis)} />
             <StatusMessage kind={outcome?.kind} message={outcome?.message} />

@@ -4,8 +4,10 @@ import { QUEUE_KEYS, getState, onStateChange, queueOrder } from "../../core/stat
 import { updateAvailable } from "../updates/version.ts";
 import { pendingIn } from "./queue.ts";
 
+// Le service worker n'a pas de CSS : valeurs recopiées de ui/palette.css
+// (--color-coral-deep) et ui/globals.css (--color-state-problem).
 const CORAL_DEEP = "#B83A14";
-const RED = "#f4212e";
+const RED = "#D7261E";
 const WHITE = "#ffffff";
 
 export async function refreshBadge(): Promise<void> {

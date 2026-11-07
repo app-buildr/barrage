@@ -3,11 +3,12 @@
 import { useDeferredValue, useMemo, useState } from "react";
 import type { State } from "@/core/state.ts";
 import { CORAL_LINK } from "@/ui/classes.ts";
+import { routeHash } from "@/ui/layout/main-tab.ts";
 import { Panel } from "@/ui/layout/Section.tsx";
 import { coversNetwork } from "../lists/lists.ts";
 import type { Network } from "../networks/networks.ts";
 import { AccountRow } from "./AccountRow.tsx";
-import { AccountTable, HEAD, TableHead } from "./AccountTable.tsx";
+import { AccountTable } from "./AccountTable.tsx";
 import { matches, noMatchMessage, normalizeQuery } from "./filter.ts";
 import { ProgressCard } from "./ProgressCard.tsx";
 import { SearchInput } from "./SearchInput.tsx";
@@ -30,7 +31,7 @@ export function AccountList({ state, network }: { state: State; network: Network
 
   return (
     <>
-      <p className="mb-5 text-[15px] text-muted-foreground">
+      <p className="mb-5 text-body text-muted-foreground">
         L'interrupteur <strong className="text-ink">Blocage automatique</strong> est actif par défaut. Désactivez-le
         pour que Barrage ignore un compte, et le débloque s'il l'avait bloqué.
       </p>
@@ -38,7 +39,7 @@ export function AccountList({ state, network }: { state: State; network: Network
       {noActiveList ? (
         <Panel className="mb-5">
           Aucune liste active.{" "}
-          <a href="#reglages" className={CORAL_LINK}>
+          <a href={routeHash("reglages")} className={CORAL_LINK}>
             Activez une liste dans Réglages
           </a>{" "}
           pour commencer à bloquer.
@@ -50,23 +51,7 @@ export function AccountList({ state, network }: { state: State; network: Network
         <>
           <SearchInput label={`Rechercher un compte ${network.label}`} value={search} onChange={setSearch} />
           <StatusChips counts={counts.all} selected={category} onSelect={setCategory} />
-          <AccountTable
-            empty={(query || category) && !shown.length ? noMatchMessage(query) : null}
-            head={
-              <>
-                <TableHead className={`${HEAD} w-[1%] pr-2`}>
-                  <abbr title="Blocage automatique" className="no-underline">
-                    Blocage auto
-                  </abbr>
-                </TableHead>
-                <TableHead className={HEAD}>Compte</TableHead>
-                <TableHead className={HEAD}>État</TableHead>
-                <TableHead className={`${HEAD} w-[1%] text-right`}>
-                  <span className="sr-only">Action</span>
-                </TableHead>
-              </>
-            }
-          >
+          <AccountTable empty={(query || category) && !shown.length ? noMatchMessage(query) : null}>
             {shown.map((line) => (
               <AccountRow
                 key={line.handle}

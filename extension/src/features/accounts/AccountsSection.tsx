@@ -10,7 +10,7 @@ import { AddForm } from "./AddForm.tsx";
 export function AccountsSection({ state }: { state: State }) {
   return (
     <section className="min-w-0">
-      <h2 className="mb-4 text-2xl leading-tight">Comptes</h2>
+      <h2 className="mb-4">Comptes</h2>
       <NetworkTabs
         // L'état ne porte que les comptes de X : aucun autre réseau ne doit les afficher.
         count={(network) => (network.id === ENGINE_NETWORK ? state.handles.length : 0)}

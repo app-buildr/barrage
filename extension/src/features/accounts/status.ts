@@ -3,6 +3,7 @@
 // dans tests/status.test.ts.
 import { resultText } from "../blocking/error-text.ts";
 import { isPending, type Result } from "../blocking/queue.ts";
+import type { Tone } from "../../ui/layout/Section.tsx";
 
 /** Catégories exclusives : leur somme est le nombre de comptes de la liste. */
 export const CATEGORIES = ["blocked", "visible", "problem", "disabled"] as const;
@@ -11,11 +12,11 @@ export type Category = (typeof CATEGORIES)[number];
 
 /**
  * `tag` : l'état s'affiche en pastille ; `note` le précise à côté.
- * `className` colore un état affiché en texte.
+ * `tone` colore un état affiché en texte.
  */
 export type Status = {
   label: string;
-  className: string;
+  tone?: Tone;
   action: "block" | "unblock" | null;
   category: Category;
   tag?: "blocked" | "visible";
@@ -25,14 +26,14 @@ export type Status = {
 const text = (
   label: string,
   category: Category,
-  className = "",
+  tone: Tone,
   action: Status["action"] = null,
-): Status => ({ label, className, action, category });
+): Status => ({ label, tone, action, category });
 
-const BLOCKED: Status = { label: "Bloqué", className: "", action: "unblock", category: "blocked", tag: "blocked" };
+const BLOCKED: Status = { label: "Bloqué", action: "unblock", category: "blocked", tag: "blocked" };
 const UNBLOCKING = text("Déblocage en cours…", "disabled", "muted");
 const WAITING = text("En attente", "visible", "muted");
-const VISIBLE: Status = { label: "Visible", className: "", action: "block", category: "visible", tag: "visible" };
+const VISIBLE: Status = { label: "Visible", action: "block", category: "visible", tag: "visible" };
 
 /**
  * Compte dont le blocage automatique est sur On. « Bloqué », qu'il l'ait été

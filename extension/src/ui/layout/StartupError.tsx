@@ -1,8 +1,12 @@
 // Page de secours des options : sans elle, une lecture ratée ou une exception de
 // rendu laisseraient une page vide, sans message.
 import { Component, type ReactNode } from "react";
+import { CircleAlert } from "lucide-react";
+import { CORAL_LINK } from "@/ui/classes.ts";
 import { useReveal } from "@/ui/use-reveal.ts";
 import { bugReportUrl } from "./bug-report.ts";
+import { Header } from "./Header.tsx";
+import { Callout } from "./Section.tsx";
 
 export function StartupError({ message }: { message: string }) {
   useReveal(true);
@@ -12,11 +16,23 @@ export function StartupError({ message }: { message: string }) {
     tab: "page d'erreur",
   });
   return (
-    <div role="alert" className="mx-auto flex max-w-[860px] flex-col gap-3 px-6 pt-12 pb-16 text-base text-ink">
-      <p className="m-0 font-bold">{message}</p>
-      <a href={bugUrl} target="_blank" rel="noopener" className="text-muted-foreground underline underline-offset-2">
-        Signaler un bug
-      </a>
+    <div className="mx-auto flex max-w-[860px] flex-col gap-9 px-6 pt-12 pb-16 *:min-w-0">
+      <Header />
+      <main>
+        <Callout
+          role="alert"
+          tone="alert"
+          icon={CircleAlert}
+          title="Barrage ne s'est pas ouvert"
+          action={
+            <a href={bugUrl} target="_blank" rel="noopener" className={`${CORAL_LINK} whitespace-nowrap`}>
+              Signaler un bug
+            </a>
+          }
+        >
+          {message}
+        </Callout>
+      </main>
     </div>
   );
 }

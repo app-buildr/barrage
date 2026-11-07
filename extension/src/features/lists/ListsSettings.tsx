@@ -1,22 +1,21 @@
 // Carte « Listes de comptes » de Réglages : listes actives, désactivées, ajout.
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { List, Pencil, Plus, Trash2 } from "lucide-react";
 import { LIST_NAME_MAX, RETIRE_GRACE_MS } from "@/core/config.ts";
 import type { State } from "@/core/state.ts";
 import { useSafeWrite, type Attempt } from "@/ui/use-safe-write.ts";
 import { write } from "@/core/write.ts";
-import { CORAL_PILL } from "@/ui/classes.ts";
+import { OVERLINE } from "@/ui/classes.ts";
 import { Badge } from "@/ui/components/badge.tsx";
 import { Button } from "@/ui/components/button.tsx";
-import { Input } from "@/ui/components/input.tsx";
 import { Switch } from "@/ui/components/switch.tsx";
-import { Panel, StatusMessage } from "@/ui/layout/Section.tsx";
+import { Panel, PillInput, StatusMessage } from "@/ui/layout/Section.tsx";
 import { cn } from "@/ui/lib/utils.ts";
 import type { NetworkId } from "../networks/networks.ts";
 import { listDetails } from "./details.ts";
 import { LIST_FILE_EXTENSIONS_TEXT, LIST_HOSTS_TEXT } from "./import.ts";
 import { plural } from "@/core/format.ts";
-import { AutoUpdateNotice, FilePicker, FormatHint, ListPreview, ListUrlInput, NetworkChips } from "./ListFields.tsx";
+import { AutoUpdateNotice, FilePicker, FormatHint, ListPreview, ListUrlForm, NetworkChips } from "./ListFields.tsx";
 import { LIST_NETWORKS, OFFICIAL_ID, cleanName, listHandles, listName, type ListDef } from "./lists.ts";
 import type { PendingList } from "./remote.ts";
 import { useListAnalysis, type Analysis } from "./use-list-analysis.ts";
@@ -53,7 +52,7 @@ function ListName({ list, attempt }: ListProps) {
 
   if (editing) {
     return (
-      <Input
+      <PillInput
         autoFocus
         aria-label={`Nouveau nom de ${list.name}`}
         maxLength={LIST_NAME_MAX}
@@ -61,7 +60,7 @@ function ListName({ list, attempt }: ListProps) {
         onChange={(event) => setValue(event.target.value)}
         onBlur={() => finish(true)}
         onKeyDown={onKeyDown}
-        className="h-9 max-w-xs rounded-full border-line-strong px-3 text-base font-bold shadow-none"
+        className="h-9 max-w-xs px-3 font-bold"
       />
     );
   }
@@ -69,7 +68,7 @@ function ListName({ list, attempt }: ListProps) {
     <div className="flex flex-wrap items-center gap-2">
       <span className="text-lg font-bold text-ink">{listName(list)}</span>
       {list.id === OFFICIAL_ID ? (
-        <Badge className={CORAL_PILL}>Officielle</Badge>
+        <Badge variant="coral">Officielle</Badge>
       ) : (
         <Button
           ref={pencil}
@@ -101,7 +100,7 @@ function RemoveList({ list, attempt }: ListProps) {
   }
   return (
     <div className="flex flex-wrap items-center gap-3">
-      <span className="text-[15px] text-ink">Supprimer {list.name} ? Les comptes déjà bloqués le resteront.</span>
+      <span className="text-body text-ink">Supprimer {list.name} ? Les comptes déjà bloqués le resteront.</span>
       <Button variant="destructive" onClick={() => void attempt(write("removeList", list.id))}>
         Supprimer
       </Button>
@@ -127,7 +126,7 @@ function PendingUpdate({ list, attempt, pending, current }: PendingProps) {
   const added = handles?.filter((h) => !before.has(h)) ?? [];
   const removed = handles ? current.filter((h) => !after.has(h)) : [];
   return (
-    <div className="mt-3 rounded-step bg-sun-soft p-4 text-[15px] text-ink">
+    <div className="mt-3 rounded-step bg-sun-soft p-4 text-body text-ink">
       <p className="m-0 font-bold">
         {handles ? "Mise à jour en attente de votre accord" : "Mise à jour ignorée"} : {pending.reason}.
       </p>
@@ -186,9 +185,9 @@ function ListCard({ list, attempt, count, now, pending, current }: CardProps) {
         </span>
         <div className="min-w-0 flex-1">
           <ListName list={list} attempt={attempt} />
-          <p className="m-0 text-[15px] text-muted-foreground">{listDetails(list, count, now)}</p>
+          <p className="m-0 text-body text-muted-foreground">{listDetails(list, count, now)}</p>
         </div>
-        <label className="flex flex-none cursor-pointer items-center gap-3 text-[15px] font-bold text-muted-foreground">
+        <label className="flex flex-none cursor-pointer items-center gap-3 text-body font-bold text-muted-foreground">
           {list.active ? <span className="text-ink">Active</span> : "Désactivée"}
           <Switch
             checked={list.active}
@@ -205,11 +204,11 @@ function ListCard({ list, attempt, count, now, pending, current }: CardProps) {
           />
         </div>
       ) : list.id === OFFICIAL_ID ? (
-        <p className="mt-3 mb-0 pl-15 text-[15px] text-muted-foreground max-[560px]:pl-0">
+        <p className="mt-3 mb-0 pl-15 text-body text-muted-foreground max-xs:pl-0">
           Toujours disponible : la liste officielle ne peut pas être supprimée.
         </p>
       ) : (
-        <div className="mt-3 pl-15 max-[560px]:pl-0">
+        <div className="mt-3 pl-15 max-xs:pl-0">
           <RemoveList list={list} attempt={attempt} />
         </div>
       )}
@@ -240,11 +239,6 @@ function NewListPanel({ attempt }: { attempt: Attempt }) {
     clear();
   }
 
-  function submit(event: FormEvent): void {
-    event.preventDefault();
-    void analyzeUrl(url).then(setAnalysis);
-  }
-
   return (
     <div className="mt-5 flex flex-col gap-4 rounded-step bg-cream p-5">
       <div className="flex items-center gap-3">
@@ -253,24 +247,23 @@ function NewListPanel({ attempt }: { attempt: Attempt }) {
         </span>
         <h3 className="font-sans text-lg font-bold tracking-normal">Nouvelle liste</h3>
       </div>
-      <p className="m-0 text-[15px] text-muted-foreground">
+      <p className="m-0 text-body text-muted-foreground">
         Collez l'adresse d'une liste hébergée sur GitHub ({LIST_HOSTS_TEXT}), ou importez un fichier texte (
         {LIST_FILE_EXTENSIONS_TEXT}) depuis votre ordinateur. Les autres sites ne sont pas acceptés.
       </p>
       <FormatHint />
       <AutoUpdateNotice />
-      <form className="flex gap-3 max-[560px]:flex-wrap" noValidate onSubmit={submit}>
-        <ListUrlInput
-          value={url}
-          onChange={(value) => {
-            setUrl(value);
-            clear();
-          }}
-        />
-        <Button type="submit" variant="cta" size="lg" disabled={busy || !url.trim()}>
-          Importer
-        </Button>
-      </form>
+      <ListUrlForm
+        value={url}
+        onChange={(value) => {
+          setUrl(value);
+          clear();
+        }}
+        onSubmit={() => void analyzeUrl(url).then(setAnalysis)}
+        busy={busy}
+        submitLabel="Importer"
+        variant="cta"
+      />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <NetworkChips value={networks} onChange={setNetworks} />
         <FilePicker onFile={(file) => void analyzeFile(file).then(setAnalysis)} />
@@ -300,7 +293,7 @@ function Group({ title, lists, state, attempt }: GroupProps) {
   const now = Date.now();
   return (
     <>
-      <h3 className="mt-5 mb-2.5 font-sans text-sm font-bold tracking-[.04em] text-muted-foreground uppercase">
+      <h3 className={cn(OVERLINE, "mt-5 mb-2.5 font-sans text-sm text-muted-foreground")}>
         {title} ({lists.length})
       </h3>
       <ul className="m-0 flex list-none flex-col gap-3 p-0">
@@ -330,13 +323,13 @@ export function ListsSettings({ state }: { state: State }) {
     <section>
       <Panel>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-2xl leading-tight">Listes de comptes</h2>
+          <h2>Listes de comptes</h2>
           <Button aria-expanded={adding} onClick={() => setAdding(!adding)}>
             <Plus />
             Ajouter une liste
           </Button>
         </div>
-        <p className="m-0 text-[15px] text-muted-foreground">
+        <p className="m-0 text-body text-muted-foreground">
           Barrage bloque les comptes de toutes les listes actives. Choisissez pour chacune les réseaux sur lesquels elle
           s'applique. Une liste active se désactive, elle ne se supprime pas. Désactiver ou supprimer une liste ne
           débloque pas les comptes déjà bloqués.

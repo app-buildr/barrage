@@ -2,7 +2,7 @@
 // fonctionnalité et se redessine à chaque changement de l'état stocké.
 import "../ui/fonts.css";
 import "../ui/globals.css";
-import { StrictMode } from "react";
+import { StrictMode, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { REFRESH_LISTS, type Message } from "@/core/messages.ts";
 import type { State } from "@/core/state.ts";
@@ -21,7 +21,7 @@ import { UpdateBanner } from "@/features/updates/UpdateBanner.tsx";
 import { Tabs, TabsContent } from "@/ui/components/tabs.tsx";
 import { Footer } from "@/ui/layout/Footer.tsx";
 import { Header } from "@/ui/layout/Header.tsx";
-import type { MainTab } from "@/ui/layout/main-tab.ts";
+import { MAIN_TABS, type MainTab } from "@/ui/layout/main-tab.ts";
 import { MainTabList } from "@/ui/layout/MainTabs.tsx";
 import { ErrorBoundary, StartupError } from "@/ui/layout/StartupError.tsx";
 import { useReveal } from "@/ui/use-reveal.ts";
@@ -30,6 +30,17 @@ import { useReveal } from "@/ui/use-reveal.ts";
 const PANEL = "flex flex-col gap-9 data-[state=inactive]:hidden *:min-w-0";
 
 function Options({ state, tab }: { state: State; tab: MainTab }) {
+  const panels: Record<MainTab, ReactNode> = {
+    comptes: <AccountsSection state={state} />,
+    badges: <BadgesTab state={state} />,
+    reglages: (
+      <>
+        <ListsSettings state={state} />
+        <NotificationSettings notify={state.notify} notifyBadges={state.notifyBadges} />
+        <BackupSettings />
+      </>
+    ),
+  };
   return (
     <div className="mx-auto flex max-w-[860px] flex-col gap-9 px-6 pt-12 pb-16 *:min-w-0">
       <Header>
@@ -46,17 +57,11 @@ function Options({ state, tab }: { state: State; tab: MainTab }) {
       >
         <MainTabList tab={tab} badgesLabel={`Badges ${earnedCount(state.badges)}/${BADGES.length}`} />
         <div className="tab-content min-w-0">
-          <TabsContent value="comptes" forceMount className={PANEL}>
-            <AccountsSection state={state} />
-          </TabsContent>
-          <TabsContent value="badges" forceMount className={PANEL}>
-            <BadgesTab state={state} />
-          </TabsContent>
-          <TabsContent value="reglages" forceMount className={PANEL}>
-            <ListsSettings state={state} />
-            <NotificationSettings notify={state.notify} notifyBadges={state.notifyBadges} />
-            <BackupSettings />
-          </TabsContent>
+          {MAIN_TABS.map((value) => (
+            <TabsContent key={value} value={value} forceMount className={PANEL}>
+              {panels[value]}
+            </TabsContent>
+          ))}
         </div>
       </Tabs>
       <Footer tab={tab} activeLists={state.lists.filter((list) => list.active).length} />

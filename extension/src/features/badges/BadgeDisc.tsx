@@ -1,6 +1,6 @@
 // Rond d'un badge, partagé par les options et la notification sur x.com.
 import type { ReactNode } from "react";
-import { clsx as cn } from "clsx";
+import { clsx } from "clsx";
 import { TO_REACH } from "../../ui/classes.ts";
 import type { Palier } from "./badges.ts";
 
@@ -60,7 +60,7 @@ type Props = { palier: Palier; earned: boolean; iconSize?: number };
 export function BadgeDisc({ palier, earned, iconSize = 24 }: Props) {
   return (
     <span
-      className={cn(
+      className={clsx(
         "box-border grid size-12 flex-none place-items-center rounded-full",
         earned ? "bg-coral text-white" : TO_REACH,
       )}

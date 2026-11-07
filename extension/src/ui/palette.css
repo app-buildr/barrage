@@ -1,16 +1,26 @@
 /* Palette « Corail » : importée par la
    page d'options (globals.css) et par la notification sur x.com
-   (features/notifications/toast.css), qui restent ainsi assorties. */
+   (features/notifications/toast.css), qui restent ainsi assorties. Deux surfaces
+   sans CSS en recopient des valeurs : le fond de entries/options.html, et les
+   couleurs de la pastille dans features/blocking/action-badge.ts. */
 @theme inline {
   /* Couleurs de marque, utilisables en classes : bg-coral, text-sun-soft-ink… */
   --color-coral: #F0643C;
   --color-coral-deep: #B83A14;
   --color-coral-darker: #8F2C0F;
   --color-coral-soft: #FDE3D8;
-  --color-sun: #FFD23F;
-  --color-sun-ink: #5A1E0A;
   --color-sun-soft: #FFF1C9;
   --color-sun-soft-ink: #7A4E00;
+
+  /* Rayons */
+  --radius-icon: 10px;
+  --radius-step: 14px;
+  --radius-card: 18px;
+
+  /* Corps de texte courants, en px comme dans la notification : déclarés aussi
+     dans ui/lib/utils.ts, sans quoi tailwind-merge les prend pour des couleurs. */
+  --text-body: 15px;
+  --text-label: 13px;
 
   /* Ombre des notifications */
   --shadow-toast: 0 16px 40px rgba(120, 60, 30, 0.18);

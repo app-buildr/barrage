@@ -7,7 +7,7 @@ import { readStorage } from "@/core/state.ts";
 import { useSafeWrite } from "@/ui/use-safe-write.ts";
 import { write } from "@/core/write.ts";
 import { Button } from "@/ui/components/button.tsx";
-import { Hint, Panel, StatusMessage, type StatusKind } from "@/ui/layout/Section.tsx";
+import { Hint, Panel, StatusMessage, type StatusReport } from "@/ui/layout/Section.tsx";
 import { BACKUP_INVALID, BACKUP_MAX_BYTES, backupFileName, checkBackup, createBackup, describeBackup } from "./backup.ts";
 
 async function download(): Promise<void> {
@@ -21,13 +21,12 @@ async function download(): Promise<void> {
   URL.revokeObjectURL(url);
 }
 
-type Status = { kind: StatusKind; message: string };
 type Ready = { backup: unknown; summary: string };
 
 export function BackupSettings() {
   const input = useRef<HTMLInputElement>(null);
   const [ready, setReady] = useState<Ready | null>(null);
-  const [status, setStatus] = useState<Status | null>(null);
+  const [status, setStatus] = useState<StatusReport | null>(null);
   const { error, attempt } = useSafeWrite();
 
   async function read(file: File): Promise<void> {
@@ -58,7 +57,7 @@ export function BackupSettings() {
   return (
     <section>
       <Panel>
-        <h2 className="mb-4 text-2xl leading-tight">Sauvegarde</h2>
+        <h2 className="mb-4">Sauvegarde</h2>
         <div className="flex flex-wrap items-center gap-3">
           <Button variant="outline" onClick={() => void attempt(download())}>
             <Download />
@@ -88,7 +87,7 @@ export function BackupSettings() {
           n'efface rien et ne lance aucun blocage.
         </Hint>
         {ready ? (
-          <div className="mt-3 flex flex-wrap items-center gap-3 text-[15px] text-ink">
+          <div className="mt-3 flex flex-wrap items-center gap-3 text-body text-ink">
             <span>{ready.summary}</span>
             <Button variant="cta" onClick={() => void restore(ready.backup)}>
               Restaurer

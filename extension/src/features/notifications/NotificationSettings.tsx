@@ -4,7 +4,6 @@ import { useSafeWrite } from "@/ui/use-safe-write.ts";
 import { write } from "@/core/write.ts";
 import { Switch } from "@/ui/components/switch.tsx";
 import { Hint, Panel, StatusMessage } from "@/ui/layout/Section.tsx";
-import { setNotify } from "./store.ts";
 import { TOAST_MS } from "./toasts.ts";
 
 export function NotificationSettings({ notify, notifyBadges }: { notify: boolean; notifyBadges: boolean }) {
@@ -12,9 +11,9 @@ export function NotificationSettings({ notify, notifyBadges }: { notify: boolean
   return (
     <section>
       <Panel>
-        <h2 className="mb-4 text-2xl leading-tight">Notifications</h2>
+        <h2 className="mb-4">Notifications</h2>
         <label className="flex min-h-11 cursor-pointer items-center gap-3.5 font-bold">
-          <Switch checked={notify} onCheckedChange={(checked) => void attempt(setNotify(checked))} />
+          <Switch checked={notify} onCheckedChange={(checked) => void attempt(write("setNotifications", { notify: checked }))} />
           Afficher une notification sur X à chaque compte bloqué
         </label>
         <Hint>
@@ -23,7 +22,7 @@ export function NotificationSettings({ notify, notifyBadges }: { notify: boolean
         </Hint>
         <hr className="my-5 border-line" />
         <label className="flex min-h-11 cursor-pointer items-center gap-3.5 font-bold">
-          <Switch checked={notifyBadges} onCheckedChange={(checked) => void attempt(write("setNotifyBadges", checked))} />
+          <Switch checked={notifyBadges} onCheckedChange={(checked) => void attempt(write("setNotifications", { notifyBadges: checked }))} />
           Afficher une notification à chaque nouveau badge
         </label>
         <Hint>

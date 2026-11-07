@@ -5,7 +5,7 @@
 // clés indépendantes (résultats, pause, erreur) restent directes, voir
 // features/blocking/store.ts.
 import { restoreBackup } from "../features/backup/store.ts";
-import { dismissBadge, recordBlockSuccess, setNotifyBadges, syncBadges } from "../features/badges/store.ts";
+import { dismissBadge, recordBlockSuccess, syncBadges } from "../features/badges/store.ts";
 import {
   acceptPendingList,
   addList,
@@ -26,6 +26,7 @@ import {
   resumeBlocking,
   useAccount,
 } from "../features/blocking/store.ts";
+import { setNotifications } from "../features/notifications/store.ts";
 import { addSeen } from "../features/timeline/store.ts";
 import { isWriteRequest, type WriteReply } from "./messages.ts";
 
@@ -51,7 +52,7 @@ const WRITES = {
   setEnabled,
   setListActive,
   setListNetworks,
-  setNotifyBadges,
+  setNotifications,
   syncBadges,
   updateListHandles,
   useAccount,

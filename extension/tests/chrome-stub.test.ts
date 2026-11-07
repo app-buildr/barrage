@@ -53,7 +53,7 @@ test("un champ propre à un compte X réveille les écouteurs, quel que soit le 
 
 test("write passe par serveWrites, et une écriture inconnue reste sans réponse", async () => {
   serveWrites();
-  await write("setNotifyBadges", false);
+  await write("setNotifications", { notifyBadges: false });
   assert.equal(store.notifyBadges, false);
   await assert.rejects((write as any)("__proto__"), /sans réponse/);
 });

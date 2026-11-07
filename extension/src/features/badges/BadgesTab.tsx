@@ -2,7 +2,7 @@
 import { Check } from "lucide-react";
 import type { State } from "@/core/state.ts";
 import { formatCount, percent, pluralWord } from "@/core/format.ts";
-import { CORAL_LINK, PROGRESS_BAR, TO_REACH } from "@/ui/classes.ts";
+import { CORAL_LINK, OVERLINE, TO_REACH } from "@/ui/classes.ts";
 import { Progress } from "@/ui/components/progress.tsx";
 import { Panel } from "@/ui/layout/Section.tsx";
 import { cn } from "@/ui/lib/utils.ts";
@@ -26,7 +26,7 @@ function Tile({ badge, count, earned }: { badge: Badge; count: number; earned: b
           <Check className="size-3.5" strokeWidth={3} aria-hidden="true" />
         </span>
       </div>
-      <p className="m-0 text-[15px] text-muted-foreground">{badgeDescription(badge.palier)}</p>
+      <p className="m-0 text-body text-muted-foreground">{badgeDescription(badge.palier)}</p>
       {earned ? (
         <a
           href={shareUrl(badge)}
@@ -39,7 +39,7 @@ function Tile({ badge, count, earned }: { badge: Badge; count: number; earned: b
         </a>
       ) : (
         <div className="flex items-center gap-3">
-          <Progress value={percent(count, badge.palier)} aria-label={badge.name} className={cn("h-2 flex-1", PROGRESS_BAR)} />
+          <Progress value={percent(count, badge.palier)} aria-label={badge.name} className="h-2 flex-1" />
           <span className="flex-none text-sm font-bold text-muted-foreground">
             {formatCount(count)} / {formatCount(badge.palier)}
           </span>
@@ -59,7 +59,7 @@ function NextBadge({ count }: { count: number }) {
       <div className="flex items-center gap-3">
         <BadgeDisc palier={next.palier} earned={false} />
         <div>
-          <div className="text-[13px] font-bold tracking-[.04em] text-muted-foreground uppercase">Prochain badge</div>
+          <div className={cn(OVERLINE, "text-label text-muted-foreground")}>Prochain badge</div>
           <div className="font-display text-2xl leading-tight font-extrabold text-ink">{next.name}</div>
         </div>
       </div>
@@ -68,7 +68,7 @@ function NextBadge({ count }: { count: number }) {
         {pluralWord(count, "compte bloqué", "comptes bloqués")} sur {formatCount(next.palier)}, plus que{" "}
         {formatCount(next.palier - count)}.
       </p>
-      <Progress value={percent(count, next.palier)} aria-label={`Progression vers ${next.name}`} className={cn("h-3", PROGRESS_BAR)} />
+      <Progress value={percent(count, next.palier)} aria-label={`Progression vers ${next.name}`} className="h-3" />
     </div>
   );
 }
@@ -82,13 +82,13 @@ export function BadgesTab({ state }: { state: State }) {
   return (
     <Panel>
       <div className="mb-5 flex items-baseline justify-between gap-3">
-        <h2 className="text-2xl leading-tight">Mes badges</h2>
+        <h2>Mes badges</h2>
         <span className="text-muted-foreground">
           <strong className="text-ink">{earned}</strong> sur {BADGES.length} {pluralWord(earned, "obtenu")}
         </span>
       </div>
       <NextBadge count={blockCount} />
-      <ul className="m-0 mt-5 grid list-none grid-cols-2 gap-4 p-0 max-[560px]:grid-cols-1">
+      <ul className="m-0 mt-5 grid list-none grid-cols-2 gap-4 p-0 max-xs:grid-cols-1">
         {BADGES.map((badge) => (
           <Tile key={badge.palier} badge={badge} count={blockCount} earned={hasBadge(badges, badge.palier)} />
         ))}

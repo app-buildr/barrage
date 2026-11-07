@@ -29,7 +29,7 @@ export function NetworkTabs({ count, panel }: Props) {
             disabled={!network.available}
             title={network.available ? undefined : "Bientôt disponible"}
             className={[
-              "h-11 flex-none gap-2.5 rounded-full border-line bg-card px-4 text-[15px] font-bold text-ink hover:bg-cream hover:text-ink",
+              "h-11 flex-none gap-2.5 rounded-full border-line bg-card px-4 text-body font-bold text-ink hover:bg-cream hover:text-ink",
               "data-[state=active]:border-ink data-[state=active]:bg-ink data-[state=active]:text-white",
               "disabled:pointer-events-auto disabled:cursor-not-allowed disabled:border-dashed disabled:border-line-strong disabled:bg-cream-2 disabled:font-semibold disabled:text-disabled disabled:opacity-100",
             ].join(" ")}

@@ -1,10 +1,17 @@
 // Onglets principaux des options, portés par le hash de l'URL. Fonctions pures,
 // testées dans tests/format.test.ts.
 
-const MAIN_TABS = ["comptes", "badges", "reglages"] as const;
+export const MAIN_TABS = ["comptes", "badges", "reglages"] as const;
 
 export type MainTab = (typeof MAIN_TABS)[number];
 
+/** Écrans de la page d'options : les onglets, et l'accueil qui les précède. */
+export type Route = MainTab | "accueil";
+
+export const TAB_LABELS: Record<MainTab, string> = { comptes: "Comptes", badges: "Badges", reglages: "Réglages" };
+
+export const routeHash = (route: Route): string => `#${route}`;
+
 export function tabFromHash(hash: string): MainTab {
-  return MAIN_TABS.find((tab) => `#${tab}` === hash) ?? "comptes";
+  return MAIN_TABS.find((tab) => routeHash(tab) === hash) ?? "comptes";
 }

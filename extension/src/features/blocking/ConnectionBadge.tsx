@@ -10,7 +10,7 @@ export function ConnectionBadge() {
     <span role="status" className="flex-none">
       <Badge
         className={cn(
-          "gap-[7px] bg-coral-soft px-3 py-1 text-[13px] font-bold text-coral-deep",
+          "gap-[7px] bg-coral-soft px-3 py-1 text-label font-bold text-coral-deep",
           "before:size-[7px] before:rounded-full before:bg-current before:content-['']",
           !connected && "invisible",
         )}

@@ -41,8 +41,3 @@ export async function dismissBadge(palier: number, account?: string | null): Pro
   const { badgeNotified, prefix } = await getState(account);
   await chrome.storage.local.set(scoped(prefix, { badgeNotified: Math.max(badgeNotified, palier) }));
 }
-
-/** Réglage des notifications de badge, commun à tous les comptes X. */
-export async function setNotifyBadges(notifyBadges: boolean): Promise<void> {
-  await chrome.storage.local.set({ notifyBadges });
-}

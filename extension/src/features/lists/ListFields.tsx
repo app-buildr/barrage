@@ -1,11 +1,12 @@
 // Éléments communs à l'accueil et à Réglages : puces de réseau, encart « Format
 // attendu », adresse et choix d'un fichier.
-import { useRef } from "react";
+import { useRef, type Ref } from "react";
 import { Check, Info } from "lucide-react";
 import { IMPORT_PREVIEW_SIZE, LIST_FILE_EXTENSIONS, LIST_MAX_ADDED_SHARE } from "@/core/config.ts";
 import { plural } from "@/core/format.ts";
-import { CORAL_LINK, PILL_INPUT } from "@/ui/classes.ts";
-import { Input } from "@/ui/components/input.tsx";
+import { CORAL_BUTTON } from "@/ui/classes.ts";
+import { Button } from "@/ui/components/button.tsx";
+import { PillInput } from "@/ui/layout/Section.tsx";
 import { cn } from "@/ui/lib/utils.ts";
 import { AVAILABLE_NETWORKS, type NetworkId } from "../networks/networks.ts";
 import type { Analysis } from "./use-list-analysis.ts";
@@ -19,7 +20,7 @@ type ChipsProps = { value: readonly NetworkId[]; onChange: (networks: NetworkId[
 export function NetworkChips({ value, onChange }: ChipsProps) {
   return (
     <div className="flex flex-wrap items-center gap-3">
-      <span className="text-[15px] font-bold text-muted-foreground">Appliquer sur</span>
+      <span className="text-body font-bold text-muted-foreground">Appliquer sur</span>
       {AVAILABLE_NETWORKS.map(({ id, label }) => {
         const checked = value.includes(id);
         const last = checked && value.length === 1;
@@ -34,7 +35,7 @@ export function NetworkChips({ value, onChange }: ChipsProps) {
               if (!last) onChange(checked ? value.filter((n) => n !== id) : [...value, id]);
             }}
             className={cn(
-              "inline-flex h-9 items-center gap-1.5 rounded-full border px-4 text-[15px] font-bold transition-colors",
+              "inline-flex h-9 items-center gap-1.5 rounded-full border px-4 text-body font-bold transition-colors",
               last ? "cursor-default" : "cursor-pointer",
               checked ? "border-coral bg-coral text-white" : "border-line-strong bg-card text-ink hover:bg-cream",
             )}
@@ -50,9 +51,9 @@ export function NetworkChips({ value, onChange }: ChipsProps) {
 
 export function FormatHint() {
   return (
-    <aside className="rounded-step bg-sun-soft p-5 text-[15px] text-ink">
+    <aside className="rounded-step bg-sun-soft p-5 text-body text-ink">
       <div className="mb-2 flex items-center gap-3 font-bold">
-        <Info className="size-5 flex-none text-coral-deep" strokeWidth={2} aria-hidden="true" />
+        <Info className="size-5 flex-none text-coral-deep" strokeWidth={2.2} aria-hidden="true" />
         Format attendu
       </div>
       <p className="m-0">
@@ -69,7 +70,7 @@ export function FormatHint() {
 /** À l'import d'une adresse : une liste GitHub suit son auteur, pas seulement ce qu'on a vu à l'import. */
 export function AutoUpdateNotice() {
   return (
-    <p className="m-0 text-[15px] text-muted-foreground">
+    <p className="m-0 text-body text-muted-foreground">
       Une liste GitHub se met à jour seule : ce que son auteur y ajoute est appliqué sans vous le demander, jusqu'à{" "}
       {LIST_MAX_ADDED_SHARE * 100} % de comptes en plus par semaine. Au-delà, Barrage vous demande de confirmer dans
       Réglages. N'importez que des listes dont vous connaissez l'auteur.
@@ -82,7 +83,7 @@ export function ListPreview({ analysis }: { analysis: Analysis }) {
   const { handles, warning } = analysis;
   const shown = handles.slice(0, IMPORT_PREVIEW_SIZE);
   return (
-    <div className="rounded-step border border-line bg-card p-4 text-[15px] text-ink">
+    <div className="rounded-step border border-line bg-card p-4 text-body text-ink">
       <p className="m-0 font-bold">
         {plural(handles.length, "compte")} à bloquer
         {handles.length > shown.length ? `, dont les ${shown.length} premiers :` : " :"}
@@ -96,25 +97,43 @@ export function ListPreview({ analysis }: { analysis: Analysis }) {
   );
 }
 
-type UrlInputProps = { value: string; onChange: (value: string) => void };
+type UrlFormProps = {
+  value: string;
+  onChange: (value: string) => void;
+  onSubmit: () => void;
+  busy: boolean;
+  submitLabel: string;
+  variant: "cta" | "outline";
+  inputRef?: Ref<HTMLInputElement>;
+};
 
-export function ListUrlInput({ value, onChange }: UrlInputProps) {
+/** Adresse d'une liste à analyser. La suite de l'analyse reste à l'appelant. */
+export function ListUrlForm({ value, onChange, onSubmit, busy, submitLabel, variant, inputRef }: UrlFormProps) {
   return (
-    <>
+    <form
+      className="flex gap-3 max-xs:flex-wrap"
+      noValidate
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit();
+      }}
+    >
       <label htmlFor="listUrl" className="sr-only">
         Adresse de la liste
       </label>
-      <Input
+      <PillInput
+        ref={inputRef}
         id="listUrl"
         type="url"
-        spellCheck={false}
-        autoComplete="off"
         placeholder="https://raw.githubusercontent.com/…/liste.txt"
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className={cn(PILL_INPUT, "bg-card")}
+        className="bg-card"
       />
-    </>
+      <Button type="submit" variant={variant} size="lg" disabled={busy || !value.trim()}>
+        {submitLabel}
+      </Button>
+    </form>
   );
 }
 
@@ -136,11 +155,7 @@ export function FilePicker({ onFile }: { onFile: (file: File) => void }) {
           if (file) onFile(file);
         }}
       />
-      <button
-        type="button"
-        onClick={() => input.current?.click()}
-        className={cn("cursor-pointer border-0 bg-transparent p-0", CORAL_LINK)}
-      >
+      <button type="button" onClick={() => input.current?.click()} className={CORAL_BUTTON}>
         ou choisir un fichier
       </button>
     </>

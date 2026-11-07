@@ -1,10 +1,11 @@
 // Service worker : ouvre l'accueil ou les options. Il n'y a pas de popup.
 import { isOpenBadgesRequest } from "../../core/messages.ts";
+import type { Route } from "../../ui/layout/main-tab.ts";
 
 const PAGE = "options.html";
 
 /** Un onglet déjà ouvert sur la page d'options est réutilisé plutôt que dupliqué. */
-async function openPage(hash: string): Promise<void> {
+async function openPage(hash: Route): Promise<void> {
   const url = chrome.runtime.getURL(`${PAGE}#${hash}`);
   const contexts = await chrome.runtime.getContexts({ contextTypes: [chrome.runtime.ContextType.TAB] });
   const open = contexts.find((context) => context.documentUrl?.startsWith(chrome.runtime.getURL(PAGE)));

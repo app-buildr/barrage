@@ -5,6 +5,8 @@
 export const TOAST_MS = 5000;
 /** Confirmation de « Annuler » : rien à faire, juste à lire. */
 export const CONFIRM_MS = 3000;
+/** Durée de la sortie d'une notification. */
+export const LEAVE_MS = 300;
 /** Au-delà, les plus anciennes notifications cèdent la place. */
 export const MAX_TOASTS = 3;
 

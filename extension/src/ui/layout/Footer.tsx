@@ -12,7 +12,7 @@ export function Footer({ tab, activeLists }: { tab: string; activeLists: number 
     activeLists,
   });
   return (
-    <footer className="page-footer flex flex-wrap gap-x-6 gap-y-2 border-t border-line pt-5 text-[15px]">
+    <footer className="page-footer flex flex-wrap gap-x-6 gap-y-2 border-t border-line pt-5 text-body">
       <a href={`mailto:${CONTACT_EMAIL}?subject=Demande%20de%20retrait%20de%20la%20liste`} className={LINK}>
         Demander un retrait de la liste
       </a>
