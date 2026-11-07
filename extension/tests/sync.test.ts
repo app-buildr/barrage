@@ -13,13 +13,7 @@ let store: Record<string, unknown>;
 /** Réponses du faux réseau, par fin d'adresse. */
 let responses: Record<string, () => Response>;
 let fetched: Array<{ url: string; init?: RequestInit }>;
-let listeners: Array<(message: unknown, sender: unknown, reply: (value: unknown) => void) => boolean>;
-
-const send = (message: unknown): Promise<any> =>
-  new Promise((resolve) => {
-    for (const listener of listeners) if (listener(message, {}, resolve)) return;
-    throw new Error("message sans réponse");
-  });
+let send: (message: unknown) => Promise<any>;
 
 const json = (value: unknown) => () => new Response(JSON.stringify(value));
 const github = (handles: string[], extra: Partial<ListDef> = {}): ListDef => ({
@@ -38,12 +32,7 @@ beforeEach(() => {
   store = { remote: ["a", "b", "c", "d"], lists: [officialList(true)], onboarded: true };
   responses = {};
   fetched = [];
-  listeners = [];
-  const event = { addListener() {} };
-  installChrome(() => store, {
-    alarms: { onAlarm: event, create() {} },
-    runtime: { onMessage: { addListener: (l: (typeof listeners)[number]) => listeners.push(l) }, onInstalled: event, onStartup: event },
-  });
+  send = installChrome(() => store).sendMessage;
   globalThis.fetch = (async (url: string, init?: RequestInit) => {
     fetched.push({ url, ...(init ? { init } : {}) });
     const match = Object.keys(responses).find((end) => url.endsWith(end));
