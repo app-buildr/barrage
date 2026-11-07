@@ -39,7 +39,7 @@ export function StatusChips({ counts, selected, onSelect }: Props) {
           value={category ?? ALL}
           className={cn(
             "group h-11 gap-2 rounded-full border border-line bg-card px-4 text-body font-bold text-ink",
-            "hover:bg-cream hover:text-ink data-[state=on]:border-coral data-[state=on]:bg-coral data-[state=on]:text-white",
+            "hover:bg-cream hover:text-ink data-[state=on]:border-coral-deep data-[state=on]:bg-coral-deep data-[state=on]:text-white",
           )}
         >
           {category ? (

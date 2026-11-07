@@ -12,13 +12,14 @@ export type Category = (typeof CATEGORIES)[number];
 
 /**
  * `tag` : l'état s'affiche en pastille ; `note` le précise à côté.
- * `tone` colore un état affiché en texte.
+ * `tone` colore un état affiché en texte. `busy` : une demande est dans la file.
  */
 export type Status = {
   label: string;
   tone?: Tone;
   action: "block" | "unblock" | null;
   category: Category;
+  busy?: boolean;
   tag?: "blocked" | "visible";
   note?: string;
 };
@@ -31,18 +32,20 @@ const text = (
 ): Status => ({ label, tone, action, category });
 
 const BLOCKED: Status = { label: "Bloqué", action: "unblock", category: "blocked", tag: "blocked" };
-const UNBLOCKING = text("Déblocage en cours…", "disabled", "muted");
-const WAITING = text("En attente", "visible", "muted");
+const UNBLOCKING: Status = { ...text("Déblocage en cours…", "disabled", "muted"), busy: true };
+const WAITING: Status = { ...text("En attente", "visible", "muted"), busy: true };
+const BLOCKING: Status = { ...text("Blocage en cours…", "visible", "muted"), busy: true };
 const VISIBLE: Status = { label: "Visible", action: "block", category: "visible", tag: "visible" };
 
 /**
  * Compte dont le blocage automatique est sur On. « Bloqué », qu'il l'ait été
  * par l'extension ou déjà par l'utilisateur : la distinction, qui décide d'un
  * déblocage au passage sur Off, n'est pas affichée. `paused` : rien ne part
- * vers X pour l'instant, limite de X ou traitement arrêté.
+ * vers X pour l'instant : limite de X, traitement arrêté ou aucun onglet x.com
+ * connecté pour le faire.
  */
 export function describe(result: Result | undefined, queued: boolean, paused = false): Status {
-  if (queued && isPending(result)) return paused ? WAITING : text("Blocage en cours…", "visible", "muted");
+  if (queued && isPending(result)) return paused ? WAITING : BLOCKING;
   switch (result?.state) {
     case "blocked":
     case "already_blocked":

@@ -1,5 +1,5 @@
 // Carte « Listes de comptes » de Réglages : listes actives, désactivées, ajout.
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type RefObject } from "react";
 import { List, Pencil, Plus, Trash2 } from "lucide-react";
 import { LIST_NAME_MAX, RETIRE_GRACE_MS } from "@/core/config.ts";
 import type { State } from "@/core/state.ts";
@@ -88,23 +88,54 @@ function ListName({ list, attempt }: ListProps) {
   );
 }
 
-function RemoveList({ list, attempt }: ListProps) {
+/** Confirmation en deux temps : « Annuler » ramène le focus sur le bouton de départ. */
+function useConfirmation() {
   const [confirming, setConfirming] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const refocus = useRef(false);
+
+  useEffect(() => {
+    if (!confirming && refocus.current) {
+      refocus.current = false;
+      trigger.current?.focus();
+    }
+  }, [confirming]);
+
+  function cancel(): void {
+    refocus.current = true;
+    setConfirming(false);
+  }
+
+  return { confirming, trigger, ask: () => setConfirming(true), cancel };
+}
+
+function RemoveList({ list, attempt, onRemoved }: ListProps & { onRemoved: () => void }) {
+  const { confirming, trigger, ask, cancel } = useConfirmation();
+  const question = useId();
   if (!confirming) {
     return (
-      <Button variant="outline" onClick={() => setConfirming(true)}>
+      <Button ref={trigger} variant="outline" aria-label={`Supprimer ${list.name}`} onClick={ask}>
         <Trash2 />
         Supprimer
       </Button>
     );
   }
   return (
-    <div className="flex flex-wrap items-center gap-3">
-      <span className="text-body text-ink">Supprimer {list.name} ? Les comptes déjà bloqués le resteront.</span>
-      <Button variant="destructive" onClick={() => void attempt(write("removeList", list.id))}>
+    <div role="group" aria-labelledby={question} className="flex flex-wrap items-center gap-3">
+      <span id={question} className="text-body text-ink">
+        Supprimer {list.name} ? Les comptes déjà bloqués le resteront.
+      </span>
+      <Button
+        variant="destructive"
+        onClick={() =>
+          void attempt(write("removeList", list.id)).then((ok) => {
+            if (ok) onRemoved();
+          })
+        }
+      >
         Supprimer
       </Button>
-      <Button variant="outline" onClick={() => setConfirming(false)}>
+      <Button autoFocus variant="outline" onClick={cancel}>
         Annuler
       </Button>
     </div>
@@ -115,11 +146,12 @@ function RemoveList({ list, attempt }: ListProps) {
 const sample = (handles: readonly string[]): string =>
   handles.slice(0, 10).map((h) => `@${h}`).join(", ") + (handles.length > 10 ? "…" : "");
 
-type PendingProps = ListProps & { pending: PendingList; current: readonly string[] };
+type PendingProps = ListProps & { pending: PendingList; current: readonly string[]; onAccepted: () => void };
 
 /** Mise à jour refusée par les gardes : dite, et acceptable si le fichier était valide. */
-function PendingUpdate({ list, attempt, pending, current }: PendingProps) {
-  const [confirming, setConfirming] = useState(false);
+function PendingUpdate({ list, attempt, pending, current, onAccepted }: PendingProps) {
+  const { confirming, trigger, ask, cancel } = useConfirmation();
+  const question = useId();
   const { handles } = pending;
   const before = new Set(current);
   const after = new Set(handles);
@@ -138,21 +170,34 @@ function PendingUpdate({ list, attempt, pending, current }: PendingProps) {
             {removed.length ? ` (${sample(removed)})` : ""}. La liste en place reste appliquée tant que vous n'acceptez pas.
           </p>
           {confirming ? (
-            <div className="mt-3 flex flex-wrap items-center gap-3">
-              <span>
+            <div role="group" aria-labelledby={question} className="mt-3 flex flex-wrap items-center gap-3">
+              <span id={question}>
                 {list.id === OFFICIAL_ID
                   ? `Les comptes ajoutés seront bloqués s'ils paraissent dans votre fil. Ceux que Barrage a bloqués parmi les retirés seront débloqués d'ici ${RETIRE_GRACE_MS / 3_600_000} h.`
                   : "Les comptes ajoutés seront bloqués s'ils paraissent dans votre fil."}
               </span>
-              <Button variant="destructive" onClick={() => void attempt(write("acceptPendingList", list.id))}>
+              <Button
+                variant="destructive"
+                onClick={() =>
+                  void attempt(write("acceptPendingList", list.id)).then((ok) => {
+                    if (ok) onAccepted();
+                  })
+                }
+              >
                 Confirmer
               </Button>
-              <Button variant="outline" onClick={() => setConfirming(false)}>
+              <Button autoFocus variant="outline" onClick={cancel}>
                 Annuler
               </Button>
             </div>
           ) : (
-            <Button variant="outline" className="mt-3" onClick={() => setConfirming(true)}>
+            <Button
+              ref={trigger}
+              variant="outline"
+              className="mt-3"
+              aria-label={`Accepter la mise à jour de ${listName(list)}`}
+              onClick={ask}
+            >
               Accepter cette mise à jour
             </Button>
           )}
@@ -164,9 +209,33 @@ function PendingUpdate({ list, attempt, pending, current }: PendingProps) {
   );
 }
 
-type CardProps = ListProps & { count: number; now: number; pending?: PendingList | undefined; current: readonly string[] };
+/** Ce qui suit le focus quand une carte change de groupe ou disparaît. */
+type FocusProps = {
+  /** Identifiant de la liste dont l'interrupteur vient d'être actionné : sa carte est remontée dans l'autre groupe. */
+  refocus: RefObject<string | null>;
+  onRemoved: () => void;
+};
 
-function ListCard({ list, attempt, count, now, pending, current }: CardProps) {
+type CardProps = ListProps &
+  FocusProps & { count: number; now: number; pending?: PendingList | undefined; current: readonly string[] };
+
+function ListCard({ list, attempt, count, now, pending, current, refocus, onRemoved }: CardProps) {
+  const toggle = useRef<HTMLButtonElement>(null);
+  const name = listName(list);
+
+  useEffect(() => {
+    if (refocus.current !== list.id) return;
+    refocus.current = null;
+    toggle.current?.focus();
+  }, [refocus, list.id]);
+
+  function setActive(active: boolean): void {
+    refocus.current = list.id;
+    void attempt(write("setListActive", list.id, active)).then((ok) => {
+      if (!ok) refocus.current = null;
+    });
+  }
+
   return (
     <li
       className={cn(
@@ -189,16 +258,13 @@ function ListCard({ list, attempt, count, now, pending, current }: CardProps) {
         </div>
         <label className="flex flex-none cursor-pointer items-center gap-3 text-body font-bold text-muted-foreground">
           {list.active ? <span className="text-ink">Active</span> : "Désactivée"}
-          <Switch
-            checked={list.active}
-            aria-label={`${list.active ? "Désactiver" : "Activer"} ${listName(list)}`}
-            onCheckedChange={(active) => void attempt(write("setListActive", list.id, active))}
-          />
+          <Switch ref={toggle} checked={list.active} aria-label={`Liste ${name} active`} onCheckedChange={setActive} />
         </label>
       </div>
       {list.active ? (
         <div className="mt-3">
           <NetworkChips
+            list={name}
             value={list.networks}
             onChange={(networks) => void attempt(write("setListNetworks", list.id, networks))}
           />
@@ -209,10 +275,18 @@ function ListCard({ list, attempt, count, now, pending, current }: CardProps) {
         </p>
       ) : (
         <div className="mt-3 pl-15 max-xs:pl-0">
-          <RemoveList list={list} attempt={attempt} />
+          <RemoveList list={list} attempt={attempt} onRemoved={onRemoved} />
         </div>
       )}
-      {pending ? <PendingUpdate list={list} attempt={attempt} pending={pending} current={current} /> : null}
+      {pending ? (
+        <PendingUpdate
+          list={list}
+          attempt={attempt}
+          pending={pending}
+          current={current}
+          onAccepted={() => toggle.current?.focus()}
+        />
+      ) : null}
     </li>
   );
 }
@@ -224,19 +298,20 @@ function ListCard({ list, attempt, count, now, pending, current }: CardProps) {
 function NewListPanel({ attempt }: { attempt: Attempt }) {
   const [url, setUrl] = useState("");
   const [networks, setNetworks] = useState<NetworkId[]>([...LIST_NETWORKS]);
-  const [analysis, setAnalysis] = useState<Analysis | null>(null);
-  const { outcome, busy, analyzeUrl, analyzeFile, reset } = useListAnalysis();
+  const { outcome, analysis, busy, analyzeUrl, analyzeFile, reset } = useListAnalysis();
+  const urlInput = useRef<HTMLInputElement>(null);
 
-  function clear(): void {
-    setAnalysis(null);
+  /** Les boutons qui suivent l'aperçu disparaissent avec lui : le focus revient sur l'adresse. */
+  function dismiss(): void {
     reset();
+    urlInput.current?.focus();
   }
 
   async function activate(ready: Analysis): Promise<void> {
     const { warning: _warning, ...list } = ready;
     if (!(await attempt(write("addList", { ...list, networks })))) return;
     setUrl("");
-    clear();
+    dismiss();
   }
 
   return (
@@ -257,16 +332,17 @@ function NewListPanel({ attempt }: { attempt: Attempt }) {
         value={url}
         onChange={(value) => {
           setUrl(value);
-          clear();
+          reset();
         }}
-        onSubmit={() => void analyzeUrl(url).then(setAnalysis)}
+        onSubmit={() => void analyzeUrl(url)}
+        inputRef={urlInput}
         busy={busy}
         submitLabel="Importer"
         variant="cta"
       />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <NetworkChips value={networks} onChange={setNetworks} />
-        <FilePicker onFile={(file) => void analyzeFile(file).then(setAnalysis)} />
+        <FilePicker busy={busy} onFile={(file) => void analyzeFile(file)} />
       </div>
       <StatusMessage kind={outcome?.kind} message={outcome?.message} />
       {analysis ? (
@@ -276,7 +352,7 @@ function NewListPanel({ attempt }: { attempt: Attempt }) {
             <Button variant="cta" onClick={() => void activate(analysis)}>
               Activer cette liste
             </Button>
-            <Button variant="outline" onClick={clear}>
+            <Button variant="outline" onClick={dismiss}>
               Annuler
             </Button>
           </div>
@@ -286,9 +362,9 @@ function NewListPanel({ attempt }: { attempt: Attempt }) {
   );
 }
 
-type GroupProps = { title: string; lists: readonly ListDef[]; state: State; attempt: Attempt };
+type GroupProps = FocusProps & { title: string; lists: readonly ListDef[]; state: State; attempt: Attempt };
 
-function Group({ title, lists, state, attempt }: GroupProps) {
+function Group({ title, lists, state, attempt, refocus, onRemoved }: GroupProps) {
   if (!lists.length) return null;
   const now = Date.now();
   return (
@@ -308,6 +384,8 @@ function Group({ title, lists, state, attempt }: GroupProps) {
               now={now}
               pending={state.listGuards[list.id]?.pending}
               current={current}
+              refocus={refocus}
+              onRemoved={onRemoved}
             />
           );
         })}
@@ -319,12 +397,15 @@ function Group({ title, lists, state, attempt }: GroupProps) {
 export function ListsSettings({ state }: { state: State }) {
   const [adding, setAdding] = useState(false);
   const { error, attempt } = useSafeWrite();
+  const refocus = useRef<string | null>(null);
+  const addButton = useRef<HTMLButtonElement>(null);
+  const focus = { refocus, onRemoved: () => addButton.current?.focus() };
   return (
     <section>
       <Panel>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <h2>Listes de comptes</h2>
-          <Button aria-expanded={adding} onClick={() => setAdding(!adding)}>
+          <Button ref={addButton} aria-expanded={adding} onClick={() => setAdding(!adding)}>
             <Plus />
             Ajouter une liste
           </Button>
@@ -334,8 +415,8 @@ export function ListsSettings({ state }: { state: State }) {
           s'applique. Une liste active se désactive, elle ne se supprime pas. Désactiver ou supprimer une liste ne
           débloque pas les comptes déjà bloqués.
         </p>
-        <Group title="Actives" lists={state.lists.filter((l) => l.active)} state={state} attempt={attempt} />
-        <Group title="Désactivées" lists={state.lists.filter((l) => !l.active)} state={state} attempt={attempt} />
+        <Group title="Actives" lists={state.lists.filter((l) => l.active)} state={state} attempt={attempt} {...focus} />
+        <Group title="Désactivées" lists={state.lists.filter((l) => !l.active)} state={state} attempt={attempt} {...focus} />
         {adding ? <NewListPanel attempt={attempt} /> : null}
         <StatusMessage kind="error" message={error} className="mt-3" />
       </Panel>

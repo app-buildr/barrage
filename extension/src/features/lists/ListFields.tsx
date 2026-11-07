@@ -1,6 +1,6 @@
 // Éléments communs à l'accueil et à Réglages : puces de réseau, encart « Format
 // attendu », adresse et choix d'un fichier.
-import { useRef, type Ref } from "react";
+import { useId, useRef, type Ref } from "react";
 import { Check, Info } from "lucide-react";
 import { IMPORT_PREVIEW_SIZE, LIST_FILE_EXTENSIONS, LIST_MAX_ADDED_SHARE } from "@/core/config.ts";
 import { plural } from "@/core/format.ts";
@@ -11,16 +11,31 @@ import { cn } from "@/ui/lib/utils.ts";
 import { AVAILABLE_NETWORKS, type NetworkId } from "../networks/networks.ts";
 import type { Analysis } from "./use-list-analysis.ts";
 
-type ChipsProps = { value: readonly NetworkId[]; onChange: (networks: NetworkId[]) => void };
+type ChipsProps = {
+  value: readonly NetworkId[];
+  onChange: (networks: NetworkId[]) => void;
+  /** Nom de la liste, quand plusieurs groupes de puces se suivent. */
+  list?: string;
+};
+
+const LAST_NETWORK = "Une liste s'applique sur au moins un réseau.";
 
 /**
  * « Appliquer sur » : une puce par réseau où le blocage fonctionne. La dernière
  * puce cochée ne se décoche pas : sans réseau, une liste ne couvrirait rien.
  */
-export function NetworkChips({ value, onChange }: ChipsProps) {
+export function NetworkChips({ value, onChange, list }: ChipsProps) {
+  const label = useId();
+  const hint = useId();
   return (
-    <div className="flex flex-wrap items-center gap-3">
-      <span className="text-body font-bold text-muted-foreground">Appliquer sur</span>
+    <div role="group" aria-labelledby={label} className="flex flex-wrap items-center gap-3">
+      <span id={label} className="text-body font-bold text-muted-foreground">
+        Appliquer{list ? <span className="sr-only"> {list}</span> : null} sur
+      </span>
+      {/* Le title n'atteint pas le clavier. */}
+      <span id={hint} className="sr-only">
+        {LAST_NETWORK}
+      </span>
       {AVAILABLE_NETWORKS.map(({ id, label }) => {
         const checked = value.includes(id);
         const last = checked && value.length === 1;
@@ -30,14 +45,15 @@ export function NetworkChips({ value, onChange }: ChipsProps) {
             type="button"
             aria-pressed={checked}
             aria-disabled={last}
-            title={last ? "Une liste s'applique sur au moins un réseau." : undefined}
+            aria-describedby={last ? hint : undefined}
+            title={last ? LAST_NETWORK : undefined}
             onClick={() => {
               if (!last) onChange(checked ? value.filter((n) => n !== id) : [...value, id]);
             }}
             className={cn(
               "inline-flex h-9 items-center gap-1.5 rounded-full border px-4 text-body font-bold transition-colors",
               last ? "cursor-default" : "cursor-pointer",
-              checked ? "border-coral bg-coral text-white" : "border-line-strong bg-card text-ink hover:bg-cream",
+              checked ? "border-coral-deep bg-coral-deep text-white" : "border-line-strong bg-card text-ink hover:bg-cream",
             )}
           >
             {checked ? <Check className="size-4" strokeWidth={3} aria-hidden="true" /> : null}
@@ -138,7 +154,7 @@ export function ListUrlForm({ value, onChange, onSubmit, busy, submitLabel, vari
 }
 
 /** Lien « ou choisir un fichier », qui ouvre le sélecteur de fichiers. */
-export function FilePicker({ onFile }: { onFile: (file: File) => void }) {
+export function FilePicker({ onFile, busy }: { onFile: (file: File) => void; busy: boolean }) {
   const input = useRef<HTMLInputElement>(null);
   return (
     <>
@@ -155,7 +171,15 @@ export function FilePicker({ onFile }: { onFile: (file: File) => void }) {
           if (file) onFile(file);
         }}
       />
-      <button type="button" onClick={() => input.current?.click()} className={CORAL_BUTTON}>
+      {/* aria-disabled : le focus, revenu ici après le choix du fichier, reste en place. */}
+      <button
+        type="button"
+        aria-disabled={busy}
+        onClick={() => {
+          if (!busy) input.current?.click();
+        }}
+        className={cn(CORAL_BUTTON, "aria-disabled:cursor-default aria-disabled:opacity-50")}
+      >
         ou choisir un fichier
       </button>
     </>

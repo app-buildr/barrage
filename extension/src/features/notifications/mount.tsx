@@ -31,6 +31,8 @@ export function mountToaster(
 ): HTMLElement {
   const host = document.createElement("div");
   host.id = HOST_ID;
+  // La notification est en français, quelle que soit la langue de x.com.
+  host.lang = "fr";
   const shadow = host.attachShadow({ mode: "closed" });
   const sheet = new CSSStyleSheet();
   sheet.replaceSync(css);

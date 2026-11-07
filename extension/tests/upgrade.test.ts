@@ -41,6 +41,7 @@ function start(stored: Stored): void {
   store = stored;
   const event = { addListener() {} };
   chromeStub = installChrome(() => store, {
+    commands: { onCommand: event },
     action: {
       onClicked: event,
       setBadgeTextColor: async () => {},

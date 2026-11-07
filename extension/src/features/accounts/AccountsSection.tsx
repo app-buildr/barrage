@@ -7,7 +7,7 @@ import { NetworkTabs } from "../networks/NetworkTabs.tsx";
 import { AccountList } from "./AccountList.tsx";
 import { AddForm } from "./AddForm.tsx";
 
-export function AccountsSection({ state }: { state: State }) {
+export function AccountsSection({ state, working }: { state: State; working: boolean }) {
   return (
     <section className="min-w-0">
       <h2 className="mb-4">Comptes</h2>
@@ -17,7 +17,7 @@ export function AccountsSection({ state }: { state: State }) {
         panel={(network) =>
           network.id === ENGINE_NETWORK ? (
             <>
-              <AccountList state={state} network={network} />
+              <AccountList state={state} network={network} working={working} />
               <AddForm />
             </>
           ) : null

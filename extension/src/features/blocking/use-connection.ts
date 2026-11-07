@@ -1,13 +1,14 @@
-// Un onglet x.com connecté est-il ouvert ? Vérifié à l'ouverture des options,
-// puis quand un onglet x.com se charge ou se ferme.
+// État des onglets x.com, vérifié à l'ouverture des options, puis quand un onglet
+// x.com se charge ou se ferme.
 import { useEffect, useState } from "react";
-import { X_TABS, xTabStatus } from "./x-tab.ts";
+import { X_TABS, xTabStatus, type XTabStatus } from "./x-tab.ts";
 
 const X_ORIGINS = X_TABS.map((pattern) => pattern.replace("*", ""));
 const isXUrl = (url: string | undefined) => url !== undefined && X_ORIGINS.some((origin) => url.startsWith(origin));
 
-export function useXConnection(): boolean {
-  const [connected, setConnected] = useState(false);
+/** null le temps de la première vérification. */
+export function useXConnection(): XTabStatus | null {
+  const [status, setStatus] = useState<XTabStatus | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -15,8 +16,8 @@ export function useXConnection(): boolean {
     const xTabs = new Set<number>();
 
     async function check(): Promise<void> {
-      const status = await xTabStatus().catch(() => "none");
-      if (alive) setConnected(status === "connected");
+      const next = await xTabStatus().catch((): XTabStatus => "none");
+      if (alive) setStatus(next);
     }
 
     // Les autres onglets du navigateur ne changent rien à la pastille.
@@ -43,5 +44,5 @@ export function useXConnection(): boolean {
     };
   }, []);
 
-  return connected;
+  return status;
 }

@@ -68,3 +68,48 @@ test("le blocage d'un autre compte X n'est pas annoncé", async () => {
   await announce(change("a", null, "blocked", "acct:2/"));
   assert.deepEqual(shown, []);
 });
+
+test("« Annuler » qui échoue le dit, sans rien confirmer, et garde les déblocages suivants annoncés", async () => {
+  await announce(change("a", null, "blocked"));
+  const send = chrome.runtime.sendMessage;
+  (chrome.runtime as any).sendMessage = async () => ({ ok: false, error: "panne" });
+  shown[0]?.content.undo?.();
+  await new Promise((resolve) => setTimeout(resolve, 2));
+  (chrome.runtime as any).sendMessage = send;
+  assert.equal(shown.length, 2);
+  assert.match(shown[1]?.content.title ?? "", /annulation impossible/);
+  assert.equal(shown[1]?.content.undo, undefined);
+
+  await announce(change("a", "blocked", "unblocked"));
+  assert.equal(shown[2]?.content.kind, "unblocked");
+});
+
+test("« Annuler » dans un onglet orphelin dit que le compte reste bloqué, sans écrire", async () => {
+  await announce(change("a", null, "blocked"));
+  const { id } = chrome.runtime;
+  (chrome.runtime as any).id = undefined;
+  shown[0]?.content.undo?.();
+  (chrome.runtime as any).id = id;
+  assert.match(shown[1]?.content.title ?? "", /annulation impossible/);
+  assert.deepEqual((await getState()).disabled, []);
+});
+
+test("une annulation aboutie dans un onglet caché ne retient pas le compte pour la suite", async () => {
+  let visible = true;
+  announce = createAnnouncer((handle, content) => shown.push({ handle, content }), () => visible);
+  await announce(change("a", null, "blocked"));
+  shown[0]?.content.undo?.();
+  await new Promise((resolve) => setTimeout(resolve, 2));
+  visible = false;
+  await announce(change("a", "blocked", "unblocked"));
+  assert.equal(shown.length, 2);
+  visible = true;
+  await announce(change("a", "blocked", "unblocked"));
+  assert.equal(shown.length, 3);
+});
+
+test("onglet caché sans annulation en cours : rien n'est lu ni dessiné", async () => {
+  announce = createAnnouncer((handle, content) => shown.push({ handle, content }), () => false);
+  await announce(change("a", null, "blocked"));
+  assert.deepEqual(shown, []);
+});

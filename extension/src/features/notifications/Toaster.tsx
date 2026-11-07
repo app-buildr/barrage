@@ -10,7 +10,8 @@ export function Toaster({ store, badges, onDismissBadge, onOpenBadges }: Props) 
   const toasts = useSyncExternalStore(store.subscribe, store.getSnapshot);
   const palier = useSyncExternalStore(badges.subscribe, badges.getSnapshot);
   return (
-    <div role="status" aria-live="polite" className="pointer-events-none flex flex-col items-end gap-2.5 font-sans">
+    // Non atomique : un ajout n'oblige pas à relire toute la pile, boutons compris.
+    <div role="status" aria-live="polite" aria-atomic="false" className="pointer-events-none flex flex-col items-end gap-2.5 font-sans">
       {/* Au-dessus de la pile, et hors de sa limite : elle ne l'évince jamais. */}
       {palier !== null ? <BadgeToast key={palier} palier={palier} onDismiss={onDismissBadge} onOpenBadges={onOpenBadges} /> : null}
       {toasts.map((toast) => (

@@ -75,10 +75,14 @@ export type StatusReport = { message: string; kind: Tone };
 
 type StatusProps = { kind?: Tone | undefined; message?: string | null | undefined; className?: string };
 
-/** Compte rendu d'une action, annoncé aux lecteurs d'écran. Sans message, il ne prend pas de place. */
+/**
+ * Compte rendu d'une action, annoncé aux lecteurs d'écran. Sans message, il ne
+ * prend pas de place, mais reste dans l'arbre d'accessibilité : une région qui
+ * surgit avec son texte n'est pas annoncée partout.
+ */
 export function StatusMessage({ kind, message, className }: StatusProps) {
   return (
-    <p role="status" aria-live="polite" className={cn("m-0 text-sm empty:hidden", kind && TONE_COLORS[kind], className)}>
+    <p role="status" aria-live="polite" className={cn("m-0 text-sm empty:sr-only", kind && TONE_COLORS[kind], className)}>
       {message}
     </p>
   );

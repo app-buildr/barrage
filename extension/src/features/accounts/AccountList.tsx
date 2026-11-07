@@ -1,10 +1,13 @@
 // Liste des comptes d'un réseau pris en charge : encart info, progression, recherche, filtres par état et tableau. Elle porte sur la liste
 // effective, plus les comptes bloqués qui en sont sortis (« hors liste »).
 import { useDeferredValue, useMemo, useState } from "react";
+import { plural } from "@/core/format.ts";
 import type { State } from "@/core/state.ts";
-import { CORAL_LINK } from "@/ui/classes.ts";
+import { CORAL_BUTTON, CORAL_LINK } from "@/ui/classes.ts";
 import { routeHash } from "@/ui/layout/main-tab.ts";
-import { Panel } from "@/ui/layout/Section.tsx";
+import { Panel, StatusMessage } from "@/ui/layout/Section.tsx";
+import { cn } from "@/ui/lib/utils.ts";
+import { useSafeWrite } from "@/ui/use-safe-write.ts";
 import { coversNetwork } from "../lists/lists.ts";
 import type { Network } from "../networks/networks.ts";
 import { AccountRow } from "./AccountRow.tsx";
@@ -17,17 +20,28 @@ import { accountLines, lineCounts } from "./lines.ts";
 import type { Category } from "./status.ts";
 import { Tip } from "./Tip.tsx";
 
-export function AccountList({ state, network }: { state: State; network: Network }) {
+type Props = {
+  state: State;
+  network: Network;
+  /** Un onglet x.com connecté peut traiter la file. */
+  working: boolean;
+};
+
+export function AccountList({ state, network, working }: Props) {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<Category | null>(null);
   // Le champ suit la frappe ; le tableau (jusqu'à ~1 400 lignes) suit dès que possible.
   const query = useDeferredValue(normalizeQuery(search));
 
-  const lines = useMemo(() => accountLines(state), [state]);
+  // Une seule fois ici : `attempt`, stable, laisse les lignes mémoïsées en place.
+  const { error, attempt } = useSafeWrite();
+
+  const lines = useMemo(() => accountLines(state, working), [state, working]);
   const counts = useMemo(() => lineCounts(lines), [lines]);
   const noActiveList = !state.lists.some((list) => coversNetwork(list, network.id));
   const shown = useMemo(() => lines.filter((line) => matches(line, query, category)), [lines, query, category]);
   const handle = state.account ? state.accounts[state.account]?.handle : undefined;
+  const filtered = Boolean(query || category) && shown.length > 0;
 
   return (
     <>
@@ -51,6 +65,19 @@ export function AccountList({ state, network }: { state: State; network: Network
         <>
           <SearchInput label={`Rechercher un compte ${network.label}`} value={search} onChange={setSearch} />
           <StatusChips counts={counts.all} selected={category} onSelect={setCategory} />
+          <StatusMessage
+            className="sr-only"
+            message={filtered ? `${plural(shown.length, "compte affiché", "comptes affichés")}.` : null}
+          />
+          <StatusMessage kind="error" message={error} className="mb-3" />
+          {/* Pas de lien : le hash pilote les onglets. Sinon, jusqu'à trois arrêts par ligne avant le formulaire. */}
+          <button
+            type="button"
+            onClick={() => document.getElementById("addInput")?.focus()}
+            className={cn(CORAL_BUTTON, "sr-only focus:not-sr-only focus:mb-3 focus:inline-block")}
+          >
+            Aller à l'ajout de comptes
+          </button>
           <AccountTable empty={(query || category) && !shown.length ? noMatchMessage(query) : null}>
             {shown.map((line) => (
               <AccountRow
@@ -60,6 +87,7 @@ export function AccountList({ state, network }: { state: State; network: Network
                 enabled={line.enabled}
                 status={line.status}
                 offList={line.offList}
+                attempt={attempt}
               />
             ))}
           </AccountTable>

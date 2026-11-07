@@ -54,8 +54,15 @@ export type OpenBadgesRequest = { type: typeof OPEN_BADGES };
 
 export const isOpenBadgesRequest = (message: unknown): boolean => hasType(message, OPEN_BADGES);
 
+/** Service worker → content script : raccourci d'annulation, voir features/notifications/command.ts. */
+export const UNDO_LAST = "barrage/undo-last";
+
+export type UndoLastRequest = { type: typeof UNDO_LAST };
+
+export const isUndoLastRequest = (message: unknown): boolean => hasType(message, UNDO_LAST);
+
 /** Réponse d'un content script aux pings des options : y répondre prouve qu'il est vivant. */
 export type PingReply = { session: boolean };
 
 /** Tout ce qui s'envoie entre contextes : chaque envoi s'écrit avec `satisfies Message`. */
-export type Message = PingRequest | WriteRequest | RefreshListsRequest | ImportListRequest | OpenBadgesRequest;
+export type Message = PingRequest | WriteRequest | RefreshListsRequest | ImportListRequest | OpenBadgesRequest | UndoLastRequest;

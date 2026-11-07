@@ -12,6 +12,10 @@ export const TAB_LABELS: Record<MainTab, string> = { comptes: "Comptes", badges:
 
 export const routeHash = (route: Route): string => `#${route}`;
 
+/** Titre de l'onglet du navigateur. */
+export const pageTitle = (route: Route): string =>
+  route === "accueil" ? "Bienvenue sur Barrage" : `${TAB_LABELS[route]} · Barrage`;
+
 export function tabFromHash(hash: string): MainTab {
   return MAIN_TABS.find((tab) => routeHash(tab) === hash) ?? "comptes";
 }

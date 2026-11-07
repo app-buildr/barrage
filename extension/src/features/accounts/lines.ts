@@ -7,12 +7,13 @@ import { countCategories, describe, describeDisabled, type Category, type Counts
 
 export type Line = { handle: string; enabled: boolean; status: Status; category: Category; offList: boolean };
 
-export function accountLines(state: State): Line[] {
+/** @param working un onglet x.com connecté peut traiter la file */
+export function accountLines(state: State, working = true): Line[] {
   const queued = new Set(state.seen);
   const disabled = new Set(state.disabled);
   const unblocking = new Set(unblockQueue(state));
   const now = Date.now();
-  const paused = state.pauseUntil > now || halted(state.error, now);
+  const paused = !working || state.pauseUntil > now || halted(state.error, now);
   const line = (handle: string, offList: boolean): Line => {
     const result = resultOf(state.results, handle);
     const enabled = !disabled.has(handle);

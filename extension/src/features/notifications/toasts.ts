@@ -81,6 +81,8 @@ export type ToastStore = {
   remove(id: number): void;
   /** Retire tout, sans animation. */
   clear(): void;
+  /** « Annuler » de la notification la plus récente qui le propose. */
+  undoLast(): void;
 };
 
 export function createToastStore(): ToastStore {
@@ -112,6 +114,9 @@ export function createToastStore(): ToastStore {
     },
     clear() {
       if (items.length) set([]);
+    },
+    undoLast() {
+      [...items].reverse().find((t) => !t.leaving && t.content.undo)?.content.undo?.();
     },
   };
 }

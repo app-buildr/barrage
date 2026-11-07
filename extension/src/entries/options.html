@@ -12,6 +12,7 @@
     html { background: #FFF6EE; }
     #root { opacity: 0; transition: opacity 200ms cubic-bezier(0.2, 0, 0, 1); }
     html.ready #root { opacity: 1; }
+    @media (prefers-reduced-motion: reduce) { #root { transition: none; } }
   </style>
 </head>
 <body>

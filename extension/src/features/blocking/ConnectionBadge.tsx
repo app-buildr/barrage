@@ -1,23 +1,35 @@
-// Pastille d'en-tête des options, affichée quand un onglet x.com est prêt à
-// bloquer, c'est-à-dire ouvert et connecté à X.
+// Pastille d'en-tête des options : un onglet x.com est prêt à bloquer, ou ce qu'il
+// reste à faire pour cela. Le blocage ne fonctionne que depuis un onglet connecté.
 import { Badge } from "@/ui/components/badge.tsx";
 import { cn } from "@/ui/lib/utils.ts";
-import { useXConnection } from "./use-connection.ts";
+import type { XTabStatus } from "./x-tab.ts";
 
-export function ConnectionBadge() {
-  const connected = useXConnection();
+const PILL = "gap-[7px] px-3 py-1 text-label font-bold before:size-[7px] before:rounded-full before:bg-current before:content-['']";
+
+const TO_DO: Record<Exclude<XTabStatus, "connected">, { label: string; title: string }> = {
+  none: { label: "Ouvrez x.com", title: "Barrage bloque depuis un onglet x.com : aucun n'est ouvert." },
+  logged_out: { label: "Connectez-vous à x.com", title: "Barrage bloque depuis un onglet x.com connecté à votre compte." },
+};
+
+/** @param status null le temps de la première vérification */
+export function ConnectionBadge({ status }: { status: XTabStatus | null }) {
   return (
     <span role="status" className="flex-none">
-      <Badge
-        className={cn(
-          "gap-[7px] bg-coral-soft px-3 py-1 text-label font-bold text-coral-deep",
-          "before:size-[7px] before:rounded-full before:bg-current before:content-['']",
-          !connected && "invisible",
-        )}
-        title={connected ? "Un onglet x.com connecté est ouvert : Barrage peut bloquer." : undefined}
-      >
-        {connected ? "x.com connecté" : ""}
-      </Badge>
+      {status === "none" || status === "logged_out" ? (
+        <Badge asChild variant="outline" className={cn(PILL, "bg-card")}>
+          <a href="https://x.com/home" target="_blank" rel="noopener" title={TO_DO[status].title}>
+            {TO_DO[status].label}
+          </a>
+        </Badge>
+      ) : (
+        <Badge
+          variant="coral"
+          className={cn(PILL, status === null && "invisible")}
+          title={status ? "Un onglet x.com connecté est ouvert : Barrage peut bloquer." : undefined}
+        >
+          {status ? "x.com connecté" : ""}
+        </Badge>
+      )}
     </span>
   );
 }

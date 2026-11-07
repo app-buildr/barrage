@@ -32,7 +32,8 @@
   --color-accent-foreground: var(--color-ink);
   --color-destructive: var(--color-state-problem);
   --color-border: var(--color-line);
-  --color-input: var(--color-line-strong);
+  /* Contrôles à repérer : 3,95:1 sur la carte blanche, 3,70:1 sur le crème. */
+  --color-input: #907C72;
   --color-ring: var(--color-coral-deep);
 
   --ease-barrage: cubic-bezier(0.2, 0, 0, 1);
@@ -55,6 +56,19 @@
   h1, h2, h3 { @apply font-display font-extrabold tracking-tight text-ink; }
   h2 { @apply text-2xl leading-tight; }
   :focus-visible { outline: 2px solid var(--color-coral-deep); outline-offset: 2px; }
+}
+
+/* Hors couche : outline-none, dans la couche utilities, neutraliserait la règle
+   de base sur ces composants générés, et leur anneau translucide ne suffit pas. */
+:is(
+  [data-slot="button"],
+  [data-slot="switch"],
+  [data-slot="toggle-group-item"],
+  [data-slot="tabs-trigger"],
+  [data-slot="tabs-content"]
+):focus-visible {
+  outline: 2px solid var(--color-coral-deep);
+  outline-offset: 2px;
 }
 
 /* Changement d'onglet, voir ui/transition.ts. La page reste vivante pendant la

@@ -56,3 +56,26 @@ test("la notification de badge ne prévient que si le palier change", () => {
   store.set(null);
   assert.equal(calls, 1);
 });
+
+test("le raccourci annule la notification la plus récente qui le propose", () => {
+  const store = createToastStore();
+  const undone: string[] = [];
+  const withUndo = (name: string): Content => ({ ...blocked, undo: () => undone.push(name) });
+  store.show("a", withUndo("a"));
+  store.show("b", withUndo("b"));
+  store.show("c", unblocked);
+  store.undoLast();
+  assert.deepEqual(undone, ["b"]);
+  const last = store.getSnapshot().find((t) => t.handle === "b");
+  store.leave(last?.id ?? 0);
+  store.undoLast();
+  assert.deepEqual(undone, ["b", "a"]);
+});
+
+test("le raccourci ne fait rien sans notification à annuler", () => {
+  const store = createToastStore();
+  store.undoLast();
+  store.show("a", unblocked);
+  store.undoLast();
+  assert.equal(store.getSnapshot().length, 1);
+});

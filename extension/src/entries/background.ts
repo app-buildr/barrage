@@ -5,6 +5,7 @@ import { repairInheritedBlocks } from "../features/blocking/store.ts";
 import { migrate } from "../features/lists/migrate.ts";
 import { syncBundled } from "../features/lists/store.ts";
 import { refreshLists, syncLists } from "../features/lists/sync.ts";
+import { serveCommands } from "../features/notifications/command.ts";
 import { servePages } from "../features/onboarding/open.ts";
 import { checkLatestVersion } from "../features/updates/check.ts";
 import { serial, serveWrites } from "../core/writer.ts";
@@ -36,5 +37,6 @@ chrome.runtime.onInstalled.addListener(({ reason, previousVersion }) => {
 chrome.runtime.onStartup.addListener(schedule);
 
 servePages();
+serveCommands();
 serveWrites();
 watchActionBadge();

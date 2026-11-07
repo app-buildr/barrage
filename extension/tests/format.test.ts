@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { formatCount, percent, plural, pluralWord } from "../src/core/format.ts";
 import { formatAgo, formatList } from "../src/core/intl.ts";
-import { tabFromHash } from "../src/ui/layout/main-tab.ts";
+import { pageTitle, tabFromHash } from "../src/ui/layout/main-tab.ts";
 
 test("le pluriel suit le nombre", () => {
   assert.equal(plural(0, "compte"), "0 compte");
@@ -39,4 +39,9 @@ test("l'onglet vient du hash, Comptes par défaut", () => {
   assert.equal(tabFromHash("#reglages"), "reglages");
   assert.equal(tabFromHash("#accueil"), "comptes");
   assert.equal(tabFromHash(""), "comptes");
+});
+
+test("le titre de la page suit l'écran affiché", () => {
+  assert.equal(pageTitle("accueil"), "Bienvenue sur Barrage");
+  assert.equal(pageTitle("reglages"), "Réglages · Barrage");
 });

@@ -6,13 +6,15 @@ import { signedIn } from "./api.ts";
 
 export const X_TABS = ["https://x.com/*", "https://twitter.com/*"];
 
+export type XTabStatus = "none" | "logged_out" | "connected";
+
 /**
  * Options : état des onglets x.com dont le content script répond. "connected" :
  * l'un d'eux a une session X ; "logged_out" : aucun. Après un rechargement de
  * l'extension, les onglets déjà ouverts n'ont plus de script vivant, d'où le
  * ping plutôt qu'une simple recherche d'onglet.
  */
-export async function xTabStatus(): Promise<"none" | "logged_out" | "connected"> {
+export async function xTabStatus(): Promise<XTabStatus> {
   const tabs = await chrome.tabs.query({ url: X_TABS });
   const pings = tabs
     .flatMap((tab) => (tab.id === undefined ? [] : [tab.id]))

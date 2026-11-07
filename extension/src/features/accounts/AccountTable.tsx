@@ -2,7 +2,8 @@
 // quand le filtre ne laisse rien.
 import type { ReactNode } from "react";
 import { OVERLINE } from "@/ui/classes.ts";
-import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/ui/components/table.tsx";
+import { Table, TableBody, TableCaption, TableHead, TableHeader, TableRow } from "@/ui/components/table.tsx";
+import { StatusMessage } from "@/ui/layout/Section.tsx";
 import { cn } from "@/ui/lib/utils.ts";
 
 /** Cellules : mêmes marges partout, réduites sur petit écran. */
@@ -19,6 +20,7 @@ export function AccountTable({ children, empty }: { children: ReactNode; empty?:
   return (
     <div className="overflow-hidden rounded-card border border-line bg-card shadow-soft">
       <Table containerClassName="max-h-[600px] overflow-auto" className="text-body">
+        <TableCaption className="sr-only">Comptes de la liste et état de leur blocage</TableCaption>
         <TableHeader className="[&_tr]:border-0">
           <TableRow className="hover:bg-transparent">
             <TableHead className={`${HEAD} w-[1%] pr-2`}>
@@ -35,7 +37,7 @@ export function AccountTable({ children, empty }: { children: ReactNode; empty?:
         </TableHeader>
         <TableBody>{children}</TableBody>
       </Table>
-      {empty ? <p className="m-0 px-6 py-4 text-muted-foreground">{empty}</p> : null}
+      <StatusMessage kind="muted" message={empty} className="px-6 py-4 text-base" />
     </div>
   );
 }

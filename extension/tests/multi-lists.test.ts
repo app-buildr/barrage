@@ -428,3 +428,13 @@ test("le nom de la liste collaborative se résout à l'affichage, pas celui d'un
   assert.equal(listName({ ...officialList(true), name: "Ancien nom figé" }), OFFICIAL_NAME);
   assert.equal(listName(list("m", [], { name: "Amis" })), "Amis");
 });
+
+test("un compte en file est « En attente » tant qu'aucun onglet x.com connecté ne peut le traiter", async () => {
+  store.lists = [officialList(true), list("m", ["a"])];
+  store.seen = ["a"];
+  const state = await getState();
+  assert.equal(accountLines(state)[0]?.status.label, "Blocage en cours…");
+  const [line] = accountLines(state, false).filter((l) => l.handle === "a");
+  assert.equal(line?.status.label, "En attente");
+  assert.equal(line?.status.busy, true);
+});

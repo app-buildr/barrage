@@ -23,13 +23,15 @@ const readReport = (report: ImportReport): StatusReport =>
 
 const warningOf = (report: Extract<ImportReport, { ok: true }>) => (report.warning ? { warning: report.warning } : {});
 
+const ANALYZING: StatusReport = { message: "Analyse en cours…", kind: "muted" };
+
 export function useListAnalysis() {
   const [outcome, setOutcome] = useState<StatusReport | null>(null);
+  const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [busy, setBusy] = useState(false);
-  /** Dernière analyse demandée : la réponse d'une analyse dépassée est ignorée. */
+  /** Dernière analyse demandée : une analyse dépassée ne touche à rien, résultat en place compris. */
   const latest = useRef(0);
 
-  /** Analyse en cours, ou null si elle est refusée ou dépassée. */
   async function run(task: () => Promise<{ outcome: StatusReport; analysis: Analysis | null }>, onError: string) {
     const id = ++latest.current;
     setBusy(true);
@@ -39,14 +41,13 @@ export function useListAnalysis() {
     } catch {
       result = { outcome: refused(onError), analysis: null };
     }
-    if (id !== latest.current) return null;
+    if (id !== latest.current) return;
     setBusy(false);
     setOutcome(result.outcome);
-    return result.analysis;
+    setAnalysis(result.analysis);
   }
 
-  /** Renvoie la liste analysée, ou null si elle est refusée. */
-  function analyzeUrl(raw: string): Promise<Analysis | null> {
+  function analyzeUrl(raw: string): Promise<void> {
     return run(async () => {
       const checked = validateListUrl(raw);
       if (!checked.ok) return { outcome: refused(checked.reason), analysis: null };
@@ -58,7 +59,7 @@ export function useListAnalysis() {
     }, DOWNLOAD_ERROR);
   }
 
-  function analyzeFile(file: File): Promise<Analysis | null> {
+  function analyzeFile(file: File): Promise<void> {
     return run(async () => {
       const problem = checkListFile(file.name, file.size);
       if (problem) return { outcome: refused(problem), analysis: null };
@@ -74,7 +75,9 @@ export function useListAnalysis() {
     latest.current++;
     setBusy(false);
     setOutcome(null);
+    setAnalysis(null);
   }
 
-  return { outcome, busy, analyzeUrl, analyzeFile, reset };
+  /** `outcome` : le compte rendu à afficher. `analysis` : la liste analysée, null si elle est refusée. */
+  return { outcome: busy ? ANALYZING : outcome, analysis, busy, analyzeUrl, analyzeFile, reset };
 }

@@ -133,12 +133,13 @@ export function Toast({ toast, store }: { toast: ToastItem; store: ToastStore })
         </span>
       </span>
       <CloseButton buttonRef={close} onClick={() => store.leave(id)} />
-      {/* Temps d'affichage restant : barre qui se vide vers la gauche, sur une piste pâle. */}
-      <span className="absolute inset-x-0 bottom-0 h-1 bg-line" />
+      {/* Temps d'affichage restant : barre qui se vide vers la gauche, sur une piste pâle.
+          Sans animation voulue, elle tourne quand même, invisible : elle donne le rythme. */}
+      <span className="absolute inset-x-0 bottom-0 h-1 bg-line motion-reduce:opacity-0" />
       <span
         ref={timer}
         className={clsx(
-          "absolute inset-x-0 bottom-0 z-1 h-1 origin-left",
+          "absolute inset-x-0 bottom-0 z-1 h-1 origin-left motion-reduce:opacity-0",
           content.kind === "unblocked" ? "bg-disabled" : "bg-coral",
         )}
       />

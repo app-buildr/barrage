@@ -18,7 +18,9 @@ export function NotificationSettings({ notify, notifyBadges }: { notify: boolean
         </label>
         <Hint>
           Un message « @nom vient d'être bloqué ! » s'affiche {plural(TOAST_MS / 1000, "seconde")} en haut à droite de
-          x.com, avec un lien pour annuler.
+          x.com, avec un lien pour annuler. Au clavier, Alt+Maj+Z (Option+Maj+Z sur Mac) annule le dernier blocage
+          affiché, sans quitter la page. Vous pouvez aussi annuler plus tard depuis l'onglet Comptes, avec l'interrupteur
+          du compte.
         </Hint>
         <hr className="my-5 border-line" />
         <label className="flex min-h-11 cursor-pointer items-center gap-3.5 font-bold">
