@@ -1,0 +1,18 @@
+{
+  "files": {
+    "includes": ["**/*.ts", "**/*.tsx", "**/*.mjs", "!dist", "!src/ui/components"]
+  },
+  "formatter": { "enabled": false },
+  "assist": { "enabled": false },
+  "linter": {
+    "rules": {
+      "preset": "none",
+      "correctness": {
+        "noUnusedImports": "error",
+        "noUnusedVariables": "error",
+        "useExhaustiveDependencies": "warn",
+        "useHookAtTopLevel": "error"
+      }
+    }
+  }
+}
