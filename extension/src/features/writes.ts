@@ -30,6 +30,7 @@ import {
   completeOnboarding,
   removeList,
   renameList,
+  resolveRetired,
   setListActive,
   setListNetworks,
 } from "./lists/store.ts";
@@ -122,6 +123,7 @@ export const WRITES = {
   renameList: optionsWrite(renameList, isString, isString),
   requestBlock: optionsWrite(requestBlock, isHandle),
   requestUnblock: optionsWrite(requestUnblock, isHandle),
+  resolveRetired: optionsWrite(resolveRetired, isHandles, isHandles),
   // Relue champ par champ à l'arrivée, voir checkBackup.
   restoreBackup: optionsWrite(restoreBackup, isAnything),
   resumeBlocking: optionsWrite(resumeBlocking, isAccount),

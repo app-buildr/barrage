@@ -5,7 +5,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { beforeEach, test } from "node:test";
-import { RETIRE_GRACE_MS } from "../src/core/config.ts";
 import { accountStates, getState, resultKey } from "../src/core/state.ts";
 import { write } from "../src/core/write.ts";
 import { unblockQueue } from "../src/features/blocking/queue.ts";
@@ -133,7 +132,7 @@ test("depuis la 1.3.0 : un « déjà bloqué » n'est plus réattribué à Barra
   assert.equal((await getState("222")).results.liste_a?.state, "already_blocked");
 });
 
-test("sans liste reçue, un compte sorti de la liste intégrée attend le délai de grâce", async () => {
+test("sans liste reçue, un compte sorti de la liste intégrée attend le choix de l'utilisateur", async () => {
   const stored = fixture("1.3.0");
   delete stored.remote;
   stored.bundled = [...DEFAULT_HANDLES, "parti"];
@@ -144,7 +143,6 @@ test("sans liste reçue, un compte sorti de la liste intégrée attend le délai
   const state = await getState("111");
   assert.deepEqual(state.retired, ["parti"]);
   assert.deepEqual(unblockQueue(state), []);
-  assert.deepEqual(unblockQueue(state, Date.now() + RETIRE_GRACE_MS), ["parti"]);
   assert.deepEqual(store.bundled, DEFAULT_HANDLES);
 });
 

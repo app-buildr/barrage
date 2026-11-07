@@ -48,7 +48,7 @@ export const NETWORKS: readonly Network[] = [
   {
     id: "youtube",
     label: "YouTube",
-    // Identifiant de chaîne « UC… » ou « @nom », voir scripts/split-lists.mjs.
+    // Identifiant de chaîne « UC… » ou « @nom », voir ENTRY_RULES dans scripts/check-repo.mjs.
     profileUrl: (h) => (h.startsWith("@") ? `https://www.youtube.com/${h}` : `https://www.youtube.com/channel/${h}`),
     display: (h) => h,
     available: false,

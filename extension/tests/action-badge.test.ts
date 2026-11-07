@@ -58,3 +58,11 @@ test("la version installée ne déclenche rien", async () => {
   await refreshBadge();
   assert.equal(shown.text, "");
 });
+
+test("des comptes retirés qui attendent un choix passent avant tout, en rouge", async () => {
+  store.seen = ["a"];
+  store.latestVersion = "99.0.0";
+  store.retired = ["x1", "x2"];
+  await refreshBadge();
+  assert.deepEqual(shown, { color: "#D7261E", text: "2", title: `${TITLE} (2 comptes retirés des listes, à vérifier)` });
+});

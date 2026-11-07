@@ -89,7 +89,8 @@ export function AutoUpdateNotice() {
     <p className="m-0 text-body text-muted-foreground">
       Une liste GitHub se met à jour seule : ce que son auteur y ajoute est appliqué sans vous le demander, jusqu'à{" "}
       {LIST_MAX_ADDED_SHARE * 100} % de comptes en plus par semaine. Au-delà, Barrage vous demande de confirmer dans
-      Réglages. N'importez que des listes dont vous connaissez l'auteur.
+      Réglages. Un compte qu'il retire reste bloqué jusqu'à ce que vous choisissiez de le débloquer. N'importez que des
+      listes dont vous connaissez l'auteur.
     </p>
   );
 }

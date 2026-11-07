@@ -155,29 +155,21 @@ export const IMPORT_PREVIEW_SIZE = 20;
 /** Longueur maximale du nom d'une liste. */
 export const LIST_NAME_MAX = 40;
 /**
- * Part maximale de comptes retirés d'une liste en ligne, par rapport à sa
+ * Part maximale de comptes ajoutés à une liste en ligne, par rapport à sa
  * référence (voir LIST_BASELINE_MS). Au-delà, la liste reçue est mise de côté
- * jusqu'à confirmation dans les options.
- */
-export const LIST_MAX_REMOVED_SHARE = 0.1;
-/**
- * Part maximale de comptes ajoutés, sur la même base. Le plus gros ajout connu
- * de la liste collaborative est de 14 %.
+ * jusqu'à confirmation dans les options. Le plus gros ajout connu de la liste
+ * collaborative est de 14 %. Les retraits n'ont pas de seuil : aucun compte
+ * retiré n'est débloqué sans l'accord de l'utilisateur, voir State.retired.
  */
 export const LIST_MAX_ADDED_SHARE = 0.25;
-/** En dessous de ce nombre de comptes, un ajout ou un retrait passe toujours : une petite liste change vite en proportion. */
+/** En dessous de ce nombre de comptes, un ajout passe toujours : une petite liste change vite en proportion. */
 export const LIST_GUARD_FLOOR = 5;
 /**
- * Durée de vie de la référence à laquelle les seuils se comparent. Comparer à
- * la dernière liste acceptée laisserait passer des retraits enchaînés, chacun
- * sous le seuil ; une référence stable limite le cumul sur cette durée.
+ * Durée de vie de la référence à laquelle le seuil se compare. Comparer à la
+ * dernière liste acceptée laisserait passer des ajouts enchaînés, chacun sous
+ * le seuil ; une référence stable limite le cumul sur cette durée.
  */
 export const LIST_BASELINE_MS = 7 * 24 * 60 * 60_000;
-/**
- * Délai avant de débloquer un compte retiré de la liste collaborative : un
- * retrait par erreur, corrigé entre-temps, ne débloque personne.
- */
-export const RETIRE_GRACE_MS = 72 * 60 * 60_000;
 
 // Mises à jour : Barrage est chargé en mode développeur, sans mise à jour
 // automatique. La dernière version publiée sur GitHub est relevée en même

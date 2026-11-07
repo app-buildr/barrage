@@ -13,7 +13,6 @@ import {
   MAX_ACTIONS_PER_HOUR,
   MAX_PAUSE_MS,
   NETWORK_RETRY_MS,
-  RETIRE_GRACE_MS,
   SLEEP_SLICE_MS,
   STATE_COALESCE_MS,
 } from "../src/core/config.ts";
@@ -23,6 +22,7 @@ import { serveWrites } from "../src/core/writer.ts";
 import { WRITES } from "../src/features/writes.ts";
 import { resumeBlocking } from "../src/features/blocking/store.ts";
 import { officialList } from "../src/features/lists/lists.ts";
+import { resolveRetired } from "../src/features/lists/store.ts";
 import { installChrome, X_TAB } from "./helpers/chrome.ts";
 import { putResults, result } from "./helpers/fixtures.ts";
 import { apiError, BLOCK, installX, LOOKUP, lookupReply, UNBLOCK, type FakeX } from "./helpers/x.ts";
@@ -462,8 +462,7 @@ test("sans service worker, un blocage fait et une limite de X restent notés", a
 
 test("avant la copie de la liste intégrée, rien ne part, puis son arrivée relance le traitement", async () => {
   delete store.remote;
-  store.retired = ["a"];
-  store.retiredAt = { a: 1 };
+  store.unblock = ["a"];
   putResults(store, { a: result("blocked") });
   await openTab();
   assert.equal(x.requests.length, 0);
@@ -537,13 +536,15 @@ test("un code 34 sur un déblocage n'est pas noté fait si le compte existe", as
   assert.equal(state.results.a?.state, "blocked");
 });
 
-test("un compte retiré n'est débloqué qu'après le délai de grâce", async () => {
+test("un compte retiré n'est débloqué que sur le choix de l'utilisateur", async () => {
   store.retired = ["z"];
   store.retiredAt = { z: T0 };
   putResults(store, { z: result("blocked") });
   await openTab();
+  await advance(7 * 24 * 3600_000, 6 * 3600_000);
   assert.equal(x.requests.length, 0);
-  await advance(RETIRE_GRACE_MS, 6 * 3600_000);
+  await resolveRetired(["z"], []);
+  await advance(STATE_COALESCE_MS);
   await openTab();
   assert.deepEqual(x.posts(UNBLOCK), ["z"]);
   assert.equal((await getState("1")).results.z?.state, "unblocked");

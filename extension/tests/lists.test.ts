@@ -45,10 +45,10 @@ test("un compte ajouté par l'utilisateur n'est jamais retiré", () => {
 
 const accounts = (count: number, from = 0): string[] => Array.from({ length: count }, (_, i) => `c${from + i}`);
 
-test("au-delà de la part de retraits permise, la liste est refusée", () => {
+test("un retrait passe toujours, même massif : l'utilisateur choisit ensuite qui débloquer", () => {
   const base = accounts(1000);
-  assert.equal(compareLists(base, base.slice(100), []).ok, true);
-  assert.equal(compareLists(base, base.slice(101), []).ok, false);
+  assert.deepEqual(compareLists(base, base.slice(900), []), { ok: true, removed: base.slice(0, 900) });
+  assert.equal(compareLists(["a", "b", "c", "d", "e", "f"], ["f"], []).ok, true);
 });
 
 test("au-delà de la part d'ajouts permise, la liste est refusée, même si elle ne retire rien", () => {
@@ -58,21 +58,16 @@ test("au-delà de la part d'ajouts permise, la liste est refusée, même si elle
   assert.deepEqual(update, { ok: false, reason: "251 comptes ajoutés d'un coup à 1000" });
 });
 
-test("le plancher vaut aussi pour les retraits, à l'unité près", () => {
-  assert.equal(compareLists(["a", "b", "c", "d", "e", "f"], ["f"], []).ok, true);
-  assert.equal(compareLists(["a", "b", "c", "d", "e", "f"], ["z"], []).ok, false);
-});
-
 test("une petite liste change sans refus, dans la limite du plancher", () => {
   assert.equal(compareLists(["a", "b"], ["a", "c", "d", "e", "f", "g"], []).ok, true);
   assert.equal(compareLists(["a", "b"], ["a", "c", "d", "e", "f", "g", "h"], []).ok, false);
 });
 
-test("des retraits enchaînés se cumulent sur la référence, chacun sous le seuil", () => {
+test("des ajouts enchaînés se cumulent sur la référence, chacun sous le seuil", () => {
   const base = accounts(1000);
-  const first = base.slice(90);
+  const first = [...base, ...accounts(200, 1000)];
   assert.equal(compareLists(base, first, [], [base]).ok, true);
-  assert.equal(compareLists(first, base.slice(180), [], [base]).ok, false);
+  assert.equal(compareLists(first, [...first, ...accounts(100, 2000)], [], [base]).ok, false);
 });
 
 test("revenir à la référence passe toujours, même après un gros ajout", () => {

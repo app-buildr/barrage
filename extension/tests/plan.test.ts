@@ -142,10 +142,10 @@ test("un déblocage passe avant un blocage", async () => {
   assert.deepEqual(await plan({ seen: ["a"], disabled: ["b"], unblock: ["b"] }, fresh), { kind: "unblock", handle: "b" });
 });
 
-test("un compte retiré n'entre pas dans le plan avant la fin du délai de grâce", async () => {
+test("un compte retiré n'entre pas dans le plan tant que l'utilisateur n'a pas choisi", async () => {
   putResults(store, { z: result("blocked") });
-  assert.deepEqual(await plan({ retired: ["z"], retiredAt: { z: NOW } }), { kind: "stop" });
-  assert.deepEqual(await plan({ retired: ["z"], retiredAt: { z: 1 } }), { kind: "unblock", handle: "z" });
+  assert.deepEqual(await plan({ retired: ["z"], retiredAt: { z: 1 } }), { kind: "stop" });
+  assert.deepEqual(await plan({ unblock: ["z"] }), { kind: "unblock", handle: "z" });
 });
 
 test("une erreur d'arrêt interdit toute requête, travail en file ou non", async () => {
@@ -159,9 +159,8 @@ test("une erreur d'arrêt interdit toute requête, travail en file ou non", asyn
 test("tant que la liste collaborative n'est pas là, rien ne part : un compte y paraîtrait sorti", async () => {
   putResults(store, { z: result("blocked") });
   const unknown = { remote: null, official: [] };
-  assert.deepEqual(await plan({ ...unknown, retired: ["z"], retiredAt: { z: 1 } }), { kind: "stop" });
   assert.deepEqual(await plan({ ...unknown, unblock: ["z"] }), { kind: "stop" });
-  assert.deepEqual(await plan({ ...unknown, official: ["a"], retired: ["z"], retiredAt: { z: 1 } }), { kind: "unblock", handle: "z" });
+  assert.deepEqual(await plan({ ...unknown, official: ["a"], unblock: ["z"] }), { kind: "unblock", handle: "z" });
 });
 
 test("une raison inconnue arrête par prudence", () => {
@@ -218,23 +217,6 @@ test("une erreur de session ne se lève pas depuis les options", async () => {
   assert.equal((await getState()).error?.reason, "auth");
   assert.equal(resumable(error("auth")), false);
   assert.equal(resumable(error("api")), true);
-});
-
-test("un compte retiré dont le déblocage est refusé reste en file pour trois tentatives", async () => {
-  store.retired = ["z"];
-  store.retiredAt = { z: 1 };
-  putResults(store, { z: result("blocked") });
-  for (const attempts of [1, 2]) {
-    await refuseUnblock("z", { code: "refused", param: 1 });
-    const state = await getState();
-    assert.deepEqual(state.retired, ["z"]);
-    assert.equal(refusal(state, "z").unblockAttempts, attempts);
-    assert.equal(refusal(state, "z").unblockFailed, undefined);
-  }
-  await refuseUnblock("z", { code: "refused", param: 1 });
-  const state = await getState();
-  assert.deepEqual(state.retired, []);
-  assert.equal(refusal(state, "z").unblockFailed, true);
 });
 
 test("un compte sur Off dont le déblocage est refusé sort de la file aussitôt", async () => {

@@ -1,7 +1,7 @@
 // Écritures des listes de comptes, appliquées une à la fois par le service
 // worker (voir core/writer.ts). Les listes valent pour tous les comptes X ;
 // les files, elles, sont propres à chacun.
-import { accountStates, readStorage, scoped, stringArray, type SharedValues, type State } from "../../core/state.ts";
+import { accountStates, readState, readStorage, scoped, stringArray, type SharedValues, type State } from "../../core/state.ts";
 import { blockedByBarrage, resultOf } from "../blocking/queue.ts";
 import type { NetworkId } from "../networks/networks.ts";
 import { DEFAULT_HANDLES } from "./defaults.ts";
@@ -28,38 +28,80 @@ import {
   settledGuard,
   type ListGuard,
   type PendingList,
-  type Update,
 } from "./remote.ts";
 
 type Stored = Record<string, unknown>;
+
+/** Ce qu'une nouvelle liste effective change pour un compte X. */
+type ListChange = {
+  /** Nouvelle liste effective de X. */
+  covered: ReadonlySet<string>;
+  /** Comptes à vérifier auprès de X, voir State.audit. */
+  fresh: readonly string[];
+  /** Comptes sortis de la liste effective par une mise à jour, et liste d'où ils sortent. */
+  removed?: { handles: readonly string[]; from: string; at: number };
+};
+
+/**
+ * Champs d'un compte X après un changement de liste. Les files ne gardent que
+ * les comptes encore couverts : un compte sorti ne coûte plus de requête à X.
+ * Ceux que Barrage a bloqués parmi les sortis attendent le choix de
+ * l'utilisateur (voir State.retired) ; un compte remis dans la liste
+ * entre-temps n'attend plus rien.
+ */
+function changedValues(own: State, { covered, fresh, removed }: ListChange): Stored {
+  const values: Partial<State> = {
+    seen: own.seen.filter((h) => covered.has(h)),
+    audit: [...new Set([...own.audit.filter((h) => covered.has(h)), ...fresh])],
+  };
+  const added = removed ? blockedByBarrage(removed.handles, own.results).filter((h) => !covered.has(h)) : [];
+  const retired = [...new Set([...own.retired, ...added])].filter((h) => !covered.has(h));
+  if (retired.length !== own.retired.length || retired.some((h, i) => h !== own.retired[i])) {
+    values.retired = retired;
+    values.retiredAt = Object.create(null) as Record<string, number>;
+    values.retiredFrom = Object.create(null) as Record<string, string>;
+    for (const handle of retired) {
+      values.retiredAt[handle] = own.retiredAt[handle] ?? removed?.at ?? Date.now();
+      const from = own.retiredFrom[handle] ?? (own.retired.includes(handle) ? undefined : removed?.from);
+      if (from !== undefined) values.retiredFrom[handle] = from;
+    }
+  }
+  return scoped(own.prefix, values);
+}
+
+type SaveOptions = {
+  /** Les comptes qui entrent dans la liste effective sans résultat connu seront vérifiés auprès de X. */
+  audit: boolean;
+  /** Mise à jour de cette liste : ceux qui en sortent, bloqués par Barrage, attendent le choix de l'utilisateur. */
+  updated?: string;
+  extra?: SharedValues;
+};
 
 /**
  * Enregistre de nouvelles listes. Les comptes sortis de la liste effective
  * quittent les files de chaque compte X, sans rien débloquer. Avec `audit`, ceux
  * qui y entrent sans résultat connu seront vérifiés auprès de X : à l'import, à
- * l'activation d'une liste et à l'accueil. Une liste mise à jour et un ajout à la
- * main ne déclenchent pas de vérification : ces comptes-là ne sont bloqués qu'une
- * fois vus dans le fil. La liste collaborative a ses propres règles, voir replaceOfficial.
+ * l'activation d'une liste, à l'ajout à la main et à l'accueil. Une liste mise
+ * à jour ne déclenche pas de vérification : ses nouveaux comptes ne sont bloqués
+ * qu'une fois vus dans le fil. La liste collaborative a ses propres règles, voir
+ * replaceOfficial.
  */
-async function saveLists(stored: Stored, lists: ListDef[], audit: boolean, extra: SharedValues = {}): Promise<void> {
+async function saveLists(stored: Stored, lists: ListDef[], { audit, updated, extra = {} }: SaveOptions): Promise<void> {
   const states = accountStates(stored);
   const [shared] = states;
   const before = new Set(shared.handles);
   const effective = effectiveHandles(lists, "x", shared.official);
   const covered = new Set(effective);
   const off = new Set(shared.disabled);
+  const removed = updated
+    ? { handles: shared.handles.filter((h) => !covered.has(h)), from: updated, at: Date.now() }
+    : undefined;
   const values: Stored = { ...extra, lists };
   for (const own of states) {
     const fresh = audit
       ? effective.filter((h) => !before.has(h) && !off.has(h) && !resultOf(own.results, h))
       : [];
-    Object.assign(
-      values,
-      scoped(own.prefix, {
-        seen: own.seen.filter((h) => covered.has(h)),
-        audit: [...new Set([...own.audit.filter((h) => covered.has(h)), ...fresh])],
-      }),
-    );
+    Object.assign(values, changedValues(own, { covered, fresh, ...(removed ? { removed } : {}) }));
   }
   await chrome.storage.local.set(values);
 }
@@ -97,13 +139,13 @@ function importedList(lists: readonly ListDef[], list: NewList): ListDef {
 export async function addList(list: NewList): Promise<void> {
   const stored = await readStorage();
   const lists = readLists(stored.lists);
-  await saveLists(stored, [...lists, importedList(lists, list)], true);
+  await saveLists(stored, [...lists, importedList(lists, list)], { audit: true });
 }
 
 export async function setListActive(id: string, active: boolean): Promise<void> {
   const stored = await readStorage();
   const lists = readLists(stored.lists);
-  await saveLists(stored, replace(lists, { ...find(lists, id), active }), active);
+  await saveLists(stored, replace(lists, { ...find(lists, id), active }), { audit: active });
 }
 
 /** Une liste garde au moins un réseau : active sans réseau, elle ne couvrirait rien. */
@@ -111,7 +153,7 @@ export async function setListNetworks(id: string, networks: NetworkId[]): Promis
   if (!networks.length) throw new Error("Une liste s'applique sur au moins un réseau.");
   const stored = await readStorage();
   const lists = readLists(stored.lists);
-  await saveLists(stored, replace(lists, { ...find(lists, id), networks }), true);
+  await saveLists(stored, replace(lists, { ...find(lists, id), networks }), { audit: true });
 }
 
 /** Renomme une liste, jamais la collaborative. Un nom déjà pris est numéroté. */
@@ -135,7 +177,7 @@ export async function removeList(id: string): Promise<void> {
   const [shared] = accountStates(stored);
   const { [id]: _removed, ...listGuards } = shared.listGuards;
   const { [id]: _date, ...listSync } = readListSync(stored.listSync);
-  await saveLists(stored, lists.filter((l) => l.id !== id), false, { listGuards, listSync });
+  await saveLists(stored, lists.filter((l) => l.id !== id), { audit: false, extra: { listGuards, listSync } });
 }
 
 /** Date de synchronisation de la liste `id` à écrire, les autres inchangées. */
@@ -152,34 +194,21 @@ const withGuard = (shared: State, id: string, guard: ListGuard): SharedValues =>
 });
 
 /**
- * Remplace la liste collaborative par `next` : les comptes retirés que Barrage
- * a bloqués passent en file de déblocage, datés, sur chaque compte X où il les
- * a bloqués. `disabled` ne change pas : un compte hors liste y reste sans effet,
- * et une liste erronée puis corrigée ne fait pas perdre le choix de l'utilisateur.
+ * Remplace la liste collaborative par `next`. Les comptes qui sortent de la
+ * liste effective et que Barrage a bloqués attendent, sur chaque compte X où il
+ * les a bloqués, que l'utilisateur choisisse de les débloquer ou de les garder
+ * bloqués (voir State.retired). `disabled` ne change pas : un compte hors liste
+ * y reste sans effet, et une liste erronée puis corrigée ne fait pas perdre le
+ * choix de l'utilisateur.
  * @param states état de chaque compte X, voir accountStates : la liste et les
  *   réglages, communs, se lisent sur n'importe lequel
  */
-export async function replaceOfficial(
-  states: readonly State[],
-  next: readonly string[],
-  update: Extract<Update, { ok: true }>,
-  extra: SharedValues,
-): Promise<void> {
-  const removed = new Set(update.removed);
-  const listed = new Set(next);
-  const at = Date.now();
+export async function replaceOfficial(states: readonly [State, ...State[]], next: readonly string[], extra: SharedValues): Promise<void> {
+  const [shared] = states;
+  const covered = new Set(effectiveHandles(shared.lists, "x", next));
+  const removed = { handles: shared.handles.filter((h) => !covered.has(h)), from: OFFICIAL_ID, at: Date.now() };
   const values: Stored = { ...extra };
-  for (const own of states) {
-    // Un déblocage demandé à la main reste dû, voir unblockQueue.
-    // Un compte remis dans la liste entre-temps n'est plus à débloquer, même si
-    // la liste est désactivée plus tard.
-    const retired = [...new Set([...own.retired, ...blockedByBarrage(update.removed, own.results)])].filter(
-      (h) => !listed.has(h),
-    );
-    const retiredAt: Record<string, number> = Object.create(null);
-    for (const handle of retired) retiredAt[handle] = own.retiredAt[handle] ?? at;
-    Object.assign(values, scoped(own.prefix, { retired, retiredAt, seen: own.seen.filter((h) => !removed.has(h)) }));
-  }
+  for (const own of states) Object.assign(values, changedValues(own, { covered, fresh: [], removed }));
   await chrome.storage.local.set(values);
 }
 
@@ -204,16 +233,15 @@ export async function syncBundled(): Promise<void> {
   const [shared] = states;
   if (previous && shared.remote === null) {
     const update = compareLists(previous, DEFAULT_HANDLES, otherActiveHandles(shared.lists, "x"));
-    if (update.ok) return replaceOfficial(states, DEFAULT_HANDLES, update, bundled);
+    if (update.ok) return replaceOfficial(states, DEFAULT_HANDLES, bundled);
     console.warn("[Barrage] liste intégrée sans retrait :", update.reason);
   }
   await chrome.storage.local.set(bundled);
 }
 
 /**
- * Liste collaborative téléchargée : appliquée, ou mise de côté si elle s'écarte
- * trop de ses références. Identique à celle en place, seule sa date change, sauf
- * s'il reste un compte retiré à dater, voir unblockQueue.
+ * Liste collaborative téléchargée : appliquée, ou mise de côté si elle ajoute
+ * trop de comptes à ses références. Identique à celle en place, seule sa date change.
  * @returns faux si la nouvelle liste est refusée
  */
 export async function receiveOfficial(handles: string[], syncedAt: number): Promise<boolean> {
@@ -230,16 +258,15 @@ export async function receiveOfficial(handles: string[], syncedAt: number): Prom
     return false;
   }
   const settled = { ...withSync(stored, OFFICIAL_ID, syncedAt), ...withGuard(shared, OFFICIAL_ID, settledGuard(guard)) };
-  const undated = states.some(({ retired, retiredAt }) => retired.some((h) => retiredAt[h] === undefined));
-  if (sameHandles(shared.remote, handles) && !undated) await chrome.storage.local.set(settled);
-  else await replaceOfficial(states, handles, update, { remote: handles, ...settled });
+  if (sameHandles(shared.remote, handles)) await chrome.storage.local.set(settled);
+  else await replaceOfficial(states, handles, { remote: handles, ...settled });
   return true;
 }
 
 /**
  * Remplace le contenu d'une liste GitHub après synchronisation, ou met la
- * nouvelle liste de côté si elle s'écarte trop de ses références. Les comptes
- * retirés restent bloqués.
+ * nouvelle liste de côté si elle ajoute trop de comptes à ses références. Les
+ * comptes retirés restent bloqués jusqu'au choix de l'utilisateur.
  * @returns faux si la nouvelle liste est refusée
  */
 export async function updateListHandles(id: string, handles: string[], syncedAt: number): Promise<boolean> {
@@ -258,7 +285,7 @@ export async function updateListHandles(id: string, handles: string[], syncedAt:
   }
   const settled = { ...withSync(stored, id, syncedAt), ...withGuard(shared, id, settledGuard(guard)) };
   if (sameHandles(list.handles, handles)) await chrome.storage.local.set(settled);
-  else await saveLists(stored, replace(lists, { ...list, handles }), false, settled);
+  else await saveLists(stored, replace(lists, { ...list, handles }), { audit: false, updated: id, extra: settled });
   return true;
 }
 
@@ -275,7 +302,7 @@ export async function recordListRefusal(id: string, reason: string, at: number):
 /**
  * Applique la mise à jour mise de côté, confirmée dans les options. Son contenu
  * devient la référence, sans perdre le retour à la précédente. Les comptes
- * retirés de la liste collaborative attendent RETIRE_GRACE_MS comme les autres.
+ * retirés attendent le choix de l'utilisateur comme les autres.
  */
 export async function acceptPendingList(id: string): Promise<void> {
   const stored = await readStorage();
@@ -287,13 +314,34 @@ export async function acceptPendingList(id: string): Promise<void> {
   const at = Date.now();
   const extra = { ...withSync(stored, id, at), ...withGuard(shared, id, confirmedGuard(guard, handles, at)) };
   if (id === OFFICIAL_ID) {
-    const update = compareLists(shared.official, handles, otherActiveHandles(shared.lists, "x"), [handles]);
-    if (!update.ok) throw new Error(update.reason);
-    await replaceOfficial(states, handles, update, { remote: handles, ...extra });
+    await replaceOfficial(states, handles, { remote: handles, ...extra });
     return;
   }
   const lists = readLists(stored.lists);
-  await saveLists(stored, replace(lists, { ...find(lists, id), handles }), false, extra);
+  await saveLists(stored, replace(lists, { ...find(lists, id), handles }), { audit: false, updated: id, extra });
+}
+
+/**
+ * Choix de l'utilisateur sur des comptes retirés d'une liste, pour le compte X
+ * affiché : ceux de `unblock` passent en file de déblocage, ceux de `keep`
+ * restent bloqués et rejoignent les comptes hors liste. Un compte que le choix
+ * ne vise pas, retiré pendant que l'utilisateur lisait, reste en attente.
+ */
+export async function resolveRetired(unblock: readonly string[], keep: readonly string[]): Promise<void> {
+  const own = readState(await readStorage());
+  const done = new Set([...unblock, ...keep].filter((h) => own.retired.includes(h)));
+  if (!done.size) return;
+  const retired = own.retired.filter((h) => !done.has(h));
+  const retiredAt: Record<string, number> = Object.create(null);
+  const retiredFrom: Record<string, string> = Object.create(null);
+  for (const handle of retired) {
+    if (own.retiredAt[handle] !== undefined) retiredAt[handle] = own.retiredAt[handle];
+    if (own.retiredFrom[handle] !== undefined) retiredFrom[handle] = own.retiredFrom[handle];
+  }
+  const toUnblock = unblock.filter((h) => done.has(h));
+  await chrome.storage.local.set(
+    scoped(own.prefix, { retired, retiredAt, retiredFrom, unblock: [...new Set([...own.unblock, ...toUnblock])] }),
+  );
 }
 
 /** `inactiveList` : nom réel de « Ma liste perso » si elle ne couvre pas X, ces comptes ne seront pas bloqués. */
@@ -302,6 +350,8 @@ export type AddResult = { added: string[]; existing: string[]; inactiveList: str
 /**
  * Ajoute des comptes normalisés à « Ma liste perso », créée au premier ajout.
  * Ceux déjà couverts, ou en double dans la saisie, ne sont ajoutés qu'une fois.
+ * Les nouveaux sont vérifiés auprès de X : un compte déjà bloqué y paraît bloqué
+ * sans attendre d'être vu dans le fil.
  */
 export async function addHandles(handles: readonly string[]): Promise<AddResult> {
   const stored = await readStorage();
@@ -314,7 +364,7 @@ export async function addHandles(handles: readonly string[]): Promise<AddResult>
   for (const handle of new Set(handles)) {
     (known.has(handle) ? result.existing : result.added).push(handle);
   }
-  if (result.added.length) await saveLists(stored, withManualHandles(lists, result.added, Date.now()), false);
+  if (result.added.length) await saveLists(stored, withManualHandles(lists, result.added, Date.now()), { audit: true });
   return result;
 }
 
@@ -334,6 +384,6 @@ export async function completeOnboarding(choice: OnboardingChoice): Promise<void
   const next = replace(lists, { ...find(lists, OFFICIAL_ID), ...official });
   if (choice.kind === "list") next.push(importedList(next, choice.list));
   // Une migration manquée ne perd rien : les comptes de l'ancienne clé `handles` sont repris.
-  await saveLists(stored, withManualHandles(next, stringArray(stored.handles), addedAt), true, { onboarded: true });
+  await saveLists(stored, withManualHandles(next, stringArray(stored.handles), addedAt), { audit: true, extra: { onboarded: true } });
   if (Array.isArray(stored.handles)) await chrome.storage.local.remove("handles");
 }

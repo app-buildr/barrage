@@ -194,27 +194,14 @@ test("débloquer à la main vaut aussi pour un compte bloqué avant Barrage", as
   assert.deepEqual(state.seen, ["b"]);
 });
 
-test("un compte retiré de la liste partagée que Barrage a bloqué est débloqué", async () => {
+test("un compte retiré de la liste partagée n'est pas débloqué sans choix de l'utilisateur", async () => {
   store.remote = ["b"];
-  store.retired = ["a", "c"];
-  store.retiredAt = { a: 1, c: 1 };
-  replaceResults({ a: { state: "blocked", at: 1 }, c: { state: "already_blocked", at: 1 } });
+  store.retired = ["a"];
+  store.retiredAt = { a: 1 };
+  replaceResults({ a: { state: "blocked", at: 1 } });
   const state = await getState();
   assert.deepEqual(state.handles, ["b"]);
-  assert.deepEqual(unblockQueue(state), ["a"]);
-});
-
-test("un compte remis dans la liste partagée n'est plus à débloquer", async () => {
-  store.remote = ["a"];
-  store.retired = ["a"];
-  replaceResults({ a: { state: "blocked", at: 1 } });
-  assert.deepEqual(unblockQueue(await getState()), []);
-});
-
-test("un déblocage terminé sort aussi les comptes retirés de la file", async () => {
-  store.retired = ["a"];
-  await finishUnblock("a", { state: "unblocked", at: 2 });
-  assert.deepEqual((await getState()).retired, []);
+  assert.deepEqual(unblockQueue(state), []);
 });
 
 test("un compte vu comme déjà bloqué sur X passe sur « bloqué avant Barrage »", async () => {
@@ -527,12 +514,12 @@ test("les clés de compte reçoivent le préfixe, jamais une autre clé", () => 
   assert.ok(never);
 });
 
-test("un ajout à la main ne lance pas de vérification, et ne touche pas aux files en place", async () => {
+test("un ajout à la main met le compte à vérifier, sans toucher aux files en place", async () => {
   store.seen = ["vu"];
   store.audit = ["c"];
   store.lists = [officialList(true), manualList(["vu", "c"], 0)];
   await addHandles(["nouveau"]);
-  assert.deepEqual(store.audit, ["c"]);
+  assert.deepEqual(store.audit, ["c", "nouveau"]);
   assert.deepEqual(store.seen, ["vu"]);
   assert.ok((await getState()).handles.includes("nouveau"));
 });

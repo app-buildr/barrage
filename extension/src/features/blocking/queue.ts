@@ -1,6 +1,6 @@
 // État de traitement de la liste : quels comptes restent à bloquer. Fonctions
 // pures, couvertes par les tests.
-import { MAX_ATTEMPTS, NOT_FOUND_RETRY_MS, RETIRE_GRACE_MS } from "../../core/config.ts";
+import { MAX_ATTEMPTS, NOT_FOUND_RETRY_MS } from "../../core/config.ts";
 import type { State } from "../../core/state.ts";
 import type { Failure, FailureCode } from "./outcome.ts";
 
@@ -50,8 +50,6 @@ export type UnblockRefusal = {
    * seul un clic sur « Débloquer » relance la demande.
    */
   unblockFailed?: boolean;
-  /** Déblocages refusés d'un compte retiré de la liste, voir refuseUnblock. */
-  unblockAttempts?: number;
 };
 
 /** Résultats indexés par identifiant minuscule. */
@@ -168,35 +166,29 @@ export function queueOrder(state: State): string[] {
 
 /**
  * Comptes à débloquer sur X : demandes à la main encore sur Off (ou sorties
- * de la liste depuis, la demande reste due), puis tout
- * compte sur Off ou retiré de la liste collaborative que Barrage a bloqué. Calculée
- * plutôt que stockée, la file ne peut pas manquer un blocage qui aboutit juste
- * après le passage sur Off. Un déblocage refusé par X n'est relancé que par
- * une nouvelle demande. Un compte retiré attend RETIRE_GRACE_MS, et sans date
- * de retrait il attend que la prochaine synchronisation lui en donne une.
+ * de la liste depuis, la demande reste due), puis tout compte sur Off que
+ * Barrage a bloqué. Calculée plutôt que stockée, la file ne peut pas manquer un
+ * blocage qui aboutit juste après le passage sur Off. Un déblocage refusé par X
+ * n'est relancé que par une nouvelle demande. Un compte retiré d'une liste n'y
+ * entre que si l'utilisateur choisit de le débloquer, voir resolveRetired.
  */
-export function unblockQueue(state: State, now = Date.now()): string[] {
+export function unblockQueue(state: State): string[] {
   const disabled = new Set(state.disabled);
   const blockedByUs = (h: string) => {
     const result = resultOf(state.results, h);
     return result?.state === "blocked" && !result.unblockFailed;
   };
   const listed = new Set(state.handles);
-  const graceOver = (h: string) => now - (state.retiredAt[h] ?? now) >= RETIRE_GRACE_MS;
   return [
-    ...new Set([
-      ...state.unblock.filter((h) => disabled.has(h) || !listed.has(h)),
-      ...state.disabled.filter(blockedByUs),
-      // Un compte remis dans la liste entre-temps n'est plus à débloquer.
-      ...state.retired.filter((h) => !listed.has(h) && blockedByUs(h) && graceOver(h)),
-    ]),
+    ...new Set([...state.unblock.filter((h) => disabled.has(h) || !listed.has(h)), ...state.disabled.filter(blockedByUs)]),
   ];
 }
 
 /**
  * Comptes bloqués sortis de la liste effective (liste désactivée, supprimée ou
- * mise à jour) : ils restent bloqués et déblocables. Ceux retirés de la liste
- * collaborative n'en sont pas : Barrage les débloque de lui-même.
+ * mise à jour) : ils restent bloqués et déblocables. Ceux qui attendent le
+ * choix de l'utilisateur après une mise à jour n'en sont pas : ils sont
+ * présentés à part, voir State.retired.
  */
 export function offListHandles(state: State): string[] {
   const listed = new Set(state.handles);

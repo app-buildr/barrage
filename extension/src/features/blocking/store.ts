@@ -10,7 +10,7 @@
 // qui arrête le traitement (setPauseUntil, setFailures, recordAutomation,
 // setError) : un blocage a eu lieu, ou X a dit stop, même si le service worker ne
 // répond pas. Perdre cette trace relancerait des requêtes à X.
-import { ACTIONS_WINDOW_MS, LOOKUP_WINDOW_MS, MAX_ATTEMPTS, RUNNER_GRACE_MS } from "../../core/config.ts";
+import { ACTIONS_WINDOW_MS, LOOKUP_WINDOW_MS, RUNNER_GRACE_MS } from "../../core/config.ts";
 import {
   accountStates,
   accountsOf,
@@ -104,12 +104,8 @@ async function leaveUnblockQueue(
   extra: AccountValues,
   account?: string | null,
 ): Promise<void> {
-  const { unblock, retired, prefix } = await getState(account);
-  await setResults(prefix, result ? { [handle]: result } : {}, {
-    unblock: unblock.filter((h) => h !== handle),
-    retired: retired.filter((h) => h !== handle),
-    ...extra,
-  });
+  const { unblock, prefix } = await getState(account);
+  await setResults(prefix, result ? { [handle]: result } : {}, { unblock: unblock.filter((h) => h !== handle), ...extra });
 }
 
 /** Échec d'un blocage : le compteur de tentatives progresse, d'après le résultat enregistré. */
@@ -126,18 +122,12 @@ export async function recordBlockFailure(
 /**
  * Déblocage refusé par X : le compte sort de la file quand même, un refus se
  * répéterait à l'identique. Il reste bloqué, marqué pour que « Débloquer »
- * permette de réessayer. Un compte retiré de la liste collaborative n'a pas
- * d'autre chance d'être débloqué : il reste en file MAX_ATTEMPTS tentatives.
+ * permette de réessayer.
  */
 export async function refuseUnblock(handle: string, cause: Failure, account?: string | null): Promise<void> {
-  const { results, retired, prefix } = await getState(account);
+  const { results } = await getState(account);
   const previous = resultOf(results, handle);
   const error = errorValue({ ...cause, context: { unblock: handle } }, "other", 0);
-  const attempts = (isBlocked(previous) ? (previous.unblockAttempts ?? 0) : 0) + 1;
-  if (previous && retired.includes(handle) && attempts < MAX_ATTEMPTS) {
-    await setResults(prefix, { [handle]: refused(previous, { unblockAttempts: attempts }, cause) }, { error });
-    return;
-  }
   const result = previous ? refused(previous, { unblockFailed: true }, cause) : null;
   await leaveUnblockQueue(handle, result, { error }, account);
 }

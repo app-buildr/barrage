@@ -29,7 +29,7 @@ La CI (`.github/workflows/ci.yml`) lance ces commandes sur chaque pull request. 
 - `src/features/badges/` : paliers, attribution et partage, par compte X.
 - `src/ui/components/` : composants shadcn/ui (`npx shadcn@latest add <composant>`), habillés du thème Corail de `src/ui/globals.css`. La palette (`src/ui/palette.css`) est partagée avec la notification de x.com.
 - Les notifications sur x.com sont rendues dans un Shadow DOM fermé (`features/notifications/mount.tsx`), avec la police système ; Chrome y ignorant les `@property`, `mount.tsx` redonne leur valeur initiale aux variables `--tw-*`. Le content script remplace React par Preact (`preact/compat`, voir `vite.config.ts`) pour rester léger : n'y utiliser que l'API React courante.
-- `scripts/` : `check-repo.mjs` (contrôle de la CI), `split-lists.mjs` (génère `lists/` depuis `resources/`, hors dépôt, et n'écrit qu'avec `--write`), `make-icons.mjs` (régénère `icons/`).
+- `scripts/` : `check-repo.mjs` (contrôle de la CI), `make-icons.mjs` (régénère `icons/`). `lists/x.json` est la source de vérité de la liste, modifiée par pull request.
 
 ## Publier une version
 

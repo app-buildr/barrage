@@ -107,7 +107,7 @@ export function lookupDelay({ lookups, lookupPauseUntil }: Pick<State, "lookups"
 export function nextAction(state: State, { now, checked }: PlanContext): Action {
   if (halted(state.error, now) || !listKnown(state)) return { kind: "stop" };
   // Les déblocages demandés passent avant tout nouveau blocage.
-  const toUnblock = unblockQueue(state, now)[0];
+  const toUnblock = unblockQueue(state)[0];
   const order = queueOrder(state);
   const toBlock = nextPending(order, state.results);
   if (!toUnblock && !toBlock && !state.audit.length) return { kind: "stop" };

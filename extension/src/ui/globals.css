@@ -19,9 +19,6 @@
   --color-background: var(--color-cream);
   --color-foreground: var(--color-ink);
   --color-card: #FFFFFF;
-  --color-card-foreground: var(--color-ink);
-  --color-popover: #FFFFFF;
-  --color-popover-foreground: var(--color-ink);
   --color-primary: var(--color-coral-deep);
   --color-primary-foreground: #FFFFFF;
   --color-secondary: var(--color-cream);
@@ -63,6 +60,7 @@
 :is(
   [data-slot="button"],
   [data-slot="switch"],
+  [data-slot="checkbox"],
   [data-slot="toggle-group-item"],
   [data-slot="tabs-trigger"],
   [data-slot="tabs-content"]

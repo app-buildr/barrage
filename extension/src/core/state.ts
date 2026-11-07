@@ -1,6 +1,6 @@
 // État de l'extension, partagé par les trois surfaces (service worker, onglets
 // x.com, options). Chaque fonctionnalité écrit sa part dans son propre store.ts,
-// et les files d'un compte X (`seen`, `audit`, `unblock`, `retired`) n'ont de sens
+// et les files d'un compte X (`seen`, `audit`, `unblock`) n'ont de sens
 // que pour features/blocking : les autres n'y ajoutent ou n'en retirent que des
 // comptes, sans en changer les règles. Ce fichier décrit la forme de l'état, le
 // lit. Il dépend de modèles purs (lists.ts, remote.ts) dont il agrège le schéma,
@@ -88,12 +88,16 @@ export type SharedState = {
  */
 export type AccountState = {
   /**
-   * Comptes retirés de la liste collaborative alors que Barrage les avait bloqués :
-   * à débloquer sur X, voir unblockQueue.
+   * Comptes retirés d'une liste mise à jour (collaborative ou GitHub) alors que
+   * Barrage les avait bloqués. Ils restent bloqués jusqu'au choix de
+   * l'utilisateur dans les options : débloquer, ou garder bloqué. Barrage ne les
+   * débloque jamais de lui-même, voir resolveRetired.
    */
   retired: string[];
-  /** Date de retrait de ces comptes, en millisecondes, voir RETIRE_GRACE_MS. */
+  /** Date de retrait de ces comptes, en millisecondes. */
   retiredAt: Record<string, number>;
+  /** Liste d'où chaque compte a été retiré, par identifiant. Absente : la collaborative, seule concernée avant la 1.4.0. */
+  retiredFrom: Record<string, string>;
   /**
    * Déblocages demandés à la main, y compris pour un compte bloqué avant
    * Barrage. Les comptes désactivés que Barrage a bloqués s'y ajoutent d'eux-mêmes,
@@ -230,7 +234,6 @@ export const QUEUE_KEYS: readonly StateKey[] = [
   "lists",
   "remote",
   "bundled",
-  "retired",
   "disabled",
   "unblock",
   "results",
@@ -288,6 +291,7 @@ export function readState(stored: Record<string, unknown>, account?: string | nu
   const strikes = own("strikes");
   const error = own("error");
   const retiredAt = own("retiredAt");
+  const retiredFrom = own("retiredFrom");
   const lookupPauseUntil = own("lookupPauseUntil");
   return {
     account: current,
@@ -300,6 +304,7 @@ export function readState(stored: Record<string, unknown>, account?: string | nu
     remote,
     retired: stringArray(own("retired")),
     retiredAt: isRecord(retiredAt) ? Object.assign(Object.create(null), retiredAt) : Object.create(null),
+    retiredFrom: isRecord(retiredFrom) ? Object.assign(Object.create(null), retiredFrom) : Object.create(null),
     listGuards: readGuards(stored.listGuards),
     disabled: stringArray(stored.disabled),
     unblock: stringArray(own("unblock")),

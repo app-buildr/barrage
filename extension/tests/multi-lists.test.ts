@@ -65,13 +65,13 @@ test("un compte couvert par une autre liste active reste dans la liste effective
   assert.deepEqual((await getState()).handles, ["a", "b"]);
 });
 
-test("un compte retiré de la collaborative n'est pas hors liste : il va être débloqué", async () => {
+test("un compte retiré qui attend un choix n'est pas hors liste, et rien ne le débloque", async () => {
   store.retired = ["c"];
   store.retiredAt = { c: 1 };
   putResults(store, { c: result("blocked") });
   const state = await getState();
   assert.deepEqual(offListHandles(state), []);
-  assert.deepEqual(unblockQueue(state), ["c"]);
+  assert.deepEqual(unblockQueue(state), []);
 });
 
 test("un compte déjà bloqué ou débloqué sort ou reste du tableau selon son résultat", async () => {
@@ -188,21 +188,50 @@ test("un compte hors liste débloqué à la main reste affiché jusqu'au débloc
 
 // Synchronisation d'une liste GitHub
 
-test("une liste GitHub qui retire des comptes les laisse bloqués, hors liste", async () => {
+test("une liste GitHub qui retire des comptes les laisse bloqués, en attente d'un choix", async () => {
   store.lists = [officialList(true), list("g", ["c", "d", "e"], { source: "github" })];
-  putResults(store, { c: result("blocked") });
-  assert.equal(await updateListHandles("g", ["d", "e"], 5), true);
+  putResults(store, { c: result("blocked"), d: result("already_blocked") });
+  assert.equal(await updateListHandles("g", ["e"], 5), true);
   const state = await getState();
   assert.deepEqual(unblockQueue(state), []);
-  assert.deepEqual(offListHandles(state), ["c"]);
+  // Seul un compte bloqué par Barrage attend : « d » était bloqué avant lui.
+  assert.deepEqual(state.retired, ["c"]);
+  assert.equal(state.retiredFrom.c, "g");
+  assert.deepEqual(offListHandles(state), ["d"]);
   assert.equal(state.lists[1]?.syncedAt, 5);
 });
 
-test("une liste GitHub qui retire trop de comptes d'un coup est mise de côté", async () => {
+test("une liste GitHub qui retire presque tout passe : aucun compte n'est débloqué sans accord", async () => {
   const handles = Array.from({ length: 20 }, (_, i) => `c${i}`);
   store.lists = [officialList(true), list("g", handles, { source: "github" })];
-  assert.equal(await updateListHandles("g", ["c0"], 5), false);
-  assert.deepEqual((await getState()).lists[1]?.handles, handles);
+  assert.equal(await updateListHandles("g", ["c0"], 5), true);
+  assert.deepEqual((await getState()).lists[1]?.handles, ["c0"]);
+});
+
+test("une liste GitHub qui ajoute trop de comptes d'un coup est mise de côté", async () => {
+  const handles = Array.from({ length: 20 }, (_, i) => `c${i}`);
+  store.lists = [officialList(true), list("g", ["c0"], { source: "github" })];
+  assert.equal(await updateListHandles("g", handles, 5), false);
+  assert.deepEqual((await getState()).lists[1]?.handles, ["c0"]);
+});
+
+test("désactiver une liste ne met rien en attente de choix", async () => {
+  store.lists = [officialList(true), list("g", ["c"], { source: "github" })];
+  putResults(store, { c: result("blocked") });
+  await setListActive("g", false);
+  const state = await getState();
+  assert.deepEqual(state.retired, []);
+  assert.deepEqual(offListHandles(state), ["c"]);
+});
+
+test("un compte retiré puis rajouté à la main n'attend plus de choix", async () => {
+  store.retired = ["c"];
+  store.retiredAt = { c: 1 };
+  store.retiredFrom = { c: "g" };
+  await addHandles(["c"]);
+  const state = await getState();
+  assert.deepEqual(state.retired, []);
+  assert.deepEqual(Object.keys(state.retiredFrom), []);
 });
 
 test("supprimer une liste oublie sa garde", async () => {

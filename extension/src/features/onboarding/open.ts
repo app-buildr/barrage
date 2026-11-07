@@ -1,5 +1,6 @@
 // Service worker : ouvre l'accueil ou les options. Il n'y a pas de popup.
 import { isOpenBadgesRequest } from "../../core/messages.ts";
+import { getState } from "../../core/state.ts";
 import type { Route } from "../../ui/layout/main-tab.ts";
 
 const PAGE = "options.html";
@@ -18,10 +19,13 @@ async function openPage(hash: Route): Promise<void> {
 }
 
 export function servePages(): void {
+  // Des comptes retirés des listes attendent un choix : l'onglet Comptes, où il
+  // se fait, plutôt que le dernier onglet ouvert. Voir action-badge.ts.
   chrome.action.onClicked.addListener(() => {
-    void chrome.storage.local.get({ onboarded: false }).then(({ onboarded }) => {
-      if (onboarded === true) void chrome.runtime.openOptionsPage();
-      else void openPage("accueil");
+    void getState().then(({ onboarded, retired }) => {
+      if (!onboarded) void openPage("accueil");
+      else if (retired.length) void openPage("comptes");
+      else void chrome.runtime.openOptionsPage();
     });
   });
   chrome.runtime.onMessage.addListener((message: unknown) => {

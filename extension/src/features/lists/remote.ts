@@ -1,12 +1,6 @@
 // Lecture de la liste collaborative reçue de GitHub et calcul de ce qui change.
 // Fonctions pures, testées dans tests/lists.test.ts.
-import {
-  LIST_BASELINE_MS,
-  LIST_GUARD_FLOOR,
-  LIST_MAX_ADDED_SHARE,
-  LIST_MAX_REMOVED_SHARE,
-  LIST_MAX_SIZE,
-} from "../../core/config.ts";
+import { LIST_BASELINE_MS, LIST_GUARD_FLOOR, LIST_MAX_ADDED_SHARE, LIST_MAX_SIZE } from "../../core/config.ts";
 import { parseEntries } from "./handles.ts";
 
 export type Parsed = { ok: true; handles: string[] } | { ok: false; reason: string };
@@ -26,32 +20,26 @@ export function parseList(body: unknown): Parsed {
 
 export type Update = { ok: true; removed: string[] } | { ok: false; reason: string };
 
-const withinLimit = (count: number, size: number, share: number): boolean =>
-  count <= Math.max(LIST_GUARD_FLOOR, size * share);
+const withinLimit = (count: number, size: number): boolean =>
+  count <= Math.max(LIST_GUARD_FLOOR, size * LIST_MAX_ADDED_SHARE);
 
 /** Raison de refuser `next` par rapport à la liste `reference`, ou null. */
-function overLimit(reference: readonly string[], next: readonly string[], kept: ReadonlySet<string>): string | null {
+function overLimit(reference: readonly string[], next: readonly string[]): string | null {
   const known = new Set(reference);
-  const removed = reference.filter((h) => !kept.has(h)).length;
   const added = next.filter((h) => !known.has(h)).length;
-  if (!withinLimit(removed, reference.length, LIST_MAX_REMOVED_SHARE)) {
-    return `${removed} comptes retirés d'un coup sur ${reference.length}`;
-  }
-  if (!withinLimit(added, reference.length, LIST_MAX_ADDED_SHARE)) {
-    return `${added} comptes ajoutés d'un coup à ${reference.length}`;
-  }
-  return null;
+  return withinLimit(added, reference.length) ? null : `${added} comptes ajoutés d'un coup à ${reference.length}`;
 }
 
 /**
  * Compare la liste en place à la nouvelle. `removed` : comptes qui en sortent,
  * sauf ceux encore couverts par une autre liste active (`covered`). Ceux que
- * Barrage a bloqués sont à débloquer, voir blockedByBarrage.
+ * Barrage a bloqués attendent le choix de l'utilisateur, voir State.retired :
+ * un retrait, même massif, ne débloque personne de lui-même et passe toujours.
  *
- * La nouvelle liste est refusée si elle s'écarte trop de toutes les références,
- * pas de la liste en place : un retour à la référence passe toujours, même
- * après un gros ajout, et des retraits enchaînés se cumulent. Une liste
- * identique à celle en place ne change rien et passe aussi.
+ * La nouvelle liste est refusée si elle ajoute trop de comptes par rapport à
+ * toutes les références, pas à la liste en place : un retour à la référence
+ * passe toujours, et des ajouts enchaînés se cumulent. Une liste identique à
+ * celle en place ne change rien et passe aussi.
  * @param references listes de confiance, voir guardReferences
  */
 export function compareLists(
@@ -63,8 +51,8 @@ export function compareLists(
   const kept = new Set([...next, ...covered]);
   const removed = current.filter((h) => !kept.has(h));
   const known = new Set(current);
-  if (!removed.length && next.every((h) => known.has(h))) return { ok: true, removed };
-  const refusals = references.map((reference) => overLimit(reference, next, kept));
+  if (next.every((h) => known.has(h))) return { ok: true, removed };
+  const refusals = references.map((reference) => overLimit(reference, next));
   if (refusals.includes(null)) return { ok: true, removed };
   return { ok: false, reason: refusals[0] ?? "liste refusée" };
 }

@@ -1,7 +1,7 @@
 // Carte « Listes de comptes » de Réglages : listes actives, désactivées, ajout.
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type RefObject } from "react";
 import { List, Pencil, Plus, Trash2 } from "lucide-react";
-import { LIST_NAME_MAX, RETIRE_GRACE_MS } from "@/core/config.ts";
+import { LIST_NAME_MAX } from "@/core/config.ts";
 import type { State } from "@/core/state.ts";
 import { useSafeWrite, type Attempt } from "@/ui/use-safe-write.ts";
 import { write } from "@/core/write.ts";
@@ -201,9 +201,8 @@ function PendingUpdate({ list, attempt, pending, current, onAccepted }: PendingP
           {confirming ? (
             <div role="group" aria-labelledby={question} className="mt-3 flex flex-wrap items-center gap-3">
               <span id={question}>
-                {list.id === OFFICIAL_ID
-                  ? `Les comptes ajoutés seront bloqués s'ils paraissent dans votre fil. Ceux que Barrage a bloqués parmi les retirés seront débloqués d'ici ${RETIRE_GRACE_MS / 3_600_000} h.`
-                  : "Les comptes ajoutés seront bloqués s'ils paraissent dans votre fil."}
+                Les comptes ajoutés seront bloqués s'ils paraissent dans votre fil. Pour ceux que Barrage a bloqués
+                parmi les retirés, vous choisirez dans l'onglet Comptes de les débloquer ou non.
               </span>
               <Button
                 variant="destructive"

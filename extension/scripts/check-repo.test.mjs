@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { LIST_GUARD_FLOOR, LIST_MAX_ADDED_SHARE, LIST_MAX_REMOVED_SHARE, LIST_MAX_SIZE } from "../src/core/config.ts";
+import { LIST_GUARD_FLOOR, LIST_MAX_ADDED_SHARE, LIST_MAX_SIZE } from "../src/core/config.ts";
 
 const SCRIPT = fileURLToPath(new URL("./check-repo.mjs", import.meta.url));
 const REPO = fileURLToPath(new URL("../..", import.meta.url));
@@ -122,15 +122,12 @@ test("refuse un fichier de liste sans réseau connu", () => {
   assertRefused(root, /sans réseau connu \(mastodon\.json\)/);
 });
 
-test("compare les retraits à la base avec le seuil de l'extension", () => {
+test("laisse passer un retrait massif : l'extension demande l'accord de chaque utilisateur", () => {
   const root = fixture();
-  const kept = Math.ceil(100 * (1 - LIST_MAX_REMOVED_SHARE));
-  writeList(root, "x", handles(kept));
-  const atLimit = check(root);
-  assert.equal(atLimit.status, 0, atLimit.output);
-  assert.match(atLimit.output, new RegExp(`${100 - kept} retirés, 0 ajoutés sur 100`));
-  writeList(root, "x", handles(kept - 1));
-  assertRefused(root, /x\.json : refusée par l'extension \(\d+ comptes retirés d'un coup sur 100\)/);
+  writeList(root, "x", handles(40));
+  const { status, output } = check(root);
+  assert.equal(status, 0, output);
+  assert.match(output, /60 retirés, 0 ajoutés sur 100/);
 });
 
 test("compare les ajouts à la base avec le seuil de l'extension", () => {
