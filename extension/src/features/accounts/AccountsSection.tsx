@@ -2,12 +2,13 @@
 // charge, affiche sa liste effective et le formulaire d'ajout ; les autres sont
 // grisés « Bientôt ».
 import type { State } from "@/core/state.ts";
+import type { XTabStatus } from "../blocking/x-tab.ts";
 import { ENGINE_NETWORK } from "../networks/networks.ts";
 import { NetworkTabs } from "../networks/NetworkTabs.tsx";
 import { AccountList } from "./AccountList.tsx";
 import { AddForm } from "./AddForm.tsx";
 
-export function AccountsSection({ state, working }: { state: State; working: boolean }) {
+export function AccountsSection({ state, connection }: { state: State; connection: XTabStatus | null }) {
   return (
     <section className="min-w-0">
       <h2 className="mb-4">Comptes</h2>
@@ -17,7 +18,7 @@ export function AccountsSection({ state, working }: { state: State; working: boo
         panel={(network) =>
           network.id === ENGINE_NETWORK ? (
             <>
-              <AccountList state={state} network={network} working={working} />
+              <AccountList state={state} network={network} connection={connection} />
               <AddForm />
             </>
           ) : null

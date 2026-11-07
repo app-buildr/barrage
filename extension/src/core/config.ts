@@ -134,6 +134,8 @@ export const HEALTH_PROBE_MS = 30_000;
  * téléchargement, seule la liste intégrée à l'extension sert.
  */
 export const LISTS_URL = `https://raw.githubusercontent.com/${REPO}/main/lists`;
+/** Liste collaborative de X, vide sans LISTS_URL. */
+export const OFFICIAL_LIST_URL = LISTS_URL && `${LISTS_URL}/x.json`;
 /** Intervalle entre deux téléchargements. */
 export const LISTS_REFRESH_MINUTES = 6 * 60;
 /** À l'ouverture des options, une vérification plus récente que ce délai n'est pas refaite. */

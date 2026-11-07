@@ -5,7 +5,7 @@ import { listDef, putResults, result } from "./helpers/fixtures.ts";
 import { getState, resultKey } from "../src/core/state.ts";
 import { offListHandles, queueOrder, unblockQueue } from "../src/features/blocking/queue.ts";
 import { accountLines, lineCounts } from "../src/features/accounts/lines.ts";
-import { listDetails } from "../src/features/lists/details.ts";
+import { listDetailSegments, listPageUrl } from "../src/features/lists/details.ts";
 import { analyzeList, checkListFile, describeReport, looksLikeProse, looksLikeTable, validateListUrl, BAD_HOST_MESSAGE, INVALID_WARNING, PROSE_WARNING, TABLE_MESSAGE } from "../src/features/lists/import.ts";
 import { OFFICIAL_NAME, cleanName, effectiveHandles, listName, officialList, readLists, uniqueName } from "../src/features/lists/lists.ts";
 import { migrate } from "../src/features/lists/migrate.ts";
@@ -316,11 +316,26 @@ test("accueil : « plus tard » ne laisse aucune liste active", async () => {
 
 test("les détails d'une liste suivent sa source", () => {
   const now = Date.UTC(2026, 10, 6, 12);
+  const listDetails = (...args: Parameters<typeof listDetailSegments>) =>
+    listDetailSegments(...args).map((s) => s.text).join(" · ");
   assert.equal(listDetails(officialList(true), 1426, now), "1\u202f426 comptes · GitHub");
   assert.equal(listDetails({ ...officialList(true), syncedAt: now - 2 * 3_600_000 }, 1426, now), "1\u202f426 comptes · GitHub · mise à jour il y a 2\u00a0h");
   assert.equal(listDetails(list("f", [], { addedAt: Date.UTC(2026, 10, 3, 12) }), 1, now), "1 compte · fichier importé le 3 nov.");
   assert.equal(listDetails(list("m", [], { source: "manual" }), 1, now), "1 compte · ajouté à la main");
   assert.equal(listDetails(list("m", [], { source: "manual" }), 2, now), "2 comptes · ajoutés à la main");
+});
+
+test("« GitHub » mène à la page de la liste, pas à son contenu brut", () => {
+  assert.equal(listPageUrl(officialList(true)), "https://github.com/app-buildr/barrage/blob/main/lists/x.json");
+  const segments = listDetailSegments(officialList(true), 1426, Date.UTC(2026, 10, 6, 12));
+  assert.deepEqual(segments[1], { text: "GitHub", href: "https://github.com/app-buildr/barrage/blob/main/lists/x.json" });
+  assert.equal(segments[0]?.href, undefined);
+  const github = (url: string) => listPageUrl(list("g", [], { source: "github", url }));
+  assert.equal(github("https://raw.githubusercontent.com/a/b/main/dir/x.txt"), "https://github.com/a/b/blob/main/dir/x.txt");
+  assert.equal(github("https://raw.githubusercontent.com/a/b/refs/heads/dev/x.txt"), "https://github.com/a/b/blob/dev/x.txt");
+  assert.equal(github("https://gist.githubusercontent.com/a/123abc/raw/x.txt"), "https://gist.github.com/a/123abc");
+  assert.equal(github("pas une adresse"), null);
+  assert.equal(listPageUrl(list("m", [], { source: "manual" })), null);
 });
 
 // Migration

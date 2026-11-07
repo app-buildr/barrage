@@ -24,7 +24,7 @@ export function ConnectionBadge({ status }: { status: XTabStatus | null }) {
         </Badge>
       ) : (
         <Badge
-          variant="coral"
+          variant="connected"
           className={cn(PILL, status === null && "invisible")}
           title={status ? "Un onglet x.com connecté est ouvert : Barrage peut bloquer." : undefined}
         >

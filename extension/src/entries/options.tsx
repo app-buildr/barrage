@@ -46,7 +46,7 @@ function Options({ state, tab, fromWelcome }: { state: State; tab: MainTab; from
   }, [tab]);
 
   const panels: Record<MainTab, ReactNode> = {
-    comptes: <AccountsSection state={state} working={connection === "connected"} />,
+    comptes: <AccountsSection state={state} connection={connection} />,
     badges: <BadgesTab state={state} />,
     reglages: (
       <>

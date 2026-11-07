@@ -3,7 +3,7 @@
 // est relevé en même temps se décident dans entries/background.ts.
 // Une liste qui s'écarte trop de sa référence attend une confirmation dans les
 // options, voir compareLists.
-import { LIST_MAX_BYTES, LISTS_RECHECK_MS, LISTS_REFRESH_MINUTES, LISTS_URL } from "../../core/config.ts";
+import { LIST_MAX_BYTES, LISTS_RECHECK_MS, LISTS_REFRESH_MINUTES, OFFICIAL_LIST_URL } from "../../core/config.ts";
 import {
   fromOptions,
   isImportListRequest,
@@ -40,8 +40,8 @@ async function fetchListText(url: string): Promise<string> {
 }
 
 async function refreshOfficial(): Promise<void> {
-  if (!LISTS_URL) return;
-  const url = `${LISTS_URL}/x.json`;
+  if (!OFFICIAL_LIST_URL) return;
+  const url = OFFICIAL_LIST_URL;
   let body: unknown;
   try {
     body = JSON.parse(await fetchListText(url));

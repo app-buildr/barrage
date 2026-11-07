@@ -19,6 +19,7 @@ const badgeVariants = cva(
         link: "text-primary underline-offset-4 [a&]:hover:underline",
         coral: "bg-coral-soft px-2.5 py-0.5 text-sm font-bold text-coral-deep",
         sun: "bg-sun-soft px-2.5 py-0.5 text-sm font-bold text-sun-soft-ink",
+        connected: "bg-connected-soft px-2.5 py-0.5 text-sm font-bold text-connected-ink",
       },
     },
     defaultVariants: {

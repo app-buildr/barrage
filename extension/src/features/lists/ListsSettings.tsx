@@ -9,10 +9,11 @@ import { OVERLINE } from "@/ui/classes.ts";
 import { Badge } from "@/ui/components/badge.tsx";
 import { Button } from "@/ui/components/button.tsx";
 import { Switch } from "@/ui/components/switch.tsx";
+import { Tooltip } from "@/ui/components/tooltip.tsx";
 import { Panel, PillInput, StatusMessage } from "@/ui/layout/Section.tsx";
 import { cn } from "@/ui/lib/utils.ts";
 import type { NetworkId } from "../networks/networks.ts";
-import { listDetails } from "./details.ts";
+import { listDetailSegments } from "./details.ts";
 import { LIST_FILE_EXTENSIONS_TEXT, LIST_HOSTS_TEXT } from "./import.ts";
 import { plural } from "@/core/format.ts";
 import { AutoUpdateNotice, FilePicker, FormatHint, ListPreview, ListUrlForm, NetworkChips } from "./ListFields.tsx";
@@ -21,6 +22,34 @@ import type { PendingList } from "./remote.ts";
 import { useListAnalysis, type Analysis } from "./use-list-analysis.ts";
 
 type ListProps = { list: ListDef; attempt: Attempt };
+
+/** « 1 426 comptes · GitHub · mise à jour… » : « GitHub » mène à la liste en ligne. */
+function ListDetails({ list, name, count, now }: { list: ListDef; name: string; count: number; now: number }) {
+  return (
+    <p className="m-0 text-body text-muted-foreground">
+      {listDetailSegments(list, count, now).map(({ text, href }, i) => (
+        <span key={text}>
+          {i > 0 ? " · " : null}
+          {href ? (
+            <Tooltip label="Voir la liste">
+              <a
+                href={href}
+                target="_blank"
+                rel="noopener"
+                aria-label={`Voir la liste ${name} sur GitHub`}
+                className="rounded-sm underline decoration-line-strong underline-offset-2 hover:text-ink hover:decoration-current"
+              >
+                {text}
+              </a>
+            </Tooltip>
+          ) : (
+            text
+          )}
+        </span>
+      ))}
+    </p>
+  );
+}
 
 function ListName({ list, attempt }: ListProps) {
   const [editing, setEditing] = useState(false);
@@ -254,7 +283,7 @@ function ListCard({ list, attempt, count, now, pending, current, refocus, onRemo
         </span>
         <div className="min-w-0 flex-1">
           <ListName list={list} attempt={attempt} />
-          <p className="m-0 text-body text-muted-foreground">{listDetails(list, count, now)}</p>
+          <ListDetails list={list} name={name} count={count} now={now} />
         </div>
         <label className="flex flex-none cursor-pointer items-center gap-3 text-body font-bold text-muted-foreground">
           {list.active ? <span className="text-ink">Active</span> : "Désactivée"}
@@ -412,8 +441,7 @@ export function ListsSettings({ state }: { state: State }) {
         </div>
         <p className="m-0 text-body text-muted-foreground">
           Barrage bloque les comptes de toutes les listes actives. Choisissez pour chacune les réseaux sur lesquels elle
-          s'applique. Une liste active se désactive, elle ne se supprime pas. Désactiver ou supprimer une liste ne
-          débloque pas les comptes déjà bloqués.
+          s'applique. Désactiver ou supprimer une liste ne débloque pas les comptes déjà bloqués.
         </p>
         <Group title="Actives" lists={state.lists.filter((l) => l.active)} state={state} attempt={attempt} {...focus} />
         <Group title="Désactivées" lists={state.lists.filter((l) => !l.active)} state={state} attempt={attempt} {...focus} />

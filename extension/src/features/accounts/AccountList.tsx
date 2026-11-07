@@ -12,11 +12,13 @@ import { Panel, StatusMessage } from "@/ui/layout/Section.tsx";
 import { cn } from "@/ui/lib/utils.ts";
 import { useSafeWrite } from "@/ui/use-safe-write.ts";
 import { coversNetwork } from "../lists/lists.ts";
+import type { XTabStatus } from "../blocking/x-tab.ts";
 import type { Network } from "../networks/networks.ts";
 import { AccountRow } from "./AccountRow.tsx";
 import { AccountTable } from "./AccountTable.tsx";
 import { matches, moreLabel, noMatchMessage, normalizeQuery, shownCount } from "./filter.ts";
 import { ProgressCard } from "./ProgressCard.tsx";
+import { syncStatus } from "./sync-status.ts";
 import { SearchInput } from "./SearchInput.tsx";
 import { StatusChips } from "./StatusChips.tsx";
 import { accountLines, lineCounts } from "./lines.ts";
@@ -26,11 +28,13 @@ import { Tip } from "./Tip.tsx";
 type Props = {
   state: State;
   network: Network;
-  /** Un onglet x.com connecté peut traiter la file. */
-  working: boolean;
+  /** Onglets x.com, null le temps de la première vérification. */
+  connection: XTabStatus | null;
 };
 
-export function AccountList({ state, network, working }: Props) {
+export function AccountList({ state, network, connection }: Props) {
+  /** Un onglet x.com connecté peut traiter la file. */
+  const working = connection === "connected";
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<Category | null>(null);
   // Le champ suit la frappe ; le tableau suit dès que possible.
@@ -46,6 +50,7 @@ export function AccountList({ state, network, working }: Props) {
 
   const lines = useMemo(() => accountLines(state, working), [state, working]);
   const counts = useMemo(() => lineCounts(lines), [lines]);
+  const sync = useMemo(() => syncStatus(state, connection === null ? null : working, Date.now()), [state, connection, working]);
   const noActiveList = !state.lists.some((list) => coversNetwork(list, network.id));
   const shown = useMemo(() => lines.filter((line) => matches(line, query, category)), [lines, query, category]);
   const handle = state.account ? state.accounts[state.account]?.handle : undefined;
@@ -74,7 +79,7 @@ export function AccountList({ state, network, working }: Props) {
           pour commencer à bloquer.
         </Panel>
       ) : (
-        <ProgressCard counts={counts.listed} handle={handle} />
+        <ProgressCard counts={counts.listed} handle={handle} sync={sync} />
       )}
       {lines.length ? (
         <>

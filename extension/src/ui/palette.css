@@ -28,6 +28,10 @@
   /* Coche des badges obtenus */
   --color-obtained: #1F9D63;
 
+  /* Pastille « x.com connecté » : 5,3:1 du texte sur le fond */
+  --color-connected-soft: #E2F4EA;
+  --color-connected-ink: #16704A;
+
   /* Neutres chauds */
   --color-ink: #2A1A14;
   --color-muted-ink: #6B5A50;
