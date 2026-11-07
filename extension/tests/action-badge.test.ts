@@ -63,6 +63,38 @@ test("des comptes retirés qui attendent un choix passent avant tout, en rouge",
   store.seen = ["a"];
   store.latestVersion = "99.0.0";
   store.retired = ["x1", "x2"];
+  store["result:x1"] = { state: "blocked", at: 1 };
   await refreshBadge();
-  assert.deepEqual(shown, { color: "#D7261E", text: "2", title: `${TITLE} (2 comptes retirés des listes, à vérifier)` });
+  assert.deepEqual(shown, { color: "#D7261E", text: "2", title: `${TITLE} (mise à jour des listes : 2 comptes retirés, à vérifier)` });
+});
+
+test("un compte bloqué par l'utilisateur avant Barrage ne compte pas dans la pastille", async () => {
+  store.retired = ["moi", "x1"];
+  store["result:moi"] = { state: "already_blocked", at: 1 };
+  await refreshBadge();
+  assert.equal(shown.text, "1");
+});
+
+test("retraits et ajouts s'additionnent sur la pastille, rouge tant qu'un retrait attend", async () => {
+  store.retired = ["x1"];
+  store["result:x1"] = { state: "blocked", at: 1 };
+  store.added = ["n1", "n2"];
+  await refreshBadge();
+  assert.deepEqual({ text: shown.text, color: shown.color }, { text: "3", color: "#D7261E" });
+});
+
+test("des retraits sans aucun compte à débloquer donnent une pastille verte", async () => {
+  store.retired = ["jamais_bloque"];
+  store.added = ["n1"];
+  await refreshBadge();
+  assert.deepEqual(shown, { color: "#16704A", text: "2", title: `${TITLE} (mise à jour des listes : 1 compte retiré, 1 ajouté)` });
+});
+
+test("des ajouts seuls donnent une pastille verte, après une mise à jour de l'extension", async () => {
+  store.added = ["n1", "n2"];
+  await refreshBadge();
+  assert.deepEqual(shown, { color: "#16704A", text: "2", title: `${TITLE} (mise à jour des listes : 2 comptes ajoutés)` });
+  store.latestVersion = "99.0.0";
+  await refreshBadge();
+  assert.equal(shown.text, "!");
 });

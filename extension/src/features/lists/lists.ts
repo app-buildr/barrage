@@ -7,7 +7,7 @@ export const OFFICIAL_ID = "official";
 export const MANUAL_ID = "manual";
 /** Résolu à l'affichage, voir listName : celui stocké reste figé, la liste n'étant pas renommable. */
 export const OFFICIAL_NAME = "Liste collaborative Barrage";
-const MANUAL_NAME = "Ma liste perso";
+export const MANUAL_NAME = "Ma liste perso";
 export const IMPORTED_NAME = "Nouvelle liste perso";
 
 const SOURCES = ["official", "manual", "github", "file"] as const;

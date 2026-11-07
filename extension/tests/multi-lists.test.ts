@@ -194,7 +194,7 @@ test("une liste GitHub qui retire des comptes les laisse bloqués, en attente d'
   assert.equal(await updateListHandles("g", ["e"], 5), true);
   const state = await getState();
   assert.deepEqual(unblockQueue(state), []);
-  // Seul un compte bloqué par Barrage attend : « d » était bloqué avant lui.
+  // « d » était bloqué par l'utilisateur avant Barrage : il n'est pas présenté.
   assert.deepEqual(state.retired, ["c"]);
   assert.equal(state.retiredFrom.c, "g");
   assert.deepEqual(offListHandles(state), ["d"]);

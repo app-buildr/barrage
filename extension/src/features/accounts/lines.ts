@@ -7,17 +7,30 @@ import { countCategories, describe, describeDisabled, type Category, type Counts
 
 export type Line = { handle: string; enabled: boolean; status: Status; category: Category; offList: boolean };
 
-/** @param working un onglet x.com connecté peut traiter la file */
-export function accountLines(state: State, working = true): Line[] {
+/**
+ * État affiché d'un compte, le même partout dans les options : interrupteur,
+ * file de blocage ou de déblocage, pause.
+ * @param working un onglet x.com connecté peut traiter la file
+ */
+export function statusOf(state: State, working = true): (handle: string) => { enabled: boolean; status: Status } {
   const queued = new Set(state.seen);
   const disabled = new Set(state.disabled);
   const unblocking = new Set(unblockQueue(state));
   const now = Date.now();
   const paused = !working || state.pauseUntil > now || halted(state.error, now) || actionsCapped(state.actions, now);
-  const line = (handle: string, offList: boolean): Line => {
+  return (handle) => {
     const result = resultOf(state.results, handle);
     const enabled = !disabled.has(handle);
     const status = enabled ? describe(result, queued.has(handle), paused) : describeDisabled(result, unblocking.has(handle));
+    return { enabled, status };
+  };
+}
+
+/** @param working un onglet x.com connecté peut traiter la file */
+export function accountLines(state: State, working = true): Line[] {
+  const of = statusOf(state, working);
+  const line = (handle: string, offList: boolean): Line => {
+    const { enabled, status } = of(handle);
     return { handle, enabled, status, category: status.category, offList };
   };
   return [

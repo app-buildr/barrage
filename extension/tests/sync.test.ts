@@ -6,7 +6,7 @@ import { QUEUE_KEYS, accountStates, getState, onStateChange } from "../src/core/
 import { unblockQueue } from "../src/features/blocking/queue.ts";
 import { BAD_HOST_MESSAGE, DOWNLOAD_ERROR, INVALID_WARNING, TABLE_MESSAGE } from "../src/features/lists/import.ts";
 import { officialList, type ListDef } from "../src/features/lists/lists.ts";
-import { acceptPendingList, removeList, replaceOfficial, resolveRetired } from "../src/features/lists/store.ts";
+import { acceptPendingList, removeList, replaceOfficial, resolveListUpdate } from "../src/features/lists/store.ts";
 import { refreshLists, syncLists } from "../src/features/lists/sync.ts";
 import { checkLatestVersion } from "../src/features/updates/check.ts";
 import { installChrome } from "./helpers/chrome.ts";
@@ -71,7 +71,7 @@ test("le choix débloque les comptes cochés, garde les autres bloqués hors lis
   putResults(store, { a: result("blocked"), b: result("blocked") });
   responses["/x.json"] = json(["c", "d"]);
   await refreshLists();
-  await resolveRetired(["a"], ["b"]);
+  await resolveListUpdate(null, ["a"], ["b"], [], []);
   const state = await getState();
   assert.deepEqual(state.retired, []);
   assert.deepEqual(Object.keys(state.retiredAt), []);
@@ -79,19 +79,141 @@ test("le choix débloque les comptes cochés, garde les autres bloqués hors lis
   assert.deepEqual(state.unblock, ["a"]);
 });
 
+test("un compte pas encore bloqué que l'utilisateur garde rejoint « Ma liste perso », vérifié auprès de X", async () => {
+  responses["/x.json"] = json(["c", "d"]);
+  await refreshLists();
+  assert.deepEqual((await getState()).retired, ["a", "b"]);
+  await resolveListUpdate(null, [], ["b"], ["a"], []);
+  const state = await getState();
+  assert.deepEqual(state.retired, []);
+  assert.ok(state.handles.includes("a"));
+  assert.ok(!state.handles.includes("b"));
+  assert.ok(state.audit.includes("a"));
+  assert.deepEqual(state.unblock, []);
+});
+
+test("une mise à jour présente aussi les comptes ajoutés, jusqu'à la validation", async () => {
+  putResults(store, { a: result("blocked") });
+  responses["/x.json"] = json(["b", "c", "d", "e", "f"]);
+  await refreshLists();
+  let state = await getState();
+  assert.deepEqual(state.retired, ["a"]);
+  assert.deepEqual(state.added, ["e", "f"]);
+  assert.equal(state.addedFrom.e, "official");
+  // Un compte ajouté puis retiré avant la validation n'est présenté qu'en retrait.
+  responses["/x.json"] = json(["b", "c", "d", "f"]);
+  await refreshLists();
+  state = await getState();
+  assert.deepEqual(state.added, ["f"]);
+  assert.deepEqual(state.retired, ["a", "e"]);
+  await resolveListUpdate(null, [], ["a", "e"], [], ["f"]);
+  state = await getState();
+  assert.deepEqual(state.retired, []);
+  assert.deepEqual(state.added, []);
+});
+
+test("sans retrait, « J'ai compris » ne retire que les ajouts vus", async () => {
+  responses["/x.json"] = json(["a", "b", "c", "d", "e", "f"]);
+  await refreshLists();
+  await resolveListUpdate(null, [], [], [], ["e"]);
+  assert.deepEqual((await getState()).added, ["f"]);
+});
+
+test("la validation vise le compte X dont la carte était affichée", async () => {
+  store.account = "222";
+  store.legacy = "111";
+  store.accounts = { "111": {}, "222": {} };
+  store.retired = ["a"];
+  store["acct:222/retired"] = ["a"];
+  putResults(store, { a: result("blocked") });
+  putResults(store, { a: result("blocked") }, "acct:222/");
+  await resolveListUpdate("111", ["a"], [], [], []);
+  assert.deepEqual((await getState("111")).unblock, ["a"]);
+  assert.deepEqual((await getState("222")).retired, ["a"]);
+  assert.deepEqual((await getState("222")).unblock, []);
+});
+
+test("un compte que l'utilisateur bloquait avant Barrage n'est jamais débloqué par la validation", async () => {
+  store.retired = ["moi", "a"];
+  putResults(store, { moi: result("already_blocked"), a: result("blocked") });
+  await resolveListUpdate(null, ["moi", "a"], [], [], []);
+  const state = await getState();
+  assert.deepEqual(state.unblock, ["a"]);
+  // Masqué dans la carte, il la quitte avec la validation : il reste visible hors liste.
+  assert.deepEqual(state.retired, []);
+});
+
+test("garder un compte dans une « Ma liste perso » désactivée est refusé, sans rien changer", async () => {
+  store.lists = [officialList(true), { ...listDef("manual", ["perso"]), active: false }];
+  store.retired = ["c"];
+  await assert.rejects(resolveListUpdate(null, [], [], ["c"], []), /ne couvre pas X/);
+  assert.deepEqual((await getState()).retired, ["c"]);
+});
+
+test("garder un compte l'ajoute à « Ma liste perso » en une seule écriture, et le fait vérifier", async () => {
+  store.retired = ["z"];
+  let writes = 0;
+  const set = chrome.storage.local.set.bind(chrome.storage.local);
+  chrome.storage.local.set = (async (values: Record<string, unknown>) => {
+    writes++;
+    return set(values);
+  }) as typeof chrome.storage.local.set;
+  await resolveListUpdate(null, [], [], ["z"], []);
+  chrome.storage.local.set = set;
+  const state = await getState();
+  assert.equal(writes, 1);
+  assert.deepEqual(state.retired, []);
+  assert.ok(state.handles.includes("z"));
+  assert.ok(state.audit.includes("z"));
+});
+
+test("garder un compte désactivé le réactive : bloqué il n'est plus débloqué, suivi il sera vérifié", async () => {
+  store.retired = ["a", "z"];
+  store.disabled = ["a", "z", "autre"];
+  putResults(store, { a: result("blocked") });
+  assert.deepEqual(unblockQueue(await getState()), ["a"]);
+  await resolveListUpdate(null, [], ["a"], ["z"], []);
+  const state = await getState();
+  assert.deepEqual(state.disabled, ["autre"]);
+  assert.deepEqual(unblockQueue(state), []);
+  assert.ok(state.audit.includes("z"));
+});
+
+test("un compte laissé tel quel reste désactivé", async () => {
+  store.retired = ["c"];
+  store.disabled = ["c"];
+  await resolveListUpdate(null, [], ["c"], [], []);
+  assert.deepEqual((await getState()).disabled, ["c"]);
+});
+
+test("un choix incohérent est refusé, sans rien changer", async () => {
+  store.retired = ["a", "c"];
+  putResults(store, { a: result("blocked") });
+  await assert.rejects(resolveListUpdate(null, ["a"], [], ["a"], []), /un seul choix/);
+  await assert.rejects(resolveListUpdate(null, [], [], ["a"], []), /se garde bloqué/);
+  const state = await getState();
+  assert.deepEqual(state.retired, ["a", "c"]);
+  assert.deepEqual(state.unblock, []);
+});
+
 test("un compte retiré pendant le choix reste en attente", async () => {
   store.retired = ["a", "b"];
   store.retiredAt = { a: 1, b: 2 };
   store.retiredFrom = { b: "g" };
   putResults(store, { a: result("blocked"), b: result("blocked") });
-  await resolveRetired([], ["a"]);
+  await resolveListUpdate(null, [], ["a"], [], []);
   const state = await getState();
   assert.deepEqual(state.retired, ["b"]);
   assert.equal(state.retiredAt.b, 2);
   assert.equal(state.retiredFrom.b, "g");
   assert.deepEqual(unblockQueue(state), []);
   // Un compte inconnu de la file d'attente n'est pas débloqué par ce biais.
-  await resolveRetired(["z"], []);
+  await resolveListUpdate(null, ["z"], [], [], []);
+  assert.deepEqual((await getState()).unblock, []);
+  // Un compte retiré qui n'est plus bloqué sort de la carte sans requête à X.
+  store.retired = ["b", "v"];
+  await resolveListUpdate(null, ["v"], [], [], []);
+  assert.deepEqual((await getState()).retired, ["b"]);
   assert.deepEqual((await getState()).unblock, []);
 });
 
@@ -107,13 +229,14 @@ test("une liste corrigée avant le choix ne laisse rien en attente", async () =>
 });
 
 test("un compte retiré avant la 1.4.0 garde sa date, et sa liste d'origine est la collaborative", async () => {
+  // « d », jamais bloqué, est retiré à son tour : il est présenté aussi.
   store.retired = ["z"];
   store.retiredAt = { z: 5 };
   putResults(store, { z: result("blocked") });
   responses["/x.json"] = json(["a", "b", "c"]);
   await refreshLists();
   const state = await getState();
-  assert.deepEqual(state.retired, ["z"]);
+  assert.deepEqual(state.retired, ["z", "d"]);
   assert.equal(state.retiredAt.z, 5);
   assert.equal(state.retiredFrom.z, undefined);
 });
@@ -168,11 +291,11 @@ test("une liste acceptée dans les options s'applique, et ses retraits attendent
   // La même liste, téléchargée de nouveau, ne revient pas en attente.
   await refreshLists();
   assert.equal((await getState()).listGuards.official?.pending, undefined);
-  // Le retour arrière passe, et le compte remis n'attend plus de choix.
+  // Le retour arrière passe : le compte remis n'est plus présenté, les 60 ajouts retirés le sont.
   responses["/x.json"] = json(base);
   await refreshLists();
   assert.deepEqual((await getState()).remote, base);
-  assert.deepEqual((await getState()).retired, []);
+  assert.deepEqual((await getState()).retired, accounts(60, 100));
 });
 
 test("une liste corrigée en ligne fait disparaître la mise à jour en attente", async () => {

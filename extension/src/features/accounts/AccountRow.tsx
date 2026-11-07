@@ -16,7 +16,7 @@ import { CELL } from "./AccountTable.tsx";
 import { ProfileLink } from "./ProfileLink.tsx";
 import type { Status } from "./status.ts";
 
-function StatusLabel({ status }: { status: Status }) {
+export function StatusLabel({ status }: { status: Status }) {
   if (!status.tag) return <>{status.label}</>;
   return (
     <>

@@ -22,7 +22,7 @@ import { serveWrites } from "../src/core/writer.ts";
 import { WRITES } from "../src/features/writes.ts";
 import { resumeBlocking } from "../src/features/blocking/store.ts";
 import { officialList } from "../src/features/lists/lists.ts";
-import { resolveRetired } from "../src/features/lists/store.ts";
+import { resolveListUpdate } from "../src/features/lists/store.ts";
 import { installChrome, X_TAB } from "./helpers/chrome.ts";
 import { putResults, result } from "./helpers/fixtures.ts";
 import { apiError, BLOCK, installX, LOOKUP, lookupReply, UNBLOCK, type FakeX } from "./helpers/x.ts";
@@ -543,7 +543,7 @@ test("un compte retiré n'est débloqué que sur le choix de l'utilisateur", asy
   await openTab();
   await advance(7 * 24 * 3600_000, 6 * 3600_000);
   assert.equal(x.requests.length, 0);
-  await resolveRetired(["z"], []);
+  await resolveListUpdate(null, ["z"], [], [], []);
   await advance(STATE_COALESCE_MS);
   await openTab();
   assert.deepEqual(x.posts(UNBLOCK), ["z"]);

@@ -88,16 +88,25 @@ export type SharedState = {
  */
 export type AccountState = {
   /**
-   * Comptes retirés d'une liste mise à jour (collaborative ou GitHub) alors que
-   * Barrage les avait bloqués. Ils restent bloqués jusqu'au choix de
-   * l'utilisateur dans les options : débloquer, ou garder bloqué. Barrage ne les
-   * débloque jamais de lui-même, voir resolveRetired.
+   * Comptes retirés d'une liste mise à jour (collaborative ou GitHub), présentés
+   * dans les options jusqu'à la validation de l'utilisateur, hors ceux qu'il
+   * bloquait avant Barrage. Ceux que Barrage a bloqués le restent jusqu'à son
+   * choix : il ne les débloque jamais de lui-même, voir resolveListUpdate.
    */
   retired: string[];
   /** Date de retrait de ces comptes, en millisecondes. */
   retiredAt: Record<string, number>;
   /** Liste d'où chaque compte a été retiré, par identifiant. Absente : la collaborative, seule concernée avant la 1.4.0. */
   retiredFrom: Record<string, string>;
+  /**
+   * Comptes ajoutés par une mise à jour de liste (collaborative ou GitHub),
+   * présentés à titre d'information avec les retraits, jusqu'à la même validation.
+   */
+  added: string[];
+  /** Date d'ajout de ces comptes, en millisecondes. */
+  addedAt: Record<string, number>;
+  /** Liste où chaque compte a été ajouté, par identifiant. */
+  addedFrom: Record<string, string>;
   /**
    * Déblocages demandés à la main, y compris pour un compte bloqué avant
    * Barrage. Les comptes désactivés que Barrage a bloqués s'y ajoutent d'eux-mêmes,
@@ -292,6 +301,8 @@ export function readState(stored: Record<string, unknown>, account?: string | nu
   const error = own("error");
   const retiredAt = own("retiredAt");
   const retiredFrom = own("retiredFrom");
+  const addedAt = own("addedAt");
+  const addedFrom = own("addedFrom");
   const lookupPauseUntil = own("lookupPauseUntil");
   return {
     account: current,
@@ -305,6 +316,9 @@ export function readState(stored: Record<string, unknown>, account?: string | nu
     retired: stringArray(own("retired")),
     retiredAt: isRecord(retiredAt) ? Object.assign(Object.create(null), retiredAt) : Object.create(null),
     retiredFrom: isRecord(retiredFrom) ? Object.assign(Object.create(null), retiredFrom) : Object.create(null),
+    added: stringArray(own("added")),
+    addedAt: isRecord(addedAt) ? Object.assign(Object.create(null), addedAt) : Object.create(null),
+    addedFrom: isRecord(addedFrom) ? Object.assign(Object.create(null), addedFrom) : Object.create(null),
     listGuards: readGuards(stored.listGuards),
     disabled: stringArray(stored.disabled),
     unblock: stringArray(own("unblock")),

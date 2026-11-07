@@ -24,3 +24,11 @@ export function plural(count: number, one: string, many = `${one}s`): string {
 export function percent(part: number, total: number): number {
   return total > 0 ? Math.min(100, (part / total) * 100) : 0;
 }
+
+/** « 574 comptes retirés, 12 ajoutés », « 3 comptes ajoutés ». */
+export function diffSummary(removed: number, added: number): string {
+  const parts: string[] = [];
+  if (removed) parts.push(plural(removed, "compte retiré", "comptes retirés"));
+  if (added) parts.push(removed ? plural(added, "ajouté") : plural(added, "compte ajouté", "comptes ajoutés"));
+  return parts.join(", ");
+}

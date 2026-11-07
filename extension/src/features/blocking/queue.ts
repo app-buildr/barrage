@@ -139,6 +139,14 @@ export function blockedByBarrage(handles: readonly string[], results: Results): 
 }
 
 /**
+ * Compte que l'utilisateur bloquait avant Barrage : son choix à lui. Une mise
+ * à jour des listes ne le présente pas, et Barrage ne le débloque jamais.
+ */
+export function blockedBeforeBarrage(results: Results, handle: string): boolean {
+  return resultOf(results, handle)?.state === "already_blocked";
+}
+
+/**
  * Comptes passés à « bloqué par Barrage » entre deux versions des résultats.
  * Un compte déjà bloqué avant Barrage n'en fait pas partie, ni un compte déjà
  * bloqué attribué ensuite à Barrage (voir repairInheritedBlocks).
@@ -170,7 +178,7 @@ export function queueOrder(state: State): string[] {
  * Barrage a bloqué. Calculée plutôt que stockée, la file ne peut pas manquer un
  * blocage qui aboutit juste après le passage sur Off. Un déblocage refusé par X
  * n'est relancé que par une nouvelle demande. Un compte retiré d'une liste n'y
- * entre que si l'utilisateur choisit de le débloquer, voir resolveRetired.
+ * entre que si l'utilisateur choisit de le débloquer, voir resolveListUpdate.
  */
 export function unblockQueue(state: State): string[] {
   const disabled = new Set(state.disabled);
@@ -186,14 +194,35 @@ export function unblockQueue(state: State): string[] {
 
 /**
  * Comptes bloqués sortis de la liste effective (liste désactivée, supprimée ou
- * mise à jour) : ils restent bloqués et déblocables. Ceux qui attendent le
- * choix de l'utilisateur après une mise à jour n'en sont pas : ils sont
- * présentés à part, voir State.retired.
+ * mise à jour) : ils restent bloqués et déblocables. Ceux que la carte de mise
+ * à jour présente n'en sont pas, voir listUpdate ; un compte retiré qu'elle ne
+ * présente pas (bloqué par l'utilisateur avant Barrage) reste visible ici.
  */
 export function offListHandles(state: State): string[] {
   const listed = new Set(state.handles);
-  const retired = new Set(state.retired);
+  const presented = new Set(listUpdate(state).retired);
   return Object.keys(state.results).filter(
-    (h) => !listed.has(h) && !retired.has(h) && isBlocked(resultOf(state.results, h)),
+    (h) => !listed.has(h) && !presented.has(h) && isBlocked(resultOf(state.results, h)),
   );
+}
+
+/**
+ * Mise à jour des listes présentée à l'utilisateur, voir State.retired et
+ * State.added. `retired` : tous les comptes retirés, sauf ceux qu'il bloquait
+ * avant Barrage, son choix à lui. `actionable` : ceux d'entre eux que Barrage
+ * a bloqués, seuls à attendre une décision.
+ */
+export function listUpdate({ retired, added, results }: Pick<State, "retired" | "added" | "results">): {
+  retired: string[];
+  actionable: string[];
+  added: readonly string[];
+} {
+  const shown = retired.filter((h) => !blockedBeforeBarrage(results, h));
+  return { retired: shown, actionable: blockedByBarrage(shown, results), added };
+}
+
+/** Une mise à jour des listes attend d'être vue : carte, pastille, clic sur l'icône. */
+export function hasListUpdate(state: Pick<State, "retired" | "added" | "results">): boolean {
+  const { retired, added } = listUpdate(state);
+  return retired.length > 0 || added.length > 0;
 }
