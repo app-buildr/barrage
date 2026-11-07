@@ -1,7 +1,7 @@
 // Analyse d'une liste à importer, sans rien enregistrer : adresse GitHub
 // téléchargée par le service worker, ou fichier lu dans la page d'options.
 import { useRef, useState } from "react";
-import { IMPORT_LIST, type ImportListReply } from "@/core/messages.ts";
+import { IMPORT_LIST, type ImportListReply, type Message } from "@/core/messages.ts";
 import type { StatusKind } from "@/ui/layout/Section.tsx";
 import {
   DOWNLOAD_ERROR,
@@ -51,7 +51,7 @@ export function useListAnalysis() {
     return run(async () => {
       const checked = validateListUrl(raw);
       if (!checked.ok) return { outcome: refused(checked.reason), analysis: null };
-      const reply = (await chrome.runtime.sendMessage({ type: IMPORT_LIST, url: checked.url })) as ImportListReply;
+      const reply = (await chrome.runtime.sendMessage({ type: IMPORT_LIST, url: checked.url } satisfies Message)) as ImportListReply;
       return {
         outcome: readReport(reply),
         analysis: reply.ok ? { source: "github", url: reply.url, handles: reply.handles, ...warningOf(reply) } : null,

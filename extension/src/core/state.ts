@@ -318,10 +318,22 @@ export function readState(stored: Record<string, unknown>, account?: string | nu
     pauseUntil: typeof pauseUntil === "number" ? pauseUntil : 0,
     strikes: typeof strikes === "number" ? strikes : 0,
     failures: stringArray(own("failures")),
-    error: isRecord(error) ? (error as BlockingError) : null,
+    error: readError(error),
     audit: stringArray(own("audit")),
     latestVersion: typeof stored.latestVersion === "string" ? stored.latestVersion : null,
   };
+}
+
+/**
+ * Erreur stockée. Illisible, elle n'est ni oubliée, ce qui relancerait des
+ * requêtes à X, ni laissée telle quelle, sans message ni échéance : le traitement
+ * reste arrêté, et « Reprendre » dans les options lève l'arrêt.
+ */
+function readError(value: unknown): BlockingError | null {
+  if (!isRecord(value)) return null;
+  const { message, staleAt } = value;
+  if (typeof message === "string" && typeof staleAt === "number") return value as BlockingError;
+  return { message: "Erreur illisible : Barrage s'est arrêté.", reason: "api", staleAt: Number.MAX_SAFE_INTEGER };
 }
 
 /** Comptes X connus, d'après le contenu du stockage. */
@@ -333,9 +345,10 @@ export function accountsOf(stored: Record<string, unknown>): Record<string, Acco
  * État de chaque compte X connu, d'après le contenu du stockage. Sans compte
  * connu, celui des clés sans préfixe, qui reviendra au premier compte vu.
  */
-export function accountStates(stored: Record<string, unknown>): State[] {
-  const accounts = Object.keys(accountsOf(stored));
-  return accounts.length ? accounts.map((account) => readState(stored, account)) : [readState(stored)];
+export function accountStates(stored: Record<string, unknown>): [State, ...State[]] {
+  const [first, ...others] = Object.keys(accountsOf(stored));
+  if (first === undefined) return [readState(stored)];
+  return [readState(stored, first), ...others.map((account) => readState(stored, account))];
 }
 
 /** Préfixe des clés d'un compte X, sans lire tout l'état ; par défaut, le dernier connecté. */

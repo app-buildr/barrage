@@ -4,51 +4,30 @@ import { useState, type FormEvent } from "react";
 import { Button } from "@/ui/components/button.tsx";
 import { Input } from "@/ui/components/input.tsx";
 import { PILL_INPUT } from "@/ui/classes.ts";
-import { Hint, Panel, StatusMessage, type StatusKind } from "@/ui/layout/Section.tsx";
+import { Hint, Panel, StatusMessage } from "@/ui/layout/Section.tsx";
 import { cn } from "@/ui/lib/utils.ts";
-import { plural } from "@/core/format.ts";
 import { WRITE_ERROR } from "@/ui/use-safe-write.ts";
 import { write } from "@/core/write.ts";
 import { parseInput } from "../lists/handles.ts";
-
-/** « @a, @b et @c », tronqué au-delà de quelques noms. */
-function names(handles: readonly string[], prefix = "@"): string {
-  const shown = handles.slice(0, 5).map((h) => prefix + h);
-  const more = handles.length - shown.length;
-  const list = shown.length > 1 ? `${shown.slice(0, -1).join(", ")} et ${shown.at(-1)}` : (shown[0] ?? "");
-  return more > 0 ? `${shown.join(", ")} et ${plural(more, "autre")}` : list;
-}
-
-type Report = { message: string; kind: StatusKind };
+import { addReport, type AddReport } from "./add-report.ts";
+import type { AddResult } from "./store.ts";
 
 export function AddForm() {
   const [value, setValue] = useState("");
-  const [report, setReport] = useState<Report | null>(null);
+  const [report, setReport] = useState<AddReport | null>(null);
 
   async function add(event: FormEvent): Promise<void> {
     event.preventDefault();
     const { handles, invalid } = parseInput(value);
     if (!handles.length && !invalid.length) return;
-    let reply = { added: [] as string[], existing: [] as string[], inactive: false };
+    let reply: AddResult = { added: [], existing: [], inactive: false };
     try {
       if (handles.length) reply = await write("addHandles", handles);
     } catch {
       setReport({ message: WRITE_ERROR, kind: "error" });
       return;
     }
-    const { added, existing, inactive } = reply;
-
-    const parts: string[] = [];
-    if (added.length) parts.push(`${plural(added.length, "compte ajouté", "comptes ajoutés")} : ${names(added)}.`);
-    if (existing.length) parts.push(`Déjà dans la liste : ${names(existing)}.`);
-    if (invalid.length) parts.push(`Comptes invalides : ${names(invalid, "")}.`);
-    if (added.length && inactive) {
-      parts.push("Ma liste perso est désactivée : activez-la dans Réglages pour bloquer ces comptes.");
-    }
-    setReport({
-      message: parts.join(" "),
-      kind: invalid.length && !added.length ? "error" : added.length ? "ok" : "warn",
-    });
+    setReport(addReport(reply, invalid));
     // Seules les entrées invalides restent dans le champ, pour être corrigées.
     setValue(invalid.join(" "));
   }

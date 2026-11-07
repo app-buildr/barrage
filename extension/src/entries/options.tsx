@@ -4,7 +4,7 @@ import "../ui/fonts.css";
 import "../ui/globals.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { REFRESH_LISTS } from "@/core/messages.ts";
+import { REFRESH_LISTS, type Message } from "@/core/messages.ts";
 import type { State } from "@/core/state.ts";
 import { useExtensionState } from "@/ui/use-extension-state.ts";
 import { AccountsSection } from "@/features/accounts/AccountsSection.tsx";
@@ -86,4 +86,4 @@ createRoot(document.getElementById("root") as HTMLElement).render(
 
 // Les listes en ligne sont revérifiées à chaque ouverture des options ; un
 // changement arrive par onStateChange.
-void chrome.runtime.sendMessage({ type: REFRESH_LISTS }).catch(() => {});
+void chrome.runtime.sendMessage({ type: REFRESH_LISTS } satisfies Message).catch(() => {});

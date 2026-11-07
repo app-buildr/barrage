@@ -2,17 +2,15 @@
 // soit fermée ou partagée.
 // clsx plutôt que cn : aucune classe en conflit ici, et tailwind-merge alourdirait le content script.
 import { clsx as cn } from "clsx";
-import { contextAlive } from "../../core/context.ts";
 import { plural } from "../../core/format.ts";
-import { OPEN_BADGES } from "../../core/messages.ts";
 import { CORAL_LINK } from "../../ui/classes.ts";
 import { badgeOf, nextStepText, shareUrl } from "../badges/badges.ts";
 import { BadgeDisc } from "../badges/BadgeDisc.tsx";
 import { CloseButton, FOCUS, TOAST_CARD } from "./ToastParts.tsx";
 
-type Props = { palier: number; onDismiss: (palier: number) => void };
+type Props = { palier: number; onDismiss: (palier: number) => void; onOpenBadges: () => void };
 
-export function BadgeToast({ palier, onDismiss }: Props) {
+export function BadgeToast({ palier, onDismiss, onOpenBadges }: Props) {
   const badge = badgeOf(palier);
   if (!badge) return null;
   return (
@@ -41,9 +39,7 @@ export function BadgeToast({ palier, onDismiss }: Props) {
         </a>
         <button
           type="button"
-          onClick={() => {
-            if (contextAlive()) void chrome.runtime.sendMessage({ type: OPEN_BADGES });
-          }}
+          onClick={onOpenBadges}
           className={cn("m-0 cursor-pointer border-0 bg-transparent p-0", CORAL_LINK, FOCUS)}
         >
           Voir mes badges

@@ -1,19 +1,15 @@
-// Encart info de la liste X : affiché jusqu'à ce que l'utilisateur le ferme,
-// fermeture mémorisée dans chrome.storage.local.
+// Encart info de la liste X : affiché jusqu'à ce que l'utilisateur le ferme.
 import { useEffect, useState } from "react";
 import { Info, X } from "lucide-react";
 import { Button } from "@/ui/components/button.tsx";
-
-const DISMISSED_KEY = "tipDismissed";
+import { dismissTip, tipDismissed } from "./tip.ts";
 
 export function Tip() {
   // Caché tant que le choix enregistré n'est pas lu, pour ne pas clignoter.
   const [shown, setShown] = useState(false);
 
   useEffect(() => {
-    void chrome.storage.local.get({ [DISMISSED_KEY]: false }).then((stored) => {
-      setShown(stored[DISMISSED_KEY] !== true);
-    });
+    void tipDismissed().then((dismissed) => setShown(!dismissed));
   }, []);
 
   if (!shown) return null;
@@ -28,7 +24,7 @@ export function Tip() {
         className="-my-1.5 -mr-2 text-sun-soft-ink hover:bg-sun-soft-ink/10 hover:text-sun-soft-ink [&_svg:not([class*='size-'])]:size-[18px]"
         onClick={() => {
           setShown(false);
-          void chrome.storage.local.set({ [DISMISSED_KEY]: true });
+          void dismissTip();
         }}
       >
         <X strokeWidth={2.2} />

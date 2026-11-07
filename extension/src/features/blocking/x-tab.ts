@@ -1,7 +1,7 @@
 // Le blocage passe par la session X de l'utilisateur, disponible seulement dans
 // un onglet x.com. Ce module garantit qu'un tel onglet existe quand les options
 // demandent un blocage ou un déblocage, et en ouvre un en arrière-plan sinon.
-import { PING, isPingRequest, type PingReply } from "../../core/messages.ts";
+import { PING, isPingRequest, type Message, type PingReply } from "../../core/messages.ts";
 import { signedIn } from "./api.ts";
 
 export const X_TABS = ["https://x.com/*", "https://twitter.com/*"];
@@ -13,13 +13,15 @@ export const X_TABS = ["https://x.com/*", "https://twitter.com/*"];
  * ping plutôt qu'une simple recherche d'onglet.
  */
 export async function xTabStatus(): Promise<"none" | "logged_out" | "connected"> {
-  const tabs = (await chrome.tabs.query({ url: X_TABS })).filter((tab) => tab.id !== undefined);
-  const pings = tabs.map((tab) =>
-    chrome.tabs.sendMessage(tab.id as number, { type: PING }).then(
-      (reply: unknown) => reply as PingReply | undefined,
-      () => undefined,
-    ),
-  );
+  const tabs = await chrome.tabs.query({ url: X_TABS });
+  const pings = tabs
+    .flatMap((tab) => (tab.id === undefined ? [] : [tab.id]))
+    .map((id) =>
+      chrome.tabs.sendMessage(id, { type: PING } satisfies Message).then(
+        (reply: unknown) => reply as PingReply | undefined,
+        () => undefined,
+      ),
+    );
   // Un onglet sans script vivant ne répond rien.
   const replies = (await Promise.all(pings)).filter((reply) => reply !== undefined);
   if (replies.some((reply) => reply.session)) return "connected";

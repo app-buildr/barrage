@@ -7,8 +7,8 @@
 // d'une liste GitHub reste bloqué. Une liste qui s'écarte trop de sa référence
 // attend une confirmation dans les options, voir compareLists. La dernière version publiée de l'extension est relevée en même temps.
 import { LIST_MAX_BYTES, LISTS_REFRESH_MINUTES, LISTS_URL } from "../../core/config.ts";
-import { isImportListRequest, isRefreshListsRequest, type ImportListReply } from "../../core/messages.ts";
-import { accountStates, readStorage, stringArray, type State } from "../../core/state.ts";
+import { isImportListRequest, isRefreshListsRequest, type ImportListReply, type RefreshListsReply } from "../../core/messages.ts";
+import { accountStates, readStorage, stringArray } from "../../core/state.ts";
 import { DEFAULT_HANDLES } from "./defaults.ts";
 import { DOWNLOAD_ERROR, analyzeList, validateListUrl } from "./import.ts";
 import { OFFICIAL_ID, otherActiveHandles, readLists } from "./lists.ts";
@@ -31,7 +31,7 @@ async function syncBundled(): Promise<void> {
   const previous = Array.isArray(stored[BUNDLED_KEY]) ? stringArray(stored[BUNDLED_KEY]) : null;
   const bundled = { [BUNDLED_KEY]: [...DEFAULT_HANDLES] };
   const states = accountStates(stored);
-  const shared = states[0] as State;
+  const [shared] = states;
   if (previous && shared.remote === null) {
     const update = compareLists(previous, DEFAULT_HANDLES, otherActiveHandles(shared.lists, "x"));
     if (update.ok) return replaceOfficial(states, DEFAULT_HANDLES, update, bundled);
@@ -120,7 +120,7 @@ export function syncLists(): void {
   chrome.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === ALARM) void refresh();
   });
-  chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse: (reply: boolean) => void) => {
+  chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse: (reply: RefreshListsReply) => void) => {
     if (!isRefreshListsRequest(message)) return false;
     void refresh().finally(() => sendResponse(true));
     return true; // réponse asynchrone

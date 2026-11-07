@@ -79,7 +79,7 @@ export const requestUnblock = (handle: string): Promise<void> => disable(handle,
 export async function setEnabled(handle: string, enabled: boolean): Promise<void> {
   if (!enabled) return disable(handle, false);
   const states = accountStates(await readStorage());
-  const values: Record<string, unknown> = { disabled: states[0]?.disabled.filter((h) => h !== handle) ?? [] };
+  const values: Record<string, unknown> = { disabled: states[0].disabled.filter((h) => h !== handle) };
   for (const { unblock, prefix } of states) {
     if (unblock.includes(handle)) Object.assign(values, scoped(prefix, { unblock: unblock.filter((h) => h !== handle) }));
   }

@@ -27,6 +27,7 @@ export function mountToaster(
   store: ToastStore,
   badges: BadgeStore,
   onDismissBadge: (palier: number) => void,
+  onOpenBadges: () => void,
 ): HTMLElement {
   const host = document.createElement("div");
   host.id = HOST_ID;
@@ -36,6 +37,6 @@ export function mountToaster(
   propertyFallback(sheet);
   shadow.adoptedStyleSheets = [sheet];
   document.body.append(host);
-  createRoot(shadow).render(<Toaster store={store} badges={badges} onDismissBadge={onDismissBadge} />);
+  createRoot(shadow).render(<Toaster store={store} badges={badges} onDismissBadge={onDismissBadge} onOpenBadges={onOpenBadges} />);
   return host;
 }

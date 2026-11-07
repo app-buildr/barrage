@@ -12,7 +12,8 @@ export function useSafeWrite() {
     try {
       await task;
       return true;
-    } catch {
+    } catch (err) {
+      console.warn("[Barrage]", err);
       setError(WRITE_ERROR);
       return false;
     }

@@ -36,7 +36,7 @@ type Stored = Record<string, unknown>;
  */
 async function saveLists(stored: Stored, lists: ListDef[], audit: boolean, extra: Stored = {}): Promise<void> {
   const states = accountStates(stored);
-  const shared = states[0] as State;
+  const [shared] = states;
   const before = new Set(shared.handles);
   const effective = effectiveHandles(lists, "x", shared.official);
   const covered = new Set(effective);
@@ -121,13 +121,14 @@ export async function removeList(id: string): Promise<void> {
   const list = find(lists, id);
   if (list.id === OFFICIAL_ID) throw new Error("La liste collaborative ne peut pas être supprimée.");
   if (list.active) throw new Error("Une liste active ne peut pas être supprimée.");
-  const { [id]: _removed, ...listGuards } = (accountStates(stored)[0] as State).listGuards;
+  const [shared] = accountStates(stored);
+  const { [id]: _removed, ...listGuards } = shared.listGuards;
   await saveLists(stored, lists.filter((l) => l.id !== id), false, { listGuards });
 }
 
 /** Garde de la liste `id` à écrire, les autres inchangées. */
-const withGuard = (states: readonly State[], id: string, guard: ListGuard): Stored => ({
-  listGuards: { ...(states[0] as State).listGuards, [id]: guard },
+const withGuard = (shared: State, id: string, guard: ListGuard): Stored => ({
+  listGuards: { ...shared.listGuards, [id]: guard },
 });
 
 /**
@@ -173,20 +174,20 @@ const syncedOfficial = (shared: State, syncedAt: number): ListDef[] =>
  */
 export async function receiveOfficial(handles: string[], syncedAt: number): Promise<boolean> {
   const states = accountStates(await readStorage());
-  const shared = states[0] as State;
+  const [shared] = states;
   const guard = renewGuard(shared.listGuards[OFFICIAL_ID], shared.official, syncedAt);
   const covered = otherActiveHandles(shared.lists, "x");
   const update = compareLists(shared.official, handles, covered, guardReferences(guard));
   if (!update.ok) {
     console.warn("[Barrage] liste collaborative mise de côté :", update.reason);
     const pending: PendingList = { reason: update.reason, at: syncedAt, handles };
-    await chrome.storage.local.set(withGuard(states, OFFICIAL_ID, { ...guard, pending }));
+    await chrome.storage.local.set(withGuard(shared, OFFICIAL_ID, { ...guard, pending }));
     return false;
   }
   await replaceOfficial(states, handles, update, {
     remote: handles,
     lists: syncedOfficial(shared, syncedAt),
-    ...withGuard(states, OFFICIAL_ID, settledGuard(guard)),
+    ...withGuard(shared, OFFICIAL_ID, settledGuard(guard)),
   });
   return true;
 }
@@ -202,28 +203,27 @@ export async function updateListHandles(id: string, handles: string[], syncedAt:
   const lists = readLists(stored.lists);
   const list = lists.find((l) => l.id === id);
   if (!list) return false; // Supprimée pendant le téléchargement.
-  const states = accountStates(stored);
-  const guard = renewGuard((states[0] as State).listGuards[id], list.handles, syncedAt);
+  const [shared] = accountStates(stored);
+  const guard = renewGuard(shared.listGuards[id], list.handles, syncedAt);
   const update = compareLists(list.handles, handles, [], guardReferences(guard));
   if (!update.ok) {
     console.warn("[Barrage] liste mise de côté :", list.name, update.reason);
     const pending: PendingList = { reason: update.reason, at: syncedAt, handles };
-    await chrome.storage.local.set(withGuard(states, id, { ...guard, pending }));
+    await chrome.storage.local.set(withGuard(shared, id, { ...guard, pending }));
     return false;
   }
-  await saveLists(stored, replace(lists, { ...list, handles, syncedAt }), false, withGuard(states, id, settledGuard(guard)));
+  await saveLists(stored, replace(lists, { ...list, handles, syncedAt }), false, withGuard(shared, id, settledGuard(guard)));
   return true;
 }
 
 /** Fichier en ligne invalide : rien à appliquer ni à accepter, mais les options le disent. */
 export async function recordListRefusal(id: string, reason: string, at: number): Promise<void> {
-  const states = accountStates(await readStorage());
-  const shared = states[0] as State;
+  const [shared] = accountStates(await readStorage());
   const list = shared.lists.find((l) => l.id === id);
   if (!list) return; // Supprimée pendant le téléchargement.
   const current = id === OFFICIAL_ID ? shared.official : list.handles;
   const guard = renewGuard(shared.listGuards[id], current, at);
-  await chrome.storage.local.set(withGuard(states, id, { ...guard, pending: { reason, at } }));
+  await chrome.storage.local.set(withGuard(shared, id, { ...guard, pending: { reason, at } }));
 }
 
 /**
@@ -234,12 +234,12 @@ export async function recordListRefusal(id: string, reason: string, at: number):
 export async function acceptPendingList(id: string): Promise<void> {
   const stored = await readStorage();
   const states = accountStates(stored);
-  const shared = states[0] as State;
+  const [shared] = states;
   const guard = shared.listGuards[id];
   const handles = guard?.pending?.handles;
   if (!handles) throw new Error(`Aucune mise à jour à accepter : ${id}`);
   const at = Date.now();
-  const extra = withGuard(states, id, confirmedGuard(guard, handles, at));
+  const extra = withGuard(shared, id, confirmedGuard(guard, handles, at));
   if (id === OFFICIAL_ID) {
     const update = compareLists(shared.official, handles, otherActiveHandles(shared.lists, "x"), [handles]);
     if (!update.ok) throw new Error(update.reason);

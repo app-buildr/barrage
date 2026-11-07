@@ -74,7 +74,7 @@ export function serveWrites(): void {
     const write = WRITES[message.name as keyof Writes] as (...args: unknown[]) => Promise<unknown>;
     serial(() => write(...message.args)).then(
       (value) => sendResponse({ ok: true, value }),
-      (err: unknown) => sendResponse({ ok: false, error: String(err) }),
+      (err: unknown) => sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err) }),
     );
     return true; // réponse asynchrone
   });

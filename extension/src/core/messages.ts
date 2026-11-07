@@ -4,6 +4,8 @@ import type { ImportReport } from "../features/lists/import.ts";
 /** Options → content script : vérifier que le script de l'onglet est vivant. */
 export const PING = "barrage/ping";
 
+export type PingRequest = { type: typeof PING };
+
 const hasType = (message: unknown, type: string): boolean =>
   typeof message === "object" && message !== null && (message as { type?: unknown }).type === type;
 
@@ -23,6 +25,10 @@ export function isWriteRequest(message: unknown): message is WriteRequest {
 /** Options → service worker : retélécharger les listes en ligne sans attendre l'alarme. */
 export const REFRESH_LISTS = "barrage/refresh-lists";
 
+export type RefreshListsRequest = { type: typeof REFRESH_LISTS };
+/** Toujours vrai : prouve que le rafraîchissement est terminé. */
+export type RefreshListsReply = boolean;
+
 export const isRefreshListsRequest = (message: unknown): boolean => hasType(message, REFRESH_LISTS);
 
 /** Options → service worker : télécharger et analyser une liste GitHub, sans rien enregistrer. */
@@ -38,11 +44,18 @@ export function isImportListRequest(message: unknown): message is ImportListRequ
 /**
  * Notification de badge → service worker : ouvrir l'onglet Badges. Une page
  * x.com ne peut pas ouvrir une page d'extension sans web_accessible_resources,
- * que x.com pourrait détecter.
+ * que Barrage ne déclare pas : ses fichiers n'ont pas à être exposés à x.com. Sa
+ * présence reste visible par ailleurs (attribut de masquage, hôte des
+ * notifications, verrou du traitement).
  */
 export const OPEN_BADGES = "barrage/open-badges";
+
+export type OpenBadgesRequest = { type: typeof OPEN_BADGES };
 
 export const isOpenBadgesRequest = (message: unknown): boolean => hasType(message, OPEN_BADGES);
 
 /** Réponse d'un content script aux pings des options : y répondre prouve qu'il est vivant. */
 export type PingReply = { session: boolean };
+
+/** Tout ce qui s'envoie entre contextes : chaque envoi s'écrit avec `satisfies Message`. */
+export type Message = PingRequest | WriteRequest | RefreshListsRequest | ImportListRequest | OpenBadgesRequest;

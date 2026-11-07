@@ -22,9 +22,9 @@ import {
 } from "../../core/config.ts";
 import {
   QUEUE_KEYS,
+  accountsOf,
   getState,
   onStateChange,
-  type Account,
   type BlockingError,
   type State,
 } from "../../core/state.ts";
@@ -44,6 +44,10 @@ import { write } from "../../core/write.ts";
 import { recordAutomation, setError, setFailures, setPauseUntil, setResults } from "./store.ts";
 import { contextAlive } from "../../core/context.ts";
 
+/**
+ * La page peut lire ce nom, et même tenir le verrou : le traitement attendrait
+ * alors sans envoyer de requête.
+ */
 const LOCK_NAME = "barrage-queue";
 
 /** Comptes vérifiés auprès de X par cet onglet, non bloqués à ce moment : horodatage de la vérification. */
@@ -65,7 +69,7 @@ async function ensureAccount(account: string): Promise<void> {
   const key = `${account}@${handle ?? ""}`;
   if (key === ensured) return;
   const stored = await chrome.storage.local.get({ account: null, accounts: {} });
-  const accounts = stored.accounts as Record<string, Account>;
+  const accounts = accountsOf(stored);
   const known = Object.hasOwn(accounts, account) ? accounts[account] : undefined;
   if (stored.account !== account || !known || (handle && known.handle !== handle)) {
     await write("useAccount", account, handle);
