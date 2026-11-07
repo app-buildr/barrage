@@ -1,4 +1,6 @@
 node_modules/
 dist/
 resources/
-extension/scripts/
+extension/scripts/filter-x-list.mjs
+barrage.zip
+.DS_Store
