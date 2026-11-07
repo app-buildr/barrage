@@ -53,6 +53,14 @@ export const resumable = (error: BlockingError | null): boolean =>
 /** Pause après un soupçon d'automatisation, doublée à chaque rechute. */
 export const automationPause = (strikes: number): number => Math.min(MAX_PAUSE_MS, AUTOMATION_PAUSE_MS * 2 ** strikes);
 
+/**
+ * La liste collaborative est là. Au tout premier démarrage d'une version, avant
+ * que le service worker ait copié la liste intégrée, elle paraît vide : un compte
+ * à débloquer y paraîtrait sorti de la liste. L'arrivée de `bundled` relance le traitement.
+ */
+export const listKnown = ({ remote, official }: Pick<State, "remote" | "official">): boolean =>
+  remote !== null || official.length > 0;
+
 /** Requêtes de `times` encore dans la fenêtre. */
 export const withinWindow = (times: readonly number[], windowMs: number, now: number): number[] =>
   times.filter((at) => now - at < windowMs);
@@ -97,7 +105,7 @@ export function lookupDelay({ lookups, lookupPauseUntil }: Pick<State, "lookups"
  * remise à niveau et se contente du budget restant.
  */
 export function nextAction(state: State, { now, checked }: PlanContext): Action {
-  if (halted(state.error, now)) return { kind: "stop" };
+  if (halted(state.error, now) || !listKnown(state)) return { kind: "stop" };
   // Les déblocages demandés passent avant tout nouveau blocage.
   const toUnblock = unblockQueue(state, now)[0];
   const order = queueOrder(state);

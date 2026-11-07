@@ -97,6 +97,12 @@ export const RUNNER_GRACE_MS = 2 * 60_000;
  */
 export const STATE_COALESCE_MS = 100;
 
+/**
+ * Lignes montées d'un coup dans le tableau des comptes : le nombre de listes
+ * n'est pas plafonné, et le tableau reste monté sur tous les onglets des options.
+ */
+export const ACCOUNT_PAGE = 200;
+
 /** Comptes vérifiés par requête auprès de X, le maximum qu'accepte l'API. */
 export const LOOKUP_BATCH = 100;
 

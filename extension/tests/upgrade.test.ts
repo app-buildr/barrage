@@ -7,10 +7,11 @@ import { readFileSync } from "node:fs";
 import { beforeEach, test } from "node:test";
 import { RETIRE_GRACE_MS } from "../src/core/config.ts";
 import { accountStates, getState, resultKey } from "../src/core/state.ts";
+import { write } from "../src/core/write.ts";
 import { unblockQueue } from "../src/features/blocking/queue.ts";
 import { DEFAULT_HANDLES } from "../src/features/lists/defaults.ts";
 import { officialList } from "../src/features/lists/lists.ts";
-import { completeOnboarding } from "../src/features/lists/store.ts";
+import { completeOnboarding, receiveOfficial } from "../src/features/lists/store.ts";
 import { migrate } from "../src/features/lists/migrate.ts";
 import { installChrome } from "./helpers/chrome.ts";
 
@@ -166,7 +167,7 @@ test("une ancienne installation sans liste perso se reconnaît à ses résultats
   assert.deepEqual(state.lists.map((list) => list.id), ["official"]);
 });
 
-test("l'installation enchaîne badges et liste intégrée avant le premier téléchargement", async () => {
+test("la liste intégrée est copiée dès le démarrage, et l'installation enchaîne badges puis premier téléchargement", async () => {
   const order: string[] = [];
   start({ account: "1", legacy: "1", accounts: { "1": {} }, [resultKey("a")]: { state: "blocked", at: 1 } });
   const set = chrome.storage.local.set;
@@ -180,21 +181,76 @@ test("l'installation enchaîne badges et liste intégrée avant le premier tél�
     return new Response("", { status: 404 });
   }) as typeof fetch;
   await boot();
-  assert.deepEqual(order, []);
+  assert.deepEqual(order, ["bundled"]);
   chromeStub.onInstalled.fire({ reason: "install" });
   await settle();
-  assert.deepEqual(order.slice(0, 4), ["blockCount", "bundled", "alarme", "téléchargement"]);
+  assert.deepEqual(order.slice(0, 4), ["bundled", "blockCount", "alarme", "téléchargement"]);
 });
 
-test("le démarrage du navigateur planifie l'alarme sans toucher à la liste intégrée", async () => {
+test("le démarrage du navigateur planifie l'alarme, sans réécrire une liste intégrée à jour", async () => {
   const alarms: string[] = [];
-  start({ onboarded: true });
+  start({ onboarded: true, bundled: [...DEFAULT_HANDLES] });
+  let writes = 0;
+  const set = chrome.storage.local.set;
+  (chrome.storage.local as any).set = async (values: Stored) => {
+    writes++;
+    return set(values);
+  };
   (chrome.alarms as any).create = (name: string) => void alarms.push(name);
   await boot();
   chromeStub.onStartup.fire();
   await settle();
   assert.deepEqual(alarms, ["barrage-lists"]);
-  assert.equal("bundled" in store, false);
+  assert.equal(writes, 0);
+});
+
+test("hors ligne, le premier démarrage a la liste intégrée", async () => {
+  start({});
+  globalThis.fetch = (async () => {
+    throw new TypeError("Failed to fetch");
+  }) as typeof fetch;
+  await boot();
+  chromeStub.onInstalled.fire({ reason: "install" });
+  await settle();
+  assert.deepEqual((await getState()).official, DEFAULT_HANDLES);
+});
+
+for (const version of ["1.0.2", "1.1.0"]) {
+  test(`depuis la ${version}, sans \`bundled\` ni liste reçue, la liste est là dès le démarrage, sans onInstalled`, async () => {
+    const stored = fixture(version);
+    delete stored.remote;
+    delete stored.bundled;
+    start(stored);
+    await boot();
+    assert.deepEqual((await getState()).official, DEFAULT_HANDLES);
+    assert.deepEqual(results(store), results(fixture(version)));
+  });
+}
+
+test("une écriture demandée au réveil du service worker passe après la liste intégrée", async () => {
+  start({ lists: [officialList(true)], onboarded: true, account: "1", legacy: "1", accounts: { "1": {} } });
+  await import(`../src/entries/background.ts?boot=${++boots}`);
+  // Sans attendre la fin du démarrage : le compte neuf reçoit toute la liste à vérifier.
+  await write("useAccount", "2", null);
+  assert.deepEqual(store["acct:2/audit"], DEFAULT_HANDLES);
+});
+
+test("une liste reçue juste après la première copie n'est pas refusée pour écart", async () => {
+  start({ lists: [officialList(true)], onboarded: true });
+  await boot();
+  assert.equal(await receiveOfficial([...DEFAULT_HANDLES, "nouveau"], 1), true);
+  assert.deepEqual((await getState()).official, [...DEFAULT_HANDLES, "nouveau"]);
+});
+
+test("une copie périmée se rattrape au démarrage, même sans onInstalled, avec son délai de grâce", async () => {
+  const stored = fixture("1.3.0");
+  delete stored.remote;
+  stored.bundled = [...DEFAULT_HANDLES, "parti"];
+  stored[resultKey("parti")] = { state: "blocked", at: 1 };
+  start(stored);
+  await boot();
+  assert.deepEqual(store.bundled, DEFAULT_HANDLES);
+  assert.deepEqual((await getState("111")).retired, ["parti"]);
 });
 
 test("une migration qui échoue n'empêche ni les étapes suivantes ni le téléchargement", async (t) => {

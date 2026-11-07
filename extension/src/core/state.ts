@@ -9,7 +9,6 @@
 // chrome.storage.local plutôt que sync : sync plafonne chaque valeur à 8 Ko,
 // trop peu pour une longue liste.
 import { STATE_COALESCE_MS } from "./config.ts";
-import { DEFAULT_HANDLES } from "../features/lists/defaults.ts";
 import type { Earned } from "../features/badges/badges.ts";
 import type { Failure } from "../features/blocking/outcome.ts";
 import type { Result, Results } from "../features/blocking/queue.ts";
@@ -135,7 +134,11 @@ type DerivedState = {
   prefix: string;
   /** Liste effective de X : union des listes actives qui couvrent ce réseau. */
   handles: string[];
-  /** Comptes de la liste collaborative : celle de GitHub une fois reçue, sinon celle intégrée. */
+  /**
+   * Comptes de la liste collaborative : celle de GitHub une fois reçue, sinon
+   * celle intégrée, que le service worker copie sous `bundled` à chaque démarrage,
+   * voir syncBundled. Vide tant qu'il ne l'a pas fait, voir listKnown.
+   */
   official: readonly string[];
   /** Résultats du compte X, stockés un par compte visé, voir RESULT_PREFIX. */
   results: Results;
@@ -157,8 +160,8 @@ export type SharedValues = Partial<SharedState & StoredOnly>;
 export type AccountValues = Partial<AccountState>;
 
 // La liste collaborative n'est pas copiée dans `lists` : elle est lue dans
-// `remote`, ou dans lists/x.json intégré au build, pour que la modifier sur
-// GitHub la mette à jour chez tous les utilisateurs.
+// `remote`, ou dans `bundled`, copie de lists/x.json intégré au service worker,
+// pour que la modifier sur GitHub la mette à jour chez tous les utilisateurs.
 //
 // Les résultats sont stockés un par compte, sous `result:<identifiant>` : un
 // blocage n'écrit que sa propre clé, sans réécrire ni écraser ceux des autres.
@@ -217,7 +220,7 @@ export function scoped(prefix: string, values: AccountValues): Record<string, un
 }
 
 /** Clés écoutées par onStateChange : celles que l'on peut réellement voir changer. */
-export type StateKey = keyof SharedState | keyof AccountState | "results";
+export type StateKey = keyof SharedState | keyof AccountState | "results" | "bundled";
 
 /**
  * Clés dont la modification relance le traitement : liste changée, compte vu
@@ -226,6 +229,7 @@ export type StateKey = keyof SharedState | keyof AccountState | "results";
 export const QUEUE_KEYS: readonly StateKey[] = [
   "lists",
   "remote",
+  "bundled",
   "retired",
   "disabled",
   "unblock",
@@ -275,7 +279,7 @@ export function readState(stored: Record<string, unknown>, account?: string | nu
   }
   const own = (field: AccountField) => stored[accountKey(prefix, field)];
   const remote = Array.isArray(stored.remote) ? stringArray(stored.remote) : null;
-  const official = remote ?? DEFAULT_HANDLES;
+  const official = remote ?? stringArray(stored.bundled);
   const lists = withSyncDates(readLists(stored.lists), readListSync(stored.listSync));
   const blockCount = own("blockCount");
   const badges = own("badges");

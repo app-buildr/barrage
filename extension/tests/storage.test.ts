@@ -51,12 +51,12 @@ function setManual(handles: unknown[]): void {
 
 beforeEach(() => {
   // État d'une installation dont l'accueil est terminé, sur la liste collaborative.
-  store = { lists: [officialList(true)], onboarded: true };
+  store = { bundled: [...DEFAULT_HANDLES], lists: [officialList(true)], onboarded: true };
   installChrome(() => store);
 });
 
 test("une installation neuve ne bloque rien avant le choix de l'accueil", async () => {
-  store = {};
+  store = { bundled: [...DEFAULT_HANDLES] };
   const state = await getState();
   assert.deepEqual(state.handles, []);
   assert.equal(state.onboarded, false);

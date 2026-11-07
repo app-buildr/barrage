@@ -1,9 +1,12 @@
 // Liste des comptes d'un réseau pris en charge : encart info, progression, recherche, filtres par état et tableau. Elle porte sur la liste
 // effective, plus les comptes bloqués qui en sont sortis (« hors liste »).
-import { useDeferredValue, useMemo, useState } from "react";
+import { startTransition, useDeferredValue, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
+import { ACCOUNT_PAGE } from "@/core/config.ts";
 import { plural } from "@/core/format.ts";
 import type { State } from "@/core/state.ts";
 import { CORAL_BUTTON, CORAL_LINK } from "@/ui/classes.ts";
+import { Button } from "@/ui/components/button.tsx";
 import { routeHash } from "@/ui/layout/main-tab.ts";
 import { Panel, StatusMessage } from "@/ui/layout/Section.tsx";
 import { cn } from "@/ui/lib/utils.ts";
@@ -12,7 +15,7 @@ import { coversNetwork } from "../lists/lists.ts";
 import type { Network } from "../networks/networks.ts";
 import { AccountRow } from "./AccountRow.tsx";
 import { AccountTable } from "./AccountTable.tsx";
-import { matches, noMatchMessage, normalizeQuery } from "./filter.ts";
+import { matches, moreLabel, noMatchMessage, normalizeQuery, shownCount } from "./filter.ts";
 import { ProgressCard } from "./ProgressCard.tsx";
 import { SearchInput } from "./SearchInput.tsx";
 import { StatusChips } from "./StatusChips.tsx";
@@ -30,8 +33,13 @@ type Props = {
 export function AccountList({ state, network, working }: Props) {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<Category | null>(null);
-  // Le champ suit la frappe ; le tableau (jusqu'à ~1 400 lignes) suit dès que possible.
+  // Le champ suit la frappe ; le tableau suit dès que possible.
   const query = useDeferredValue(normalizeQuery(search));
+  const table = useRef<HTMLDivElement>(null);
+  // Lignes montées pour cette vue : une recherche ou un filtre repart de la première page.
+  const view = `${category ?? ""}/${query}`;
+  const [page, setPage] = useState({ view, limit: ACCOUNT_PAGE });
+  const limit = page.view === view ? page.limit : ACCOUNT_PAGE;
 
   // Une seule fois ici : `attempt`, stable, laisse les lignes mémoïsées en place.
   const { error, attempt } = useSafeWrite();
@@ -42,6 +50,13 @@ export function AccountList({ state, network, working }: Props) {
   const shown = useMemo(() => lines.filter((line) => matches(line, query, category)), [lines, query, category]);
   const handle = state.account ? state.accounts[state.account]?.handle : undefined;
   const filtered = Boolean(query || category) && shown.length > 0;
+  const more = moreLabel(shown.length, limit);
+
+  function showMore(): void {
+    // Tout de suite : le focus passe sur la première ligne ajoutée, le bouton peut disparaître.
+    flushSync(() => setPage({ view, limit: limit + ACCOUNT_PAGE }));
+    table.current?.querySelectorAll("tbody tr")[limit]?.querySelector<HTMLElement>('[role="switch"]')?.focus();
+  }
 
   return (
     <>
@@ -64,7 +79,7 @@ export function AccountList({ state, network, working }: Props) {
       {lines.length ? (
         <>
           <SearchInput label={`Rechercher un compte ${network.label}`} value={search} onChange={setSearch} />
-          <StatusChips counts={counts.all} selected={category} onSelect={setCategory} />
+          <StatusChips counts={counts.all} selected={category} onSelect={(next) => startTransition(() => setCategory(next))} />
           <StatusMessage
             className="sr-only"
             message={filtered ? `${plural(shown.length, "compte affiché", "comptes affichés")}.` : null}
@@ -78,19 +93,29 @@ export function AccountList({ state, network, working }: Props) {
           >
             Aller à l'ajout de comptes
           </button>
-          <AccountTable empty={(query || category) && !shown.length ? noMatchMessage(query) : null}>
-            {shown.map((line) => (
-              <AccountRow
-                key={line.handle}
-                network={network}
-                handle={line.handle}
-                enabled={line.enabled}
-                status={line.status}
-                offList={line.offList}
-                attempt={attempt}
-              />
-            ))}
-          </AccountTable>
+          <div ref={table}>
+            <AccountTable empty={(query || category) && !shown.length ? noMatchMessage(query) : null}>
+              {shown.slice(0, limit).map((line) => (
+                <AccountRow
+                  key={line.handle}
+                  network={network}
+                  handle={line.handle}
+                  enabled={line.enabled}
+                  status={line.status}
+                  offList={line.offList}
+                  attempt={attempt}
+                />
+              ))}
+            </AccountTable>
+          </div>
+          {more ? (
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <Button variant="outline" onClick={showMore}>
+                {more}
+              </Button>
+              <span className="text-label text-muted-foreground">{shownCount(shown.length, limit)}</span>
+            </div>
+          ) : null}
         </>
       ) : null}
     </>

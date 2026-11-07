@@ -183,17 +183,22 @@ export async function replaceOfficial(
   await chrome.storage.local.set(values);
 }
 
-/** Liste intégrée à la version précédente de l'extension. */
+/** Copie de la liste intégrée, lue par toutes les surfaces, voir State.official. */
 const BUNDLED_KEY = "bundled";
 
 /**
- * Mise à jour de l'extension : tant qu'aucune liste n'est reçue de GitHub, la
- * liste intégrée fait foi, un compte qu'elle ne contient plus est retiré comme
- * il le serait de la liste en ligne.
+ * Copie la liste intégrée à cette version, à chaque démarrage : les écritures
+ * suivantes passent après elle dans la file, et un événement onInstalled manqué
+ * se rattrape. Cas courant : la copie est à jour, rien d'autre n'est lu.
+ *
+ * Tant qu'aucune liste n'est reçue de GitHub, la liste intégrée fait foi : un
+ * compte qu'elle ne contient plus est retiré comme il le serait de la liste en ligne.
  */
 export async function syncBundled(): Promise<void> {
+  const { [BUNDLED_KEY]: copy } = await chrome.storage.local.get(BUNDLED_KEY);
+  const previous = Array.isArray(copy) ? stringArray(copy) : null;
+  if (sameHandles(previous, DEFAULT_HANDLES)) return;
   const stored = await readStorage();
-  const previous = Array.isArray(stored[BUNDLED_KEY]) ? stringArray(stored[BUNDLED_KEY]) : null;
   const bundled = { [BUNDLED_KEY]: [...DEFAULT_HANDLES] };
   const states = accountStates(stored);
   const [shared] = states;

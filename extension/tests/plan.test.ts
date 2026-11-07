@@ -155,6 +155,14 @@ test("une erreur d'arrêt interdit toute requête, travail en file ou non", asyn
   }
 });
 
+test("tant que la liste collaborative n'est pas là, rien ne part : un compte y paraîtrait sorti", async () => {
+  store[resultKey("z")] = { state: "blocked", at: 1 };
+  const unknown = { remote: null, official: [] };
+  assert.deepEqual(await plan({ ...unknown, retired: ["z"], retiredAt: { z: 1 } }), { kind: "stop" });
+  assert.deepEqual(await plan({ ...unknown, unblock: ["z"] }), { kind: "stop" });
+  assert.deepEqual(await plan({ ...unknown, official: ["a"], retired: ["z"], retiredAt: { z: 1 } }), { kind: "unblock", handle: "z" });
+});
+
 test("une raison inconnue arrête par prudence", () => {
   assert.equal(halted({ ...error("other"), reason: "nouvelle" as never }, NOW), true);
 });

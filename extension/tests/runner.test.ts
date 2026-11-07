@@ -446,6 +446,21 @@ test("sans service worker, un blocage fait et une limite de X restent notés", a
   assert.ok(((await getState("1")).pauseUntil) > Date.now());
 });
 
+test("avant la copie de la liste intégrée, rien ne part, puis son arrivée relance le traitement", async () => {
+  delete store.remote;
+  store.retired = ["a"];
+  store.retiredAt = { a: 1 };
+  store[resultKey("a")] = { state: "blocked", at: 1 };
+  await openTab();
+  assert.equal(x.requests.length, 0);
+  await chrome.storage.local.set({ bundled: ["a", "b"] });
+  await advance(STATE_COALESCE_MS);
+  assert.equal(x.requests.length, 0);
+  await chrome.storage.local.set({ bundled: ["b"] });
+  await advance(STATE_COALESCE_MS);
+  assert.deepEqual(x.posts(UNBLOCK), ["a"]);
+});
+
 test("un refus sans code connu arrête tout dès le premier, sans rien imputer au compte", async () => {
   store.seen = ["a", "b", "c"];
   x.routes[BLOCK] = () => ({ status: 403, text: "" });

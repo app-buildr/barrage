@@ -22,18 +22,19 @@ const refresh = (): Promise<unknown> => Promise.all([refreshLists(), checkLatest
 const schedule = syncLists(refresh);
 
 // À chaque démarrage, avant tout le reste : une mise à jour dont l'événement a
-// été manqué est rattrapée d'après les données, voir migrate.
+// été manqué est rattrapée d'après les données, voir migrate, et la liste
+// intégrée est en place avant la première écriture demandée par un message.
 void inOrder(() => migrate());
+void inOrder(syncBundled);
 
 // Seul écouteur qui touche à l'état, pour que l'ordre se lise ici : migration,
-// réparation d'une mise à jour, badges, liste intégrée, puis premier téléchargement.
+// réparation d'une mise à jour, badges, puis premier téléchargement.
 chrome.runtime.onInstalled.addListener(({ reason, previousVersion }) => {
   if (reason === "update") {
     void inOrder(() => migrate(previousVersion));
     void inOrder(() => repairInheritedBlocks(previousVersion));
   }
-  void inOrder(syncAllBadges);
-  void inOrder(syncBundled).finally(schedule);
+  void inOrder(syncAllBadges).finally(schedule);
 });
 chrome.runtime.onStartup.addListener(schedule);
 
