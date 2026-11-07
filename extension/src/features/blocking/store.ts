@@ -14,7 +14,6 @@ import { ACTIONS_WINDOW_MS, LOOKUP_WINDOW_MS, MAX_ATTEMPTS, RUNNER_GRACE_MS } fr
 import {
   accountStates,
   accountsOf,
-  active,
   getState,
   prefixFor,
   readState,
@@ -28,11 +27,10 @@ import {
   type ErrorReason,
   type HealthIssue,
 } from "../../core/state.ts";
-import { syncBadges } from "../badges/store.ts";
 import { isNewer } from "../updates/version.ts";
 import type { Failure } from "./outcome.ts";
 import { automationPause, resumable, withinWindow } from "./plan.ts";
-import { failure, isBlocked, isPending, resultOf, type Result, type Results, type UnblockRefusal } from "./queue.ts";
+import { active, failure, isBlocked, isPending, resultOf, type Result, type Results, type UnblockRefusal } from "./queue.ts";
 
 /**
  * Une requête à X va partir : noté avant l'envoi, pour qu'un onglet fermé
@@ -58,7 +56,7 @@ export async function holdLookups(until: number, account?: string | null): Promi
   await chrome.storage.local.set(scoped(prefix, { lookupPauseUntil: until }));
 }
 
-/** Dernier signe que X a changé, voir features/timeline/health.ts. */
+/** Dernier signe que X a changé, voir features/x/health.ts. */
 export async function setHealth(health: HealthIssue | null): Promise<void> {
   await chrome.storage.local.set({ health });
 }
@@ -204,8 +202,9 @@ function errorValue(cause: ErrorCause, reason: ErrorReason, expectedMs: number, 
  * Comptes de la liste que X montre comme déjà bloqués par l'utilisateur
  * (page « Comptes bloqués », profil visité) : marqués « bloqué avant Barrage »,
  * sans aucune requête à X. Un compte bloqué par Barrage garde son état.
+ * @returns vrai si un compte a été marqué : les badges sont à rattraper, voir features/writes.ts
  */
-export async function markAlreadyBlocked(handles: readonly string[], account?: string | null): Promise<void> {
+export async function markAlreadyBlocked(handles: readonly string[], account?: string | null): Promise<boolean> {
   const state = await getState(account);
   const listed = new Set(state.handles);
   const at = Date.now();
@@ -214,9 +213,9 @@ export async function markAlreadyBlocked(handles: readonly string[], account?: s
     if (listed.has(handle) && isPending(resultOf(state.results, handle))) entries[handle] = { state: "already_blocked", at };
   }
   const marked = new Set(Object.keys(entries));
-  if (!marked.size) return;
+  if (!marked.size) return false;
   await setResults(state.prefix, entries, { seen: state.seen.filter((h) => !marked.has(h)) });
-  await syncBadges(account);
+  return true;
 }
 
 /**
@@ -302,7 +301,6 @@ export async function recordAudit(
   const done = new Set(batch);
   if (stale.length) await chrome.storage.local.remove(stale.map((h) => resultKey(h, state.prefix)));
   await setResults(state.prefix, entries, { audit: state.audit.filter((h) => !done.has(h)), ...clearedValues(cleared) });
-  await syncBadges(account);
 }
 
 /** Première version dont les vérifications ne sont plus à réparer. */

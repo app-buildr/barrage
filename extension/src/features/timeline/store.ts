@@ -1,5 +1,5 @@
-import { active, getState, scoped } from "../../core/state.ts";
-import { pendingIn } from "../blocking/queue.ts";
+import { getState, scoped } from "../../core/state.ts";
+import { active, pendingIn } from "../blocking/queue.ts";
 
 /**
  * Ajoute des comptes vus dans le fil à la file de blocage. Ceux qui ne sont

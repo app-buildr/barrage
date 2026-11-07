@@ -5,7 +5,7 @@ import { getState, resultKey } from "../src/core/state.ts";
 import { awardBadges, badgeDescription, earnedCount, nextBadge, nextStepText, pendingBadge, shareText, shareUrl, BADGES } from "../src/features/badges/badges.ts";
 import { dismissBadge, recordBlockSuccess, syncAllBadges, syncBadges } from "../src/features/badges/store.ts";
 import { setNotifications } from "../src/features/notifications/store.ts";
-import { markAlreadyBlocked } from "../src/features/blocking/store.ts";
+import { WRITES } from "../src/features/writes.ts";
 import { manualList } from "../src/features/lists/lists.ts";
 
 let store: Record<string, unknown>;
@@ -121,7 +121,7 @@ test("une installation déjà en 1.4.0 rattrape ses badges à la mise à jour", 
 
 test("un compte repéré comme déjà bloqué compte pour les badges", async () => {
   store.lists = [manualList(["a"], 1)];
-  await markAlreadyBlocked(["a"], "2");
+  await WRITES.markAlreadyBlocked.run(["a"], "2");
   const state = await getState("2");
   assert.equal(state.blockCount, 1);
   assert.equal(pendingBadge(state.badges, state.badgeNotified), 1);

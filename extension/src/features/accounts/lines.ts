@@ -1,8 +1,8 @@
 // Lignes du tableau des comptes : la liste effective, puis les comptes bloqués
 // qui en sont sortis. Fonction pure, testée dans tests/multi-lists.test.ts.
-import { offListHandles, unblockQueue, type State } from "../../core/state.ts";
+import type { State } from "../../core/state.ts";
 import { actionsCapped, halted } from "../blocking/plan.ts";
-import { resultOf } from "../blocking/queue.ts";
+import { offListHandles, resultOf, unblockQueue } from "../blocking/queue.ts";
 import { countCategories, describe, describeDisabled, type Category, type Counts, type Status } from "./status.ts";
 
 export type Line = { handle: string; enabled: boolean; status: Status; category: Category; offList: boolean };

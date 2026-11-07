@@ -5,18 +5,17 @@ import { DEFAULT_HANDLES } from "../src/features/lists/defaults.ts";
 import { parseHandle } from "../src/features/lists/handles.ts";
 import { MAX_ATTEMPTS } from "../src/core/config.ts";
 import {
-  active,
   getState,
   resultChanges,
   resultHandle,
   resultKey,
   scoped,
-  unblockQueue,
   type BlockingError,
   type StateKey,
 } from "../src/core/state.ts";
 import { errorText } from "../src/features/blocking/error-text.ts";
-import { addHandles, requestBlock, requestUnblock, setEnabled } from "../src/features/accounts/store.ts";
+import { requestBlock, requestUnblock, setEnabled } from "../src/features/accounts/store.ts";
+import { addHandles } from "../src/features/lists/store.ts";
 import {
   finishUnblock,
   markAlreadyBlocked,
@@ -29,9 +28,9 @@ import {
   useAccount,
 } from "../src/features/blocking/store.ts";
 import { halted, resumable } from "../src/features/blocking/plan.ts";
-import { pendingIn } from "../src/features/blocking/queue.ts";
+import { active, pendingIn, unblockQueue } from "../src/features/blocking/queue.ts";
 import { setNotifications } from "../src/features/notifications/store.ts";
-import { officialList } from "../src/features/lists/lists.ts";
+import { manualList, officialList } from "../src/features/lists/lists.ts";
 import { addSeen } from "../src/features/timeline/store.ts";
 
 let store: Record<string, unknown>;
@@ -528,4 +527,20 @@ test("les clés de compte reçoivent le préfixe, jamais une autre clé", () => 
   // @ts-expect-error `handles` n'est pas une clé stockée : personne ne verrait son changement.
   const never: StateKey = "handles";
   assert.ok(never);
+});
+
+test("un ajout à la main ne lance pas de vérification, et ne touche pas aux files en place", async () => {
+  store.seen = ["vu"];
+  store.audit = ["c"];
+  store.lists = [officialList(true), manualList(["vu", "c"], 0)];
+  await addHandles(["nouveau"]);
+  assert.deepEqual(store.audit, ["c"]);
+  assert.deepEqual(store.seen, ["vu"]);
+  assert.ok((await getState()).handles.includes("nouveau"));
+});
+
+test("un ajout à la main ne recopie pas les dates de synchronisation dans les listes", async () => {
+  store.listSync = { official: 5 };
+  await addHandles(["nouveau"]);
+  assert.equal((store.lists as Array<{ syncedAt?: number }>)[0]?.syncedAt, undefined);
 });

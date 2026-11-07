@@ -3,7 +3,7 @@
 import { contextAlive } from "../../core/context.ts";
 import { prefixFor, resultChanges, type StateChanges } from "../../core/state.ts";
 import { write } from "../../core/write.ts";
-import { accountId } from "../blocking/api.ts";
+import { accountId } from "../x/session.ts";
 import { newlyBlocked, newlyUnblocked } from "../blocking/queue.ts";
 import { CONFIRM_MS, type Content } from "./toasts.ts";
 

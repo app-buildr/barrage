@@ -7,7 +7,7 @@ import { OPEN_BADGES, isUndoLastRequest, type Message } from "../../core/message
 import { getState, onStateChange } from "../../core/state.ts";
 import { write } from "../../core/write.ts";
 import { pendingBadge } from "../badges/badges.ts";
-import { accountId } from "../blocking/api.ts";
+import { accountId } from "../x/session.ts";
 import { createAnnouncer } from "./announce.ts";
 import { mountToaster } from "./mount.tsx";
 import { createBadgeStore, createToastStore, type Content } from "./toasts.ts";

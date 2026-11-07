@@ -117,7 +117,7 @@ export const LOOKUP_BUDGET = 12;
 /** Fenêtre de LOOKUP_BUDGET. */
 export const LOOKUP_WINDOW_MS = 15 * 60_000;
 
-/** Délai avant de juger l'état de x.com : la page a eu le temps de se dessiner, voir features/timeline/health.ts. */
+/** Délai avant de juger l'état de x.com : la page a eu le temps de se dessiner, voir features/x/health.ts. */
 export const HEALTH_PROBE_MS = 30_000;
 
 // Liste collaborative, publiée sur GitHub (dossier lists/ du dépôt, un fichier par réseau).

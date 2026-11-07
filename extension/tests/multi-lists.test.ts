@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
 import { installChrome } from "./helpers/chrome.ts";
-import { getState, offListHandles, queueOrder, resultKey, unblockQueue } from "../src/core/state.ts";
-import { addHandles } from "../src/features/accounts/store.ts";
+import { getState, resultKey } from "../src/core/state.ts";
+import { offListHandles, queueOrder, unblockQueue } from "../src/features/blocking/queue.ts";
 import { accountLines, lineCounts } from "../src/features/accounts/lines.ts";
 import { listDetails } from "../src/features/lists/details.ts";
 import { analyzeList, checkListFile, describeReport, looksLikeProse, looksLikeTable, validateListUrl, BAD_HOST_MESSAGE, INVALID_WARNING, PROSE_WARNING, TABLE_MESSAGE } from "../src/features/lists/import.ts";
@@ -11,6 +11,7 @@ import { migrate } from "../src/features/lists/migrate.ts";
 import { pendingBadge } from "../src/features/badges/badges.ts";
 import { syncAllBadges } from "../src/features/badges/store.ts";
 import {
+  addHandles,
   addList,
   completeOnboarding,
   removeList,

@@ -6,7 +6,7 @@ import { HEALTH_PROBE_MS } from "../../core/config.ts";
 import { contextAlive } from "../../core/context.ts";
 import type { HealthIssue } from "../../core/state.ts";
 import { write } from "../../core/write.ts";
-import { accountId, signedIn } from "../blocking/api.ts";
+import { accountId, signedIn } from "./session.ts";
 import { FEED_CELL_SELECTOR, TWEET_SELECTOR, USER_CELL_SELECTOR, USER_NAME_SELECTOR } from "./selectors.ts";
 
 /** En dessous, le fil n'a peut-être pas fini de se dessiner. */

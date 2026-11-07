@@ -6,7 +6,7 @@ import type { WriteEntry } from "../core/writer.ts";
 import { restoreBackup } from "./backup/store.ts";
 import { dismissBadge, recordBlockSuccess, syncBadges } from "./badges/store.ts";
 import { isResult } from "./blocking/queue.ts";
-import { addHandles, requestBlock, requestUnblock, setEnabled } from "./accounts/store.ts";
+import { requestBlock, requestUnblock, setEnabled } from "./accounts/store.ts";
 import {
   finishUnblock,
   holdLookups,
@@ -25,6 +25,7 @@ import { validateListUrl } from "./lists/import.ts";
 import { LIST_NETWORKS } from "./lists/lists.ts";
 import {
   acceptPendingList,
+  addHandles,
   addList,
   completeOnboarding,
   removeList,
@@ -88,39 +89,49 @@ const isNotifications: Check = (value) =>
 const isHealth = orNull((value) => value === "session" || value === "timeline");
 const isRequestKind: Check = (value) => value === "action" || value === "lookup";
 
-const fromContent = <F extends WriteEntry["run"]>(run: F, ...checks: Check[]) => ({ run, checks, content: true });
-const fromOptions = <F extends WriteEntry["run"]>(run: F, ...checks: Check[]) => ({ run, checks, content: false });
+/** Comptes reconnus comme bloqués : les badges suivent, dans le même tour de la file. */
+async function markAndSyncBadges(handles: readonly string[], account?: string | null): Promise<void> {
+  if (await markAlreadyBlocked(handles, account)) await syncBadges(account);
+}
+
+async function auditAndSyncBadges(...args: Parameters<typeof recordAudit>): Promise<void> {
+  await recordAudit(...args);
+  await syncBadges(args[4]);
+}
+
+const contentWrite = <F extends WriteEntry["run"]>(run: F, ...checks: Check[]) => ({ run, checks, content: true });
+const optionsWrite = <F extends WriteEntry["run"]>(run: F, ...checks: Check[]) => ({ run, checks, content: false });
 
 export const WRITES = {
-  acceptPendingList: fromOptions(acceptPendingList, isString),
-  addHandles: fromOptions(addHandles, isHandles),
-  addList: fromOptions(addList, isNewList),
-  addSeen: fromContent(addSeen, isHandles, isAccount),
-  completeOnboarding: fromOptions(completeOnboarding, isOnboardingChoice),
-  dismissBadge: fromContent(dismissBadge, isNumber, isAccount),
-  finishUnblock: fromContent(finishUnblock, isHandle, orNull(isResult), isCleared, isAccount),
-  holdLookups: fromContent(holdLookups, isNumber, isAccount),
-  markAlreadyBlocked: fromContent(markAlreadyBlocked, isHandles, isAccount),
-  recordAudit: fromContent(recordAudit, isHandles, isHandles, isHandles, isCleared, isAccount),
-  recordBlockFailure: fromContent(recordBlockFailure, isHandle, isFailure, isNumber, isAccount),
-  recordBlockSuccess: fromContent(recordBlockSuccess, isAccount),
-  recordChecks: fromContent(recordChecks, isResults, isCleared, isAccount),
-  recordRequest: fromContent(recordRequest, isRequestKind, isAccount),
-  refuseUnblock: fromContent(refuseUnblock, isHandle, isFailure, isAccount),
-  removeList: fromOptions(removeList, isString),
-  renameList: fromOptions(renameList, isString, isString),
-  requestBlock: fromOptions(requestBlock, isHandle),
-  requestUnblock: fromOptions(requestUnblock, isHandle),
+  acceptPendingList: optionsWrite(acceptPendingList, isString),
+  addHandles: optionsWrite(addHandles, isHandles),
+  addList: optionsWrite(addList, isNewList),
+  addSeen: contentWrite(addSeen, isHandles, isAccount),
+  completeOnboarding: optionsWrite(completeOnboarding, isOnboardingChoice),
+  dismissBadge: contentWrite(dismissBadge, isNumber, isAccount),
+  finishUnblock: contentWrite(finishUnblock, isHandle, orNull(isResult), isCleared, isAccount),
+  holdLookups: contentWrite(holdLookups, isNumber, isAccount),
+  markAlreadyBlocked: contentWrite(markAndSyncBadges, isHandles, isAccount),
+  recordAudit: contentWrite(auditAndSyncBadges, isHandles, isHandles, isHandles, isCleared, isAccount),
+  recordBlockFailure: contentWrite(recordBlockFailure, isHandle, isFailure, isNumber, isAccount),
+  recordBlockSuccess: contentWrite(recordBlockSuccess, isAccount),
+  recordChecks: contentWrite(recordChecks, isResults, isCleared, isAccount),
+  recordRequest: contentWrite(recordRequest, isRequestKind, isAccount),
+  refuseUnblock: contentWrite(refuseUnblock, isHandle, isFailure, isAccount),
+  removeList: optionsWrite(removeList, isString),
+  renameList: optionsWrite(renameList, isString, isString),
+  requestBlock: optionsWrite(requestBlock, isHandle),
+  requestUnblock: optionsWrite(requestUnblock, isHandle),
   // Relue champ par champ à l'arrivée, voir checkBackup.
-  restoreBackup: fromOptions(restoreBackup, isAnything),
-  resumeBlocking: fromOptions(resumeBlocking, isAccount),
-  setEnabled: fromContent(setEnabled, isHandle, isBoolean),
-  setHealth: fromContent(setHealth, isHealth),
-  setListActive: fromOptions(setListActive, isString, isBoolean),
-  setListNetworks: fromOptions(setListNetworks, isString, isNetworks),
-  setNotifications: fromOptions(setNotifications, isNotifications),
-  syncBadges: fromContent(syncBadges, isAccount),
-  useAccount: fromContent(useAccount, isAccountId, orNull(isHandle)),
+  restoreBackup: optionsWrite(restoreBackup, isAnything),
+  resumeBlocking: optionsWrite(resumeBlocking, isAccount),
+  setEnabled: contentWrite(setEnabled, isHandle, isBoolean),
+  setHealth: contentWrite(setHealth, isHealth),
+  setListActive: optionsWrite(setListActive, isString, isBoolean),
+  setListNetworks: optionsWrite(setListNetworks, isString, isNetworks),
+  setNotifications: optionsWrite(setNotifications, isNotifications),
+  syncBadges: contentWrite(syncBadges, isAccount),
+  useAccount: contentWrite(useAccount, isAccountId, orNull(isHandle)),
 };
 
 export type Writes = { [K in keyof typeof WRITES]: (typeof WRITES)[K]["run"] };

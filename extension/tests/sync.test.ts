@@ -2,10 +2,11 @@ import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
 import { LIST_MAX_BYTES, LISTS_RECHECK_MS, RETIRE_GRACE_MS } from "../src/core/config.ts";
 import { IMPORT_LIST, REFRESH_LISTS } from "../src/core/messages.ts";
-import { QUEUE_KEYS, getState, onStateChange, resultKey, unblockQueue } from "../src/core/state.ts";
+import { QUEUE_KEYS, accountStates, getState, onStateChange, resultKey } from "../src/core/state.ts";
+import { unblockQueue } from "../src/features/blocking/queue.ts";
 import { BAD_HOST_MESSAGE, DOWNLOAD_ERROR, INVALID_WARNING, TABLE_MESSAGE } from "../src/features/lists/import.ts";
 import { officialList, type ListDef } from "../src/features/lists/lists.ts";
-import { acceptPendingList, removeList } from "../src/features/lists/store.ts";
+import { acceptPendingList, removeList, replaceOfficial } from "../src/features/lists/store.ts";
 import { refreshLists, syncLists } from "../src/features/lists/sync.ts";
 import { checkLatestVersion } from "../src/features/updates/check.ts";
 import { installChrome } from "./helpers/chrome.ts";
@@ -429,4 +430,14 @@ test("une date d'avant listSync reste affichée, listSync l'emporte ensuite", as
   const { lists } = await getState();
   assert.equal(lists[1]?.syncedAt, 9);
   assert.equal(lists[0]?.syncedAt, undefined);
+});
+
+test("un compte retiré de la liste collaborative reste à vérifier : seul `seen` est purgé", async () => {
+  store.remote = ["a", "b"];
+  store.audit = ["b"];
+  store.seen = ["b"];
+  store.lists = [officialList(true)];
+  await replaceOfficial(accountStates(store), ["a"], { ok: true, removed: ["b"] }, { remote: ["a"] });
+  assert.deepEqual(store.seen, []);
+  assert.deepEqual(store.audit, ["b"]);
 });

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
-import { accountHandle, blockUser, lookupBlocking, sessionId, signedIn, unblockUser } from "../src/features/blocking/api.ts";
+import { blockUser, lookupBlocking, unblockUser } from "../src/features/blocking/api.ts";
+import { accountHandle, sessionId, signedIn } from "../src/features/x/session.ts";
 import { apiError, BLOCK, installX, LOOKUP, lookupReply, UNBLOCK, type FakeX } from "./helpers/x.ts";
 
 let x: FakeX;

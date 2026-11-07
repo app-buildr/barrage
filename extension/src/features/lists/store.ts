@@ -7,8 +7,10 @@ import type { NetworkId } from "../networks/networks.ts";
 import { DEFAULT_HANDLES } from "./defaults.ts";
 import {
   IMPORTED_NAME,
+  MANUAL_ID,
   OFFICIAL_ID,
   cleanName,
+  coversNetwork,
   effectiveHandles,
   officialList,
   otherActiveHandles,
@@ -34,7 +36,10 @@ type Stored = Record<string, unknown>;
 /**
  * Enregistre de nouvelles listes. Les comptes sortis de la liste effective
  * quittent les files de chaque compte X, sans rien débloquer. Avec `audit`, ceux
- * qui y entrent sans résultat connu seront vérifiés auprès de X.
+ * qui y entrent sans résultat connu seront vérifiés auprès de X : à l'import, à
+ * l'activation d'une liste et à l'accueil. Une liste mise à jour et un ajout à la
+ * main ne déclenchent pas de vérification : ces comptes-là ne sont bloqués qu'une
+ * fois vus dans le fil. La liste collaborative a ses propres règles, voir replaceOfficial.
  */
 async function saveLists(stored: Stored, lists: ListDef[], audit: boolean, extra: SharedValues = {}): Promise<void> {
   const states = accountStates(stored);
@@ -284,6 +289,28 @@ export async function acceptPendingList(id: string): Promise<void> {
   }
   const lists = readLists(stored.lists);
   await saveLists(stored, replace(lists, { ...find(lists, id), handles }), false, extra);
+}
+
+/** `inactiveList` : nom réel de « Ma liste perso » si elle ne couvre pas X, ces comptes ne seront pas bloqués. */
+export type AddResult = { added: string[]; existing: string[]; inactiveList: string | null };
+
+/**
+ * Ajoute des comptes normalisés à « Ma liste perso », créée au premier ajout.
+ * Ceux déjà couverts, ou en double dans la saisie, ne sont ajoutés qu'une fois.
+ */
+export async function addHandles(handles: readonly string[]): Promise<AddResult> {
+  const stored = await readStorage();
+  const [{ handles: effective }] = accountStates(stored);
+  const lists = readLists(stored.lists);
+  const manual = lists.find((list) => list.id === MANUAL_ID);
+  const known = new Set([...effective, ...(manual?.handles ?? [])]);
+  const inactiveList = manual !== undefined && !coversNetwork(manual, "x") ? manual.name : null;
+  const result: AddResult = { added: [], existing: [], inactiveList };
+  for (const handle of new Set(handles)) {
+    (known.has(handle) ? result.existing : result.added).push(handle);
+  }
+  if (result.added.length) await saveLists(stored, withManualHandles(lists, result.added, Date.now()), false);
+  return result;
 }
 
 export type OnboardingChoice =

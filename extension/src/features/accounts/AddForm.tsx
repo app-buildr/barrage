@@ -7,7 +7,7 @@ import { WRITE_ERROR } from "@/ui/use-safe-write.ts";
 import { write } from "@/core/write.ts";
 import { parseInput } from "../lists/handles.ts";
 import { addReport } from "./add-report.ts";
-import type { AddResult } from "./store.ts";
+import type { AddResult } from "../lists/store.ts";
 
 export function AddForm() {
   const [value, setValue] = useState("");

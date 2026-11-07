@@ -1,8 +1,7 @@
 // Le blocage passe par la session X de l'utilisateur, disponible seulement dans
 // un onglet x.com. Ce module garantit qu'un tel onglet existe quand les options
 // demandent un blocage ou un déblocage, et en ouvre un en arrière-plan sinon.
-import { PING, isPingRequest, type Message, type PingReply } from "../../core/messages.ts";
-import { signedIn } from "./api.ts";
+import { PING, type Message, type PingReply } from "../../core/messages.ts";
 
 export const X_TABS = ["https://x.com/*", "https://twitter.com/*"];
 
@@ -57,13 +56,4 @@ export function wakeXTab(): Promise<void> {
     waking = null;
   });
   return waking;
-}
-
-/** Content script : se déclarer vivant auprès des options, avec l'état de la session. */
-export function answerPings(): void {
-  chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse: (reply: PingReply) => void) => {
-    if (!isPingRequest(message)) return false;
-    sendResponse({ session: signedIn() });
-    return false;
-  });
 }

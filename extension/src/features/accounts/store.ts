@@ -1,39 +1,9 @@
-// Écritures de la liste de comptes : ajout, interrupteur « Blocage
-// automatique », blocage et déblocage demandés à la main. La liste et les
-// interrupteurs valent pour tous les comptes X ; un blocage ou un déblocage
-// demandé à la main vise le compte X affiché, le dernier connecté sur x.com.
+// Écritures de la liste de comptes : interrupteur « Blocage automatique »,
+// blocage et déblocage demandés à la main. Les interrupteurs valent pour tous
+// les comptes X ; un blocage ou un déblocage demandé à la main vise le compte X
+// affiché, le dernier connecté sur x.com.
 import { accountStates, getState, readStorage, resultKey, scoped } from "../../core/state.ts";
 import { resultOf } from "../blocking/queue.ts";
-import { MANUAL_ID, coversNetwork, manualList, uniqueName } from "../lists/lists.ts";
-
-/** `inactiveList` : nom réel de « Ma liste perso » si elle ne couvre pas X, ces comptes ne seront pas bloqués. */
-export type AddResult = { added: string[]; existing: string[]; inactiveList: string | null };
-
-/**
- * Ajoute des comptes, déjà normalisés par parseHandle, à « Ma liste perso »,
- * créée au premier ajout. Ceux déjà couverts, ou en double dans la saisie, ne
- * sont ajoutés qu'une fois.
- */
-export async function addHandles(handles: readonly string[]): Promise<AddResult> {
-  const { lists, handles: effective } = await getState();
-  const manual = lists.find((list) => list.id === MANUAL_ID);
-  const known = new Set([...effective, ...(manual?.handles ?? [])]);
-  const inactiveList = manual !== undefined && !coversNetwork(manual, "x") ? manual.name : null;
-  const result: AddResult = { added: [], existing: [], inactiveList };
-  for (const handle of new Set(handles)) {
-    (known.has(handle) ? result.existing : result.added).push(handle);
-  }
-  if (!result.added.length) return result;
-  if (manual) {
-    const next = { ...manual, handles: [...manual.handles, ...result.added] };
-    await chrome.storage.local.set({ lists: lists.map((l) => (l === manual ? next : l)) });
-  } else {
-    const fresh = manualList(result.added, Date.now());
-    const name = uniqueName(fresh.name, lists.map((list) => list.name));
-    await chrome.storage.local.set({ lists: [...lists, { ...fresh, name }] });
-  }
-  return result;
-}
 
 /**
  * Blocage demandé à la main depuis les options : le compte passe en tête de

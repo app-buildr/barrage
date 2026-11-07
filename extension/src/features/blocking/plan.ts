@@ -15,8 +15,8 @@ import {
   MAX_ACTIONS_PER_HOUR,
   MAX_PAUSE_MS,
 } from "../../core/config.ts";
-import { queueOrder, unblockQueue, type BlockingError, type State } from "../../core/state.ts";
-import { nextPending, uncheckedPending } from "./queue.ts";
+import type { BlockingError, State } from "../../core/state.ts";
+import { nextPending, queueOrder, unblockQueue, uncheckedPending } from "./queue.ts";
 
 export type Action =
   | { kind: "stop" }

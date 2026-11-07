@@ -29,15 +29,8 @@ import {
   type ErrorCause,
   type State,
 } from "../../core/state.ts";
-import {
-  accountHandle,
-  accountId,
-  blockUser,
-  lookupBlocking,
-  pageAccount,
-  sessionId,
-  unblockUser,
-} from "./api.ts";
+import { accountHandle, accountId, pageAccount, sessionId } from "../x/session.ts";
+import { blockUser, lookupBlocking, unblockUser } from "./api.ts";
 import { failureOf, type Failure, type Lookup, type Outcome } from "./outcome.ts";
 import { nextAction, type Action } from "./plan.ts";
 import type { Result, Results } from "./queue.ts";

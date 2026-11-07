@@ -3,7 +3,7 @@ import { afterEach, beforeEach, mock, test } from "node:test";
 import { HEALTH_PROBE_MS } from "../src/core/config.ts";
 import { serveWrites } from "../src/core/writer.ts";
 import { WRITES } from "../src/features/writes.ts";
-import { healthVerdict, type PageView } from "../src/features/timeline/health.ts";
+import { healthVerdict, type PageView } from "../src/features/x/health.ts";
 import { installChrome, X_TAB } from "./helpers/chrome.ts";
 import { installDom } from "./helpers/dom.ts";
 import { installX, type FakeX } from "./helpers/x.ts";
@@ -72,7 +72,7 @@ afterEach(() => {
 });
 
 async function open(): Promise<void> {
-  const health = await import(`../src/features/timeline/health.ts?tab=${++tab}`);
+  const health = await import(`../src/features/x/health.ts?tab=${++tab}`);
   health.watchHealth();
 }
 

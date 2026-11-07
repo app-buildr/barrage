@@ -3,7 +3,7 @@
 import { plural, pluralWord } from "../../core/format.ts";
 import { formatList } from "../../core/intl.ts";
 import type { StatusReport } from "../../ui/layout/Section.tsx";
-import type { AddResult } from "./store.ts";
+import type { AddResult } from "../lists/store.ts";
 
 /** « @a, @b et @c », tronqué au-delà de quelques noms. */
 function names(handles: readonly string[], prefix = "@"): string {

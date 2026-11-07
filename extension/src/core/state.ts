@@ -3,16 +3,16 @@
 // et les files d'un compte X (`seen`, `audit`, `unblock`, `retired`) n'ont de sens
 // que pour features/blocking : les autres n'y ajoutent ou n'en retirent que des
 // comptes, sans en changer les règles. Ce fichier décrit la forme de l'état, le
-// lit et en dérive ce que toutes les surfaces partagent (files de blocage et de
-// déblocage, comptes hors liste).
+// lit. Il dépend de modèles purs (lists.ts, remote.ts) dont il agrège le schéma,
+// jamais d'un store.ts ni d'un .tsx.
 //
 // chrome.storage.local plutôt que sync : sync plafonne chaque valeur à 8 Ko,
 // trop peu pour une longue liste.
-import { RETIRE_GRACE_MS, STATE_COALESCE_MS } from "./config.ts";
+import { STATE_COALESCE_MS } from "./config.ts";
 import { DEFAULT_HANDLES } from "../features/lists/defaults.ts";
 import type { Earned } from "../features/badges/badges.ts";
 import type { Failure } from "../features/blocking/outcome.ts";
-import { activeHandles, eligible, isBlocked, resultOf, type Result, type Results } from "../features/blocking/queue.ts";
+import type { Result, Results } from "../features/blocking/queue.ts";
 import { effectiveHandles, readListSync, readLists, withSyncDates, type ListDef, type ListSync } from "../features/lists/lists.ts";
 import { readGuards, type ListGuard } from "../features/lists/remote.ts";
 
@@ -48,7 +48,7 @@ export type BlockingError = Partial<ErrorCause> & {
 export type Account = { handle?: string };
 
 /**
- * Signe que X a changé, relevé par features/timeline/health.ts. Il n'arrête rien :
+ * Signe que X a changé, relevé par features/x/health.ts. Il n'arrête rien :
  * sans compte lisible ni tweet repérable, rien ne part déjà vers X. "session" :
  * cookie twid illisible. "timeline" : le fil s'affiche, sans tweet repérable.
  */
@@ -249,56 +249,6 @@ export function stringArray(value: unknown): string[] {
 /** Horodatages stockés, du plus ancien au plus récent. */
 function timestamps(value: unknown): number[] {
   return Array.isArray(value) ? value.filter((v): v is number => typeof v === "number").sort((a, b) => a - b) : [];
-}
-
-/** Comptes que Barrage traite : la liste moins ceux désactivés. */
-export function active(state: State): string[] {
-  return activeHandles(state.handles, state.disabled);
-}
-
-/** File de blocage : comptes de la liste vus dans le fil ou demandés à la main. */
-export function queueOrder(state: State): string[] {
-  return eligible(active(state), state.seen);
-}
-
-/**
- * Comptes à débloquer sur X : demandes à la main encore sur Off (ou sorties
- * de la liste depuis, la demande reste due), puis tout
- * compte sur Off ou retiré de la liste collaborative que Barrage a bloqué. Calculée
- * plutôt que stockée, la file ne peut pas manquer un blocage qui aboutit juste
- * après le passage sur Off. Un déblocage refusé par X n'est relancé que par
- * une nouvelle demande. Un compte retiré attend RETIRE_GRACE_MS, et sans date
- * de retrait il attend que la prochaine synchronisation lui en donne une.
- */
-export function unblockQueue(state: State, now = Date.now()): string[] {
-  const disabled = new Set(state.disabled);
-  const blockedByUs = (h: string) => {
-    const result = resultOf(state.results, h);
-    return result?.state === "blocked" && !result.unblockFailed;
-  };
-  const listed = new Set(state.handles);
-  const graceOver = (h: string) => now - (state.retiredAt[h] ?? now) >= RETIRE_GRACE_MS;
-  return [
-    ...new Set([
-      ...state.unblock.filter((h) => disabled.has(h) || !listed.has(h)),
-      ...state.disabled.filter(blockedByUs),
-      // Un compte remis dans la liste entre-temps n'est plus à débloquer.
-      ...state.retired.filter((h) => !listed.has(h) && blockedByUs(h) && graceOver(h)),
-    ]),
-  ];
-}
-
-/**
- * Comptes bloqués sortis de la liste effective (liste désactivée, supprimée ou
- * mise à jour) : ils restent bloqués et déblocables. Ceux retirés de la liste
- * collaborative n'en sont pas : Barrage les débloque de lui-même.
- */
-export function offListHandles(state: State): string[] {
-  const listed = new Set(state.handles);
-  const retired = new Set(state.retired);
-  return Object.keys(state.results).filter(
-    (h) => !listed.has(h) && !retired.has(h) && isBlocked(resultOf(state.results, h)),
-  );
 }
 
 /** Tout le contenu du stockage, à lire avec readState. */

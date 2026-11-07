@@ -3,7 +3,7 @@ import { beforeEach, test } from "node:test";
 import { getState, resultKey } from "../src/core/state.ts";
 import { serveWrites } from "../src/core/writer.ts";
 import { WRITES } from "../src/features/writes.ts";
-import { HIDDEN_ATTR } from "../src/features/timeline/selectors.ts";
+import { HIDDEN_ATTR } from "../src/features/x/selectors.ts";
 import { officialList } from "../src/features/lists/lists.ts";
 import { installChrome, X_TAB } from "./helpers/chrome.ts";
 import { FakeElement, fixture, installDom } from "./helpers/dom.ts";

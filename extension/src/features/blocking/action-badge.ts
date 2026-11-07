@@ -1,8 +1,8 @@
 // Pastille de l'icône de l'extension : « ! » rouge quand une mise à jour est
 // disponible, sinon le nombre de comptes en attente de blocage.
-import { QUEUE_KEYS, getState, onStateChange, queueOrder } from "../../core/state.ts";
+import { QUEUE_KEYS, getState, onStateChange } from "../../core/state.ts";
 import { updateAvailable } from "../updates/version.ts";
-import { pendingIn } from "./queue.ts";
+import { pendingIn, queueOrder } from "./queue.ts";
 
 // Le service worker n'a pas de CSS : valeurs recopiées de ui/palette.css
 // (--color-coral-deep) et ui/globals.css (--color-state-problem).

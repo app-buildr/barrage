@@ -2,10 +2,10 @@
 // features/. Les styles importés ici forment content.css.
 import "../features/timeline/timeline.css";
 import { startRunner } from "../features/blocking/runner.ts";
-import { answerPings } from "../features/blocking/x-tab.ts";
 import { watchBlocks } from "../features/notifications/watch.ts";
-import { watchHealth } from "../features/timeline/health.ts";
 import { watchTimeline } from "../features/timeline/timeline.ts";
+import { watchHealth } from "../features/x/health.ts";
+import { answerPings } from "../features/x/session.ts";
 
 answerPings();
 startRunner();
