@@ -41,8 +41,8 @@ const VISIBLE: Status = { label: "Visible", action: "block", category: "visible"
  * Compte dont le blocage automatique est sur On. « Bloqué », qu'il l'ait été
  * par l'extension ou déjà par l'utilisateur : la distinction, qui décide d'un
  * déblocage au passage sur Off, n'est pas affichée. `paused` : rien ne part
- * vers X pour l'instant : limite de X, traitement arrêté ou aucun onglet x.com
- * connecté pour le faire.
+ * vers X pour l'instant : limite de X, plafond horaire atteint, traitement
+ * arrêté ou aucun onglet x.com connecté pour le faire.
  */
 export function describe(result: Result | undefined, queued: boolean, paused = false): Status {
   if (queued && isPending(result)) return paused ? WAITING : BLOCKING;

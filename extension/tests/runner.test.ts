@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, mock, test } from "node:test";
 import {
+  ACTIONS_WINDOW_MS,
+  AUDIT_INTERVAL_MS,
   AUTH_RETRY_MS,
   AUTOMATION_PAUSE_MS,
   BLOCK_DELAY_MS,
   CHECK_RETRY_MS,
   DELAY_JITTER,
+  LOOKUP_BUDGET,
+  LOOKUP_WINDOW_MS,
+  MAX_ACTIONS_PER_HOUR,
   MAX_PAUSE_MS,
   NETWORK_RETRY_MS,
   RETIRE_GRACE_MS,
@@ -268,6 +273,152 @@ test("deux blocages restent espacés, même si la liste change pendant l'attente
   }
 });
 
+test("recharger l'onglet n'annule pas le délai entre deux blocages", async () => {
+  store.seen = ["a", "b"];
+  await openTab();
+  assert.deepEqual(x.posts(BLOCK), ["a"]);
+  await openTab();
+  assert.deepEqual(x.posts(BLOCK), ["a"]);
+  await advance(BLOCK_DELAY_MS * (1 + DELAY_JITTER) + 1000);
+  assert.deepEqual(x.posts(BLOCK), ["a", "b"]);
+});
+
+test("la requête est notée avant l'envoi, sous les clés du compte X", async () => {
+  store["acct:2/seen"] = ["a"];
+  store.account = "2";
+  store.accounts = { "1": {}, "2": {} };
+  x.cookies.twid = "u%3D2";
+  let noted: unknown = null;
+  x.routes[BLOCK] = () => {
+    noted = store["acct:2/actions"];
+    return { json: {} };
+  };
+  await openTab();
+  assert.deepEqual(noted, [T0]);
+  assert.equal(store.actions, undefined);
+});
+
+test("sans réponse du service worker à la note d'avant envoi, rien ne part", async (t) => {
+  t.mock.method(console, "error", () => {});
+  store.seen = ["a"];
+  const sendMessage = chrome.runtime.sendMessage;
+  (chrome.runtime as any).sendMessage = async (message: { name: string }) =>
+    message.name === "recordRequest" ? undefined : (sendMessage as any)(message);
+  await openTab();
+  await advance(NETWORK_RETRY_MS * 3, 10_000);
+  assert.equal(x.requests.length, 0);
+});
+
+test("le plafond horaire retient les blocages, même après un rechargement, puis ils reprennent", async () => {
+  store.seen = ["a"];
+  store.actions = Array.from({ length: MAX_ACTIONS_PER_HOUR }, (_, i) => T0 - ACTIONS_WINDOW_MS + 60_000 + i);
+  await openTab();
+  await openTab();
+  await advance(50_000, 10_000);
+  assert.deepEqual(x.posts(BLOCK), []);
+  await advance(20_000, 10_000);
+  assert.deepEqual(x.posts(BLOCK), ["a"]);
+  assert.ok((store.actions as number[]).length <= MAX_ACTIONS_PER_HOUR);
+});
+
+test("le budget de lookup retient les vérifications, y compris d'un autre chargement", async () => {
+  store.seen = ["a"];
+  store.lookups = Array.from({ length: LOOKUP_BUDGET }, (_, i) => T0 - LOOKUP_WINDOW_MS + 60_000 + i);
+  await openTab();
+  await advance(50_000, 10_000);
+  assert.equal(x.requests.length, 0);
+  await advance(20_000, 10_000);
+  assert.deepEqual(x.posts(BLOCK), ["a"]);
+  assert.equal(x.requests.filter((r) => r.path === LOOKUP).length, 1);
+});
+
+test("le budget tient sur un quart d'heure, vérifications de compte et d'avant blocage confondues", async () => {
+  const handles = Array.from({ length: 300 }, (_, i) => `c${i}`);
+  store.remote = handles;
+  store.audit = handles;
+  store.seen = handles;
+  const stamps: number[] = [];
+  x.routes[LOOKUP] = (request) => {
+    stamps.push(Date.now());
+    return lookupReply((request.handle ?? "").split(","));
+  };
+  await openTab();
+  await advance(2 * LOOKUP_WINDOW_MS, 10_000);
+  assert.ok(stamps.length > LOOKUP_BUDGET);
+  stamps.slice(LOOKUP_BUDGET).forEach((at, i) => {
+    assert.ok(at - (stamps[i] as number) >= LOOKUP_WINDOW_MS, `requête ${i + LOOKUP_BUDGET}`);
+  });
+});
+
+test("l'intervalle entre deux paquets de vérification survit à l'onglet", async () => {
+  store.audit = Array.from({ length: 150 }, (_, i) => `c${i}`);
+  await openTab();
+  assert.equal(x.requests.length, 1);
+  await openTab();
+  await advance(AUDIT_INTERVAL_MS - 10_000, 10_000);
+  assert.equal(x.requests.length, 1);
+  await advance(20_000, 10_000);
+  assert.equal(x.requests.length, 2);
+});
+
+test("X annonce un quota épuisé : plus de lookup jusqu'à l'échéance, le blocage vérifié part quand même", async () => {
+  store.seen = ["a", "b"];
+  const reset = Math.floor(T0 / 1000) + 300;
+  x.routes[LOOKUP] = (request) => ({
+    ...(lookupReply((request.handle ?? "").split(",")) as object),
+    headers: { "x-rate-limit-remaining": "0", "x-rate-limit-reset": String(reset) },
+  });
+  await openTab();
+  await advance(BLOCK_DELAY_MS * 3);
+  assert.deepEqual(x.posts(BLOCK), ["a", "b"]);
+  assert.equal(x.requests.filter((r) => r.path === LOOKUP).length, 1);
+  assert.equal((await getState("1")).lookupPauseUntil, reset * 1000);
+  assert.equal((await getState("1")).pauseUntil, 0);
+});
+
+test("un code 34 sur un déblocage compte sa vérification de route dans le budget", async () => {
+  store.disabled = ["a"];
+  store[resultKey("a")] = { state: "blocked", at: 1 };
+  x.routes[UNBLOCK] = () => apiError(34, 404);
+  await openTab();
+  assert.deepEqual(store.lookups, [T0]);
+});
+
+test("un 401 après une reconnexion le dit : ce n'est plus la session qui est en cause", async () => {
+  store.seen = ["a"];
+  x.routes[LOOKUP] = () => ({ status: 401, text: "" });
+  await openTab();
+  assert.equal((await getState("1")).error?.context, undefined);
+  x.cookies.ct0 = "autre";
+  await openTab();
+  const { error } = await getState("1");
+  assert.equal(error?.reason, "auth");
+  assert.equal(error?.context, "reconnected");
+});
+
+test("un 401 après le seul délai, sans reconnexion, reste une session expirée", async () => {
+  store.seen = ["a"];
+  x.routes[LOOKUP] = () => ({ status: 401, text: "" });
+  await openTab();
+  await advance(AUTH_RETRY_MS, 600_000);
+  await openTab();
+  assert.equal((await getState("1")).error?.context, undefined);
+});
+
+test("une réponse de X entre la reconnexion et le 401 écarte le jeton web", async () => {
+  store.seen = ["a"];
+  x.routes[BLOCK] = () => ({ status: 401, text: "" });
+  await openTab();
+  x.cookies.ct0 = "autre";
+  let posts = 0;
+  x.routes[BLOCK] = () => (++posts === 1 ? { json: {} } : { status: 401, text: "" });
+  store.seen = ["a", "b"];
+  await openTab();
+  await advance(BLOCK_DELAY_MS * 2);
+  assert.equal((await getState("1")).error?.reason, "auth");
+  assert.equal((await getState("1")).error?.context, undefined);
+});
+
 test("un refus sans code connu arrête tout dès le premier, sans rien imputer au compte", async () => {
   store.seen = ["a", "b", "c"];
   x.routes[BLOCK] = () => ({ status: 403, text: "" });
@@ -359,7 +510,7 @@ test("la vérification d'un compte X passe par paquets, sans rien bloquer", asyn
   assert.equal(state.results.a?.state, "already_blocked");
 });
 
-test("une vérification sans rien à noter n'écrit rien et n'appelle pas le service worker", async () => {
+test("une vérification sans rien à noter n'écrit que la requête à venir", async () => {
   store.seen = ["a"];
   const written: string[][] = [];
   const set = chrome.storage.local.set.bind(chrome.storage.local);
@@ -386,7 +537,8 @@ test("une vérification sans rien à noter n'écrit rien et n'appelle pas le ser
   };
   await openTab();
   assert.deepEqual(x.posts(BLOCK), ["a"]);
-  assert.deepEqual(beforePost, { written: [], sent: [] });
+  // Rien pour le compte vérifié : seul le blocage à venir est noté, avant son envoi.
+  assert.deepEqual(beforePost, { written: [["actions"]], sent: ["recordRequest"] });
 });
 
 test("un compte déjà bloqué met les badges à jour, une vérification réussie lève l'erreur affichée", async () => {

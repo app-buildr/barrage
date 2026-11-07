@@ -2,7 +2,7 @@
 // par X et erreur bloquante. Toutes visent un compte X : celles qui reçoivent
 // un préfixe de clés l'exigent ; celles qui reçoivent un compte visent par
 // défaut le dernier connecté sur x.com.
-import { MAX_ATTEMPTS, RUNNER_GRACE_MS } from "../../core/config.ts";
+import { ACTIONS_WINDOW_MS, LOOKUP_WINDOW_MS, MAX_ATTEMPTS, RUNNER_GRACE_MS } from "../../core/config.ts";
 import {
   accountStates,
   accountsOf,
@@ -16,12 +16,42 @@ import {
   type BlockingError,
   type ErrorCause,
   type ErrorReason,
+  type HealthIssue,
 } from "../../core/state.ts";
 import { syncBadges } from "../badges/store.ts";
 import { isNewer } from "../updates/version.ts";
 import type { Failure } from "./outcome.ts";
-import { automationPause, resumable } from "./plan.ts";
+import { automationPause, resumable, withinWindow } from "./plan.ts";
 import { failure, isBlocked, isPending, resultOf, type Result, type Results } from "./queue.ts";
+
+/**
+ * Une requête à X va partir : noté avant l'envoi, pour qu'un onglet fermé
+ * ou rechargé entre-temps ne la fasse pas oublier. Sans réponse du service
+ * worker, l'appelant échoue et rien ne part.
+ */
+export async function recordRequest(kind: "action" | "lookup", account?: string | null): Promise<void> {
+  const { actions, lookups, prefix } = await getState(account);
+  const now = Date.now();
+  await chrome.storage.local.set(
+    scoped(
+      prefix,
+      kind === "action"
+        ? { actions: [...withinWindow(actions, ACTIONS_WINDOW_MS, now), now] }
+        : { lookups: [...withinWindow(lookups, LOOKUP_WINDOW_MS, now), now] },
+    ),
+  );
+}
+
+/** X annonce ne plus accepter de lookup jusqu'à `until` : blocages déjà vérifiés et déblocages continuent. */
+export async function holdLookups(until: number, account?: string | null): Promise<void> {
+  const { prefix } = await getState(account);
+  await chrome.storage.local.set(scoped(prefix, { lookupPauseUntil: until }));
+}
+
+/** Dernier signe que X a changé, voir features/timeline/health.ts. */
+export async function setHealth(health: HealthIssue | null): Promise<void> {
+  await chrome.storage.local.set({ health });
+}
 
 /**
  * Enregistre des résultats en une écriture, avec d'autres champs à écrire en

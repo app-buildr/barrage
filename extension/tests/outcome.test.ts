@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { RATE_LIMIT_FALLBACK_MS } from "../src/core/config.ts";
-import { classify, failureOf, noUserMatch, readLookup, routeMaybeGone } from "../src/features/blocking/outcome.ts";
+import { MAX_PAUSE_MS, RATE_LIMIT_FALLBACK_MS } from "../src/core/config.ts";
+import { classify, failureOf, noUserMatch, quotaEnd, readLookup, routeMaybeGone } from "../src/features/blocking/outcome.ts";
 
 const NOW = 1_700_000_000_000;
 const err = (code: number, message = "x") => ({ errors: [{ code, message }] });
@@ -106,4 +106,15 @@ test("seul le code 17 dit qu'aucun compte du paquet n'existe", () => {
   assert.equal(noUserMatch(err(17)), true);
   assert.equal(noUserMatch(err(34)), false);
   assert.equal(noUserMatch(null), false);
+});
+
+test("quota : l'échéance de X compte, une valeur illisible vaut un quota épuisé", () => {
+  const now = 1_000_000_000_000;
+  const reset = String(now / 1000 + 300);
+  assert.equal(quotaEnd(null, reset, now), null);
+  assert.equal(quotaEnd("2", reset, now), null);
+  assert.equal(quotaEnd("0", reset, now), now + 300_000);
+  assert.equal(quotaEnd("illisible", reset, now), now + 300_000);
+  assert.equal(quotaEnd("0", null, now), now + RATE_LIMIT_FALLBACK_MS);
+  assert.equal(quotaEnd("0", "99999999999", now), now + MAX_PAUSE_MS);
 });

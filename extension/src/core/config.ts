@@ -19,6 +19,16 @@ export const BLOCK_DELAY_MS = 8_000;
 /** Variation aléatoire appliquée au délai, pour ne pas frapper à cadence fixe. */
 export const DELAY_JITTER = 0.3;
 
+/**
+ * Blocages et déblocages permis par compte X sur ACTIONS_WINDOW_MS, en fenêtre
+ * glissante et stockée : une vague de déblocages s'étale au lieu de tourner à
+ * 450 actions par heure. Les seuils réels de X sont inconnus, la valeur reste prudente.
+ */
+export const MAX_ACTIONS_PER_HOUR = 200;
+
+/** Fenêtre de MAX_ACTIONS_PER_HOUR. */
+export const ACTIONS_WINDOW_MS = 60 * 60_000;
+
 /** Au-delà, un compte en échec n'est plus retenté sans action de l'utilisateur. */
 export const MAX_ATTEMPTS = 3;
 
@@ -91,12 +101,24 @@ export const STATE_COALESCE_MS = 100;
 export const LOOKUP_BATCH = 100;
 
 /**
- * Délai entre deux paquets de la vérification d'un compte X (voir
- * State.audit). X limite cette requête à une quinzaine par quart d'heure :
- * un peu moins d'une par minute laisse de la marge aux vérifications faites
- * avant un blocage.
+ * Délai minimal entre une requête friendships/lookup et le paquet suivant de la
+ * vérification d'un compte X (voir State.audit) : les paquets s'étalent au lieu
+ * de consommer LOOKUP_BUDGET d'un coup.
  */
 export const AUDIT_INTERVAL_MS = 70_000;
+
+/**
+ * Requêtes friendships/lookup permises par compte X sur LOOKUP_WINDOW_MS,
+ * vérifications de compte et d'avant blocage confondues. X limite cette requête
+ * à une quinzaine par quart d'heure, et un refus arrête aussi les blocages.
+ */
+export const LOOKUP_BUDGET = 12;
+
+/** Fenêtre de LOOKUP_BUDGET. */
+export const LOOKUP_WINDOW_MS = 15 * 60_000;
+
+/** Délai avant de juger l'état de x.com : la page a eu le temps de se dessiner, voir features/timeline/health.ts. */
+export const HEALTH_PROBE_MS = 30_000;
 
 // Liste collaborative, publiée sur GitHub (dossier lists/ du dépôt, un fichier par réseau).
 

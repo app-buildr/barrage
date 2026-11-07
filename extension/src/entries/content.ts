@@ -4,9 +4,11 @@ import "../features/timeline/timeline.css";
 import { startRunner } from "../features/blocking/runner.ts";
 import { answerPings } from "../features/blocking/x-tab.ts";
 import { watchBlocks } from "../features/notifications/watch.ts";
+import { watchHealth } from "../features/timeline/health.ts";
 import { watchTimeline } from "../features/timeline/timeline.ts";
 
 answerPings();
 startRunner();
 watchTimeline();
 watchBlocks();
+watchHealth();

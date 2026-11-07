@@ -3,7 +3,7 @@
 // codes. Fonctions pures, testées dans tests/error-text.test.ts.
 import { CHECK_RETRY_MS, NETWORK_RETRY_MS } from "../../core/config.ts";
 import { plural } from "../../core/format.ts";
-import type { BlockingError, ErrorContext, ErrorReason } from "../../core/state.ts";
+import type { BlockingError, ErrorContext, ErrorReason, HealthIssue } from "../../core/state.ts";
 import type { Failure, FailureCode } from "./outcome.ts";
 import type { Result } from "./queue.ts";
 
@@ -43,6 +43,9 @@ const STOPPED = "Barrage s'est arrêté : X a peut-être changé.";
 function inContext(cause: string, context: ErrorContext | undefined): string {
   if (context === undefined) return cause;
   if (context === "stopped") return `${cause} ${STOPPED}`;
+  if (context === "reconnected") {
+    return "X refuse encore les requêtes après votre reconnexion : son jeton web a sans doute changé, une mise à jour de Barrage sera nécessaire.";
+  }
   if (context === "retry") return `${cause} Nouvel essai dans ${plural(NETWORK_RETRY_MS / 60_000, "minute")}.`;
   if (context === "check") {
     const delay = plural(CHECK_RETRY_MS / 60_000, "minute");
@@ -74,6 +77,17 @@ const SESSION_CODES: ReadonlySet<FailureCode | undefined> = new Set<FailureCode>
 ]);
 
 /** Le titre ne parle de session que si c'est elle qui est en cause, pas pour un compte verrouillé. */
-export function errorTitle({ reason, code }: BlockingError): string {
-  return reason === "auth" && SESSION_CODES.has(code) ? "Session X expirée" : TITLES[reason];
+export function errorTitle({ reason, code, context }: BlockingError): string {
+  return reason === "auth" && SESSION_CODES.has(code) && context !== "reconnected" ? "Session X expirée" : TITLES[reason];
 }
+
+export const HEALTH_TITLE = "Barrage ne reconnaît plus x.com";
+
+const HEALTH_TEXTS: Record<HealthIssue, string> = {
+  session: "X a changé sa session : Barrage ne sait plus quel compte est connecté et ne bloque plus rien.",
+  timeline: "X a changé sa page : Barrage ne repère plus les tweets du fil, plus rien n'est masqué ni mis en file.",
+};
+
+/** Texte d'un signe que X a changé. */
+export const healthText = (issue: HealthIssue): string =>
+  `${HEALTH_TEXTS[issue]} Une mise à jour de Barrage sera sans doute nécessaire.`;

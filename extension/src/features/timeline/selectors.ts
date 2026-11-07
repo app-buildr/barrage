@@ -3,6 +3,8 @@
 
 /** Un tweet, y compris dans une conversation ou sur un profil. */
 export const TWEET_SELECTOR = 'article[data-testid="tweet"]';
+/** Une cellule du fil : un tweet, une suggestion ou un séparateur. */
+export const FEED_CELL_SELECTOR = '[data-testid="cellInnerDiv"]';
 /** Une suggestion de compte (« Vous pourriez aimer », résultats de recherche). */
 export const USER_CELL_SELECTOR = '[data-testid="UserCell"]';
 /**

@@ -20,8 +20,9 @@ export type ErrorReason = "auth" | "network" | "automation" | "api" | "other";
  * Ce que le traitement faisait quand l'échec est survenu, pour le texte affiché.
  * "stopped" : arrêt, X a sans doute changé. "retry" : nouvel essai après
  * NETWORK_RETRY_MS. "check" : vérification impossible, reprise après CHECK_RETRY_MS.
+ * "reconnected" : X refuse encore une session renouvelée, son jeton web a sans doute changé.
  */
-export type ErrorContext = "stopped" | "retry" | "check" | { refusals: number } | { unblock: string };
+export type ErrorContext = "stopped" | "retry" | "check" | "reconnected" | { refusals: number } | { unblock: string };
 
 export type ErrorCause = Failure & { context?: ErrorContext };
 
@@ -42,6 +43,13 @@ export type BlockingError = Partial<ErrorCause> & {
 
 /** Compte X connu, par identifiant numérique. */
 export type Account = { handle?: string };
+
+/**
+ * Signe que X a changé, relevé par features/timeline/health.ts. Il n'arrête rien :
+ * sans compte lisible ni tweet repérable, rien ne part déjà vers X. "session" :
+ * cookie twid illisible. "timeline" : le fil s'affiche, sans tweet repérable.
+ */
+export type HealthIssue = "session" | "timeline";
 
 export type State = {
   /**
@@ -99,6 +107,12 @@ export type State = {
   strikes: number;
   /** Comptes refusés de suite par X, voir MAX_CONSECUTIVE_FAILURES. */
   failures: string[];
+  /** Blocages et déblocages envoyés à X sur ACTIONS_WINDOW_MS, du plus ancien au plus récent. */
+  actions: number[];
+  /** Requêtes friendships/lookup envoyées sur LOOKUP_WINDOW_MS, du plus ancien au plus récent. */
+  lookups: number[];
+  /** X annonce ne plus accepter de lookup jusque-là, en millisecondes. 0 si rien. */
+  lookupPauseUntil: number;
   error: BlockingError | null;
   /**
    * Comptes de la liste à vérifier auprès de X, une fois par compte X : son
@@ -107,6 +121,8 @@ export type State = {
   audit: string[];
   /** Dernière version publiée de l'extension, voir features/updates. */
   latestVersion: string | null;
+  /** Dernier signe que X a changé, ou null. */
+  health: HealthIssue | null;
 };
 
 // La liste collaborative n'est pas copiée dans `lists` : elle est lue dans
@@ -134,6 +150,9 @@ const ACCOUNT_FIELDS = [
   "pauseUntil",
   "strikes",
   "failures",
+  "actions",
+  "lookups",
+  "lookupPauseUntil",
   "error",
   "audit",
   "blockCount",
@@ -222,6 +241,11 @@ export function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
 }
 
+/** Horodatages stockés, du plus ancien au plus récent. */
+function timestamps(value: unknown): number[] {
+  return Array.isArray(value) ? value.filter((v): v is number => typeof v === "number").sort((a, b) => a - b) : [];
+}
+
 /** Comptes que Barrage traite : la liste moins ceux désactivés. */
 export function active(state: State): string[] {
   return activeHandles(state.handles, state.disabled);
@@ -305,6 +329,7 @@ export function readState(stored: Record<string, unknown>, account?: string | nu
   const strikes = own("strikes");
   const error = own("error");
   const retiredAt = own("retiredAt");
+  const lookupPauseUntil = own("lookupPauseUntil");
   return {
     account: current,
     accounts: accountsOf(stored),
@@ -329,9 +354,13 @@ export function readState(stored: Record<string, unknown>, account?: string | nu
     pauseUntil: typeof pauseUntil === "number" ? pauseUntil : 0,
     strikes: typeof strikes === "number" ? strikes : 0,
     failures: stringArray(own("failures")),
+    actions: timestamps(own("actions")),
+    lookups: timestamps(own("lookups")),
+    lookupPauseUntil: typeof lookupPauseUntil === "number" ? lookupPauseUntil : 0,
     error: readError(error),
     audit: stringArray(own("audit")),
     latestVersion: typeof stored.latestVersion === "string" ? stored.latestVersion : null,
+    health: stored.health === "session" || stored.health === "timeline" ? stored.health : null,
   };
 }
 

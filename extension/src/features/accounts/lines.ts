@@ -1,7 +1,7 @@
 // Lignes du tableau des comptes : la liste effective, puis les comptes bloqués
 // qui en sont sortis. Fonction pure, testée dans tests/multi-lists.test.ts.
 import { offListHandles, unblockQueue, type State } from "../../core/state.ts";
-import { halted } from "../blocking/plan.ts";
+import { actionsCapped, halted } from "../blocking/plan.ts";
 import { resultOf } from "../blocking/queue.ts";
 import { countCategories, describe, describeDisabled, type Category, type Counts, type Status } from "./status.ts";
 
@@ -13,7 +13,7 @@ export function accountLines(state: State, working = true): Line[] {
   const disabled = new Set(state.disabled);
   const unblocking = new Set(unblockQueue(state));
   const now = Date.now();
-  const paused = !working || state.pauseUntil > now || halted(state.error, now);
+  const paused = !working || state.pauseUntil > now || halted(state.error, now) || actionsCapped(state.actions, now);
   const line = (handle: string, offList: boolean): Line => {
     const result = resultOf(state.results, handle);
     const enabled = !disabled.has(handle);

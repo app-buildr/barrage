@@ -1,28 +1,30 @@
 // Seule trace de l'activité de fond qui reste affichée, sur tous les onglets
 // des options : une erreur qui empêche tout blocage, le temps qu'elle soit
-// d'actualité, ou une limite imposée par X.
+// d'actualité, une limite imposée par X, ou un signe que X a changé.
 import { CircleAlert } from "lucide-react";
 import { useSafeWrite } from "@/ui/use-safe-write.ts";
 import { write } from "@/core/write.ts";
 import { Button } from "@/ui/components/button.tsx";
 import { Callout, StatusMessage } from "@/ui/layout/Section.tsx";
 import { formatClock } from "@/core/intl.ts";
-import type { BlockingError } from "@/core/state.ts";
-import { errorText, errorTitle } from "../blocking/error-text.ts";
+import type { BlockingError, HealthIssue } from "@/core/state.ts";
+import { HEALTH_TITLE, errorText, errorTitle, healthText } from "../blocking/error-text.ts";
 import { resumable } from "../blocking/plan.ts";
 
-type Props = { error: BlockingError | null; pauseUntil: number };
+type Props = { error: BlockingError | null; pauseUntil: number; health: HealthIssue | null };
 
-export function BackgroundAlert({ error, pauseUntil }: Props) {
+export function BackgroundAlert({ error, pauseUntil, health }: Props) {
   const { error: writeError, attempt } = useSafeWrite();
   const now = Date.now();
   const shown = error !== null && now < error.staleAt ? error : null;
   const paused = pauseUntil > now;
-  if (!shown && !paused) return null;
+  if (!shown && !paused && !health) return null;
 
   const canResume = resumable(shown);
-  const title = shown ? errorTitle(shown) : "X limite les blocages";
-  const message = shown ? errorText(shown) : `Reprise vers ${formatClock(pauseUntil)}.`;
+  // Une erreur ou une limite dit quand reprendre : elle passe avant le signe de changement.
+  const healthOnly = !shown && !paused && health !== null;
+  const title = shown ? errorTitle(shown) : healthOnly ? HEALTH_TITLE : "X limite les blocages";
+  const message = shown ? errorText(shown) : healthOnly ? healthText(health) : `Reprise vers ${formatClock(pauseUntil)}.`;
   return (
     <Callout
       role="alert"

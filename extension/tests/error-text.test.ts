@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { BlockingError } from "../src/core/state.ts";
 import { describe } from "../src/features/accounts/status.ts";
-import { errorText, errorTitle, resultText } from "../src/features/blocking/error-text.ts";
+import { errorText, errorTitle, healthText, resultText } from "../src/features/blocking/error-text.ts";
 
 const error = (values: Partial<BlockingError>): BlockingError => ({ reason: "other", staleAt: 1, ...values });
 
@@ -41,4 +41,17 @@ test("le titre ne parle de session que si elle est en cause", () => {
   // Message d'une version antérieure : la cause n'est plus connue.
   assert.equal(errorTitle(error({ reason: "auth", message: "Votre compte X est suspendu." })), "Connexion à X impossible");
   assert.equal(errorTitle(error({ reason: "network", code: "network_down" })), "Réseau indisponible");
+});
+
+test("un refus après reconnexion ne renvoie pas à une reconnexion", () => {
+  const error = { code: "session_expired", context: "reconnected", reason: "auth", staleAt: 1 } as const;
+  assert.match(errorText(error), /jeton web/);
+  assert.doesNotMatch(errorText(error), /reconnectez-vous/);
+  assert.equal(errorTitle(error), "Connexion à X impossible");
+  assert.equal(errorTitle({ ...error, context: undefined }), "Session X expirée");
+});
+
+test("chaque signe de changement de X a son texte", () => {
+  assert.match(healthText("session"), /session/);
+  assert.match(healthText("timeline"), /tweets/);
 });

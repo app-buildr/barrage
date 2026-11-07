@@ -21,6 +21,16 @@ test("le lookup demande les comptes en lecture seule et lit les blocages", async
   assert.equal(x.requests[0]?.handle, "a,b,c");
 });
 
+test("X annonce un quota épuisé : le lookup rapporte son échéance", async () => {
+  x.routes[LOOKUP] = () => ({
+    ...(lookupReply(["a"]) as object),
+    headers: { "x-rate-limit-remaining": "0", "x-rate-limit-reset": "4000000000" },
+  });
+  assert.equal(((await lookupBlocking(["a"])) as { quotaEnd?: number }).quotaEnd !== undefined, true);
+  x.routes[LOOKUP] = () => ({ ...(lookupReply(["a"]) as object), headers: { "x-rate-limit-remaining": "3" } });
+  assert.equal(Object.hasOwn(await lookupBlocking(["a"]), "quotaEnd"), false);
+});
+
 test("le code 17 dit qu'aucun compte du paquet n'existe", async () => {
   x.routes[LOOKUP] = () => apiError(17, 404);
   assert.deepEqual(sets(await lookupBlocking(["a"])), { found: [], blocking: [] });

@@ -63,7 +63,7 @@ function Options({ state, tab, fromWelcome }: { state: State; tab: MainTab; from
       </Header>
       <main className="flex flex-col gap-9 *:min-w-0">
         <UpdateBanner latestVersion={state.latestVersion} />
-        <BackgroundAlert error={state.error} pauseUntil={state.pauseUntil} />
+        <BackgroundAlert error={state.error} pauseUntil={state.pauseUntil} health={state.health} />
         <Tabs
           value={tab}
           onValueChange={(next) => {

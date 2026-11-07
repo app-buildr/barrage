@@ -1,8 +1,21 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
-import { AUTOMATION_PAUSE_MS, CHECK_MAX_AGE_MS, CHECK_RETRY_MS, LOOKUP_BATCH, MAX_PAUSE_MS } from "../src/core/config.ts";
+import {
+  ACTIONS_WINDOW_MS,
+  AUDIT_INTERVAL_MS,
+  AUTOMATION_PAUSE_MS,
+  BLOCK_DELAY_MS,
+  CHECK_MAX_AGE_MS,
+  CHECK_RETRY_MS,
+  DELAY_JITTER,
+  LOOKUP_BATCH,
+  LOOKUP_BUDGET,
+  LOOKUP_WINDOW_MS,
+  MAX_ACTIONS_PER_HOUR,
+  MAX_PAUSE_MS,
+} from "../src/core/config.ts";
 import { getState, resultKey, type BlockingError, type State } from "../src/core/state.ts";
-import { automationPause, halted, nextAction, resumable } from "../src/features/blocking/plan.ts";
+import { actionDelay, actionsCapped, automationPause, halted, lookupDelay, nextAction, resumable } from "../src/features/blocking/plan.ts";
 import {
   recordAutomation,
   refuseUnblock,
@@ -17,11 +30,7 @@ const NOW = 1_000_000_000;
 const PERMANENT = Number.MAX_SAFE_INTEGER;
 
 let store: Record<string, unknown>;
-const context = (checked: Record<string, number> = {}, nextAuditAt = 0) => ({
-  now: NOW,
-  checked: new Map(Object.entries(checked)),
-  nextAuditAt,
-});
+const context = (checked: Record<string, number> = {}) => ({ now: NOW, checked: new Map(Object.entries(checked)) });
 const fresh = { a: NOW, b: NOW };
 const error = (reason: BlockingError["reason"], staleAt = PERMANENT, at = NOW): BlockingError => ({
   message: "m",
@@ -35,8 +44,13 @@ beforeEach(() => {
   installChrome(() => store);
 });
 
-const plan = async (overrides: Partial<State> = {}, checked = {}, nextAuditAt = 0) =>
-  nextAction({ ...(await getState()), ...overrides }, context(checked, nextAuditAt));
+const plan = async (overrides: Partial<State> = {}, checked = {}) =>
+  nextAction({ ...(await getState()), ...overrides }, context(checked));
+
+const MIN_GAP = BLOCK_DELAY_MS * (1 - DELAY_JITTER);
+/** `count` requêtes régulièrement réparties sur la fin de la fenêtre. */
+const times = (count: number, windowMs: number) =>
+  Array.from({ length: count }, (_, i) => NOW - windowMs + 1000 * (i + 1));
 
 test("sans travail, rien : ni requête ni attente, même pendant une pause", async () => {
   assert.deepEqual(await plan(), { kind: "stop" });
@@ -57,8 +71,67 @@ test("une pause retient tout travail jusqu'à son échéance", async () => {
 test("une vérification de compte X passe avant les déblocages et blocages, sauf entre deux paquets", async () => {
   const audit = Array.from({ length: LOOKUP_BATCH + 1 }, (_, i) => `c${i}`);
   assert.deepEqual(await plan({ seen: ["a"], audit }, fresh), { kind: "audit", batch: audit.slice(0, LOOKUP_BATCH) });
-  assert.deepEqual(await plan({ seen: ["a"], audit }, fresh, NOW + 5), { kind: "block", handle: "a" });
-  assert.deepEqual(await plan({ audit }, {}, NOW + 5), { kind: "wait", ms: 5 });
+  const lookups = [NOW + 5 - AUDIT_INTERVAL_MS];
+  assert.deepEqual(await plan({ seen: ["a"], audit, lookups }, fresh), { kind: "block", handle: "a" });
+  assert.deepEqual(await plan({ audit, lookups }), { kind: "wait", ms: 5 });
+});
+
+test("une vérification avant blocage passe avant celle du compte X, qui suit dès que possible", async () => {
+  const audit = ["c"];
+  assert.deepEqual(await plan({ seen: ["a"], audit }), { kind: "check", batch: ["a"] });
+  assert.deepEqual(await plan({ seen: ["a"], audit }, fresh), { kind: "audit", batch: audit });
+});
+
+test("le délai entre deux actions survit à l'onglet : seule la date stockée compte", async () => {
+  const actions = [NOW - 1000];
+  assert.deepEqual(await plan({ seen: ["a"], actions }, fresh), { kind: "wait", ms: MIN_GAP - 1000 });
+  assert.deepEqual(await plan({ disabled: ["b"], unblock: ["b"], actions }), { kind: "wait", ms: MIN_GAP - 1000 });
+  assert.deepEqual(await plan({ seen: ["a"], actions: [NOW - MIN_GAP] }, fresh), { kind: "block", handle: "a" });
+});
+
+test("le plafond horaire retient blocages et déblocages jusqu'à ce qu'une action sorte de la fenêtre", async () => {
+  const actions = times(MAX_ACTIONS_PER_HOUR, ACTIONS_WINDOW_MS);
+  assert.equal(actionDelay(actions, NOW), 1000);
+  assert.deepEqual(await plan({ seen: ["a"], actions }, fresh), { kind: "wait", ms: 1000 });
+  assert.deepEqual(await plan({ disabled: ["b"], unblock: ["b"], actions }), { kind: "wait", ms: 1000 });
+  assert.equal(actionDelay(actions.slice(1), NOW), 0);
+  assert.equal(actionsCapped(actions, NOW), false);
+  assert.equal(actionsCapped(actions.map((at) => at + 1_000_000), NOW), true);
+});
+
+test("une action sortie de la fenêtre ne compte plus", () => {
+  const old = Array.from({ length: MAX_ACTIONS_PER_HOUR }, () => NOW - ACTIONS_WINDOW_MS);
+  assert.equal(actionDelay(old, NOW), 0);
+});
+
+test("plafond atteint, aucune vérification avant blocage : elle serait périmée avant de servir", async () => {
+  const actions = times(MAX_ACTIONS_PER_HOUR, ACTIONS_WINDOW_MS).map((at) => at + 60_000);
+  assert.deepEqual(await plan({ seen: ["a"], actions }), { kind: "wait", ms: 61_000 });
+  // La vérification du compte X, elle, n'attend pas les actions.
+  assert.deepEqual(await plan({ seen: ["a"], actions, audit: ["c"] }), { kind: "audit", batch: ["c"] });
+});
+
+test("budget de lookup épuisé : ni vérification avant blocage ni vérification de compte", async () => {
+  const lookups = times(LOOKUP_BUDGET, LOOKUP_WINDOW_MS);
+  assert.deepEqual(await plan({ seen: ["a"], lookups }), { kind: "wait", ms: 1000 });
+  assert.deepEqual(await plan({ audit: ["a"], lookups: lookups.map((at) => at + 500_000) }), {
+    kind: "wait",
+    ms: 501_000,
+  });
+  assert.equal(lookupDelay({ lookups: lookups.slice(1), lookupPauseUntil: 0 }, NOW), 0);
+});
+
+test("budget épuisé, les comptes déjà vérifiés et les déblocages continuent", async () => {
+  const lookups = times(LOOKUP_BUDGET, LOOKUP_WINDOW_MS);
+  assert.deepEqual(await plan({ seen: ["a"], lookups }, fresh), { kind: "block", handle: "a" });
+  assert.deepEqual(await plan({ disabled: ["b"], unblock: ["b"], lookups }), { kind: "unblock", handle: "b" });
+});
+
+test("un quota épuisé d'après X retient les lookups seuls, jusqu'à son échéance", async () => {
+  const lookupPauseUntil = NOW + 5000;
+  assert.deepEqual(await plan({ seen: ["a"], lookupPauseUntil }), { kind: "wait", ms: 5000 });
+  assert.deepEqual(await plan({ audit: ["a"], lookupPauseUntil }), { kind: "wait", ms: 5000 });
+  assert.deepEqual(await plan({ seen: ["a"], lookupPauseUntil }, fresh), { kind: "block", handle: "a" });
 });
 
 test("un déblocage passe avant un blocage", async () => {

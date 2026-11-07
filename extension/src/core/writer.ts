@@ -19,11 +19,14 @@ import {
 import { addHandles, requestBlock, requestUnblock, setEnabled } from "../features/accounts/store.ts";
 import {
   finishUnblock,
+  holdLookups,
   markAlreadyBlocked,
   recordAudit,
   recordBlockFailure,
+  recordRequest,
   refuseUnblock,
   resumeBlocking,
+  setHealth,
   useAccount,
 } from "../features/blocking/store.ts";
 import { setNotifications } from "../features/notifications/store.ts";
@@ -38,10 +41,12 @@ const WRITES = {
   completeOnboarding,
   dismissBadge,
   finishUnblock,
+  holdLookups,
   markAlreadyBlocked,
   recordAudit,
   recordBlockFailure,
   recordBlockSuccess,
+  recordRequest,
   refuseUnblock,
   removeList,
   renameList,
@@ -50,6 +55,7 @@ const WRITES = {
   restoreBackup,
   resumeBlocking,
   setEnabled,
+  setHealth,
   setListActive,
   setListNetworks,
   setNotifications,

@@ -488,3 +488,13 @@ test("une erreur stockée qui n'est pas un objet ne vaut pas arrêt", async () =
   store.error = "texte";
   assert.equal((await getState()).error, null);
 });
+
+test("cadence absente ou abîmée : vide, relue dans l'ordre, et propre à chaque compte X", async () => {
+  const empty = await getState();
+  assert.deepEqual([empty.actions, empty.lookups, empty.lookupPauseUntil, empty.health], [[], [], 0, null]);
+  Object.assign(store, { account: "2", legacy: "1", actions: [9], "acct:2/actions": [3, "x", null, 1], health: "autre" });
+  const state = await getState("2");
+  assert.deepEqual(state.actions, [1, 3]);
+  assert.equal(state.health, null);
+  assert.deepEqual((await getState("1")).actions, [9]);
+});

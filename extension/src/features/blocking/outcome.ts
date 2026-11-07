@@ -1,6 +1,6 @@
 // Traduction de la réponse de X en décision pour la file. Fonction pure,
 // isolée pour être testable.
-import { RATE_LIMIT_FALLBACK_MS } from "../../core/config.ts";
+import { MAX_PAUSE_MS, RATE_LIMIT_FALLBACK_MS } from "../../core/config.ts";
 
 /**
  * Échec tel qu'il est stocké : un code, jamais une phrase. Le texte n'est résolu
@@ -127,11 +127,26 @@ export function classify(status: number, body: unknown, resetHeader: string | nu
   return { kind: "failed", code: "refused", param: code, ...(message ? { detail: message } : {}) };
 }
 
+/**
+ * X annonce qu'il ne reste plus de requête : échéance à respecter, ou null s'il
+ * en reste. Une valeur illisible vaut un quota épuisé, comme une échéance absente.
+ * @param remaining valeur de `x-rate-limit-remaining`
+ * @param reset valeur de `x-rate-limit-reset`, en secondes epoch
+ * @param now horodatage courant, en millisecondes
+ */
+export function quotaEnd(remaining: string | null, reset: string | null, now: number): number | null {
+  if (remaining === null || Number(remaining) > 0) return null;
+  const end = Number(reset) * 1000;
+  return end > now ? Math.min(end, now + MAX_PAUSE_MS) : now + RATE_LIMIT_FALLBACK_MS;
+}
+
 export type Lookup = {
   /** Comptes que X connaît, identifiants minuscules. */
   found: Set<string>;
   /** Parmi eux, ceux que l'utilisateur bloque déjà. */
   blocking: Set<string>;
+  /** Fin du quota épuisé d'après X, voir quotaEnd. */
+  quotaEnd?: number;
 };
 
 /**

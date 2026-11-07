@@ -11,7 +11,6 @@
 // suit le compte de la session, relu à chaque tour, puisque changer de compte
 // sur x.com vaut pour tous les onglets.
 import {
-  AUDIT_INTERVAL_MS,
   AUTH_RETRY_MS,
   BLOCK_DELAY_MS,
   DELAY_JITTER,
@@ -89,6 +88,25 @@ async function ensureAccount(account: string): Promise<void> {
 const switched = (state: State): boolean => accountId() !== state.account;
 
 /**
+ * Note la requête avant de l'envoyer, voir recordRequest, puis vérifie que la
+ * session n'a pas changé : l'envoi suit d'un même trait. Faux : rien ne part.
+ */
+async function clearedToSend(state: State, kind: "action" | "lookup"): Promise<boolean> {
+  if (switched(state)) return false;
+  await write("recordRequest", kind, state.account);
+  return !switched(state);
+}
+
+/**
+ * Cette page a rouvert le traitement sur une session renouvelée, et X n'a pas
+ * encore répondu : un nouveau refus viendrait d'autre chose que de la session.
+ */
+let reconnected = false;
+
+/** Codes qu'un changement du jeton web de X donnerait, sur toute session. */
+const TOKEN_CODES: readonly string[] = ["session_expired", "token_invalid", "token_expired"];
+
+/**
  * Attend `ms`, ou moins si l'extension a été rechargée. L'horloge décide de la
  * fin : Chrome ralentit les minuteurs d'un onglet caché, des tranches comptées
  * une à une allongeraient d'autant une longue pause.
@@ -136,8 +154,14 @@ async function handleGlobal(state: State, outcome: GlobalOutcome): Promise<Next>
       await stopBroken(state, { ...failureOf(outcome), context: "stopped" });
       return STOP;
     case "auth":
-      // L'alerte reste affichée jusqu'à la reprise, voir authCleared.
-      await setError(state.prefix, failureOf(outcome), "auth", Infinity, (await sessionId()) ?? undefined);
+      // L'alerte reste affichée jusqu'à la reprise, voir authResume.
+      await setError(
+        state.prefix,
+        { ...failureOf(outcome), ...(reconnected && TOKEN_CODES.includes(outcome.code) ? { context: "reconnected" } : {}) },
+        "auth",
+        Infinity,
+        (await sessionId()) ?? undefined,
+      );
       return STOP;
     case "network":
       await setError(state.prefix, { ...failureOf(outcome), context: "retry" }, "network", NETWORK_RETRY_MS);
@@ -151,18 +175,16 @@ async function handleGlobal(state: State, outcome: GlobalOutcome): Promise<Next>
  * pour tout le traitement. Un autre refus renvoie `failed`, à traiter par l'appelant.
  */
 async function lookup(state: State, batch: string[]): Promise<Lookup | Next | { failed: Failure }> {
-  if (switched(state)) return continueIn();
+  if (!(await clearedToSend(state, "lookup"))) return continueIn();
   const reply = await lookupBlocking(batch);
-  if (!("kind" in reply)) return reply;
+  if (!("kind" in reply)) {
+    reconnected = false;
+    if (reply.quotaEnd !== undefined) await write("holdLookups", reply.quotaEnd, state.account);
+    return reply;
+  }
   if (isGlobal(reply)) return handleGlobal(state, reply);
   return { failed: failureOf(reply) };
 }
-
-/**
- * Prochaine vérification de compte X permise à cet onglet, voir AUDIT_INTERVAL_MS.
- * Entre deux, blocages et déblocages continuent.
- */
-let nextAuditAt = 0;
 
 /**
  * Vérifie un paquet de comptes de la liste pour un compte X encore jamais
@@ -171,7 +193,6 @@ let nextAuditAt = 0;
  * qu'une remise à niveau, elle ne doit pas arrêter le blocage.
  */
 async function audit(state: State, batch: string[]): Promise<Next> {
-  nextAuditAt = Date.now() + AUDIT_INTERVAL_MS;
   const reply = await lookup(state, batch);
   if ("stop" in reply) return reply;
   if ("failed" in reply) {
@@ -186,7 +207,7 @@ async function audit(state: State, batch: string[]): Promise<Next> {
 }
 
 /** Décision du moment pour cet état, voir plan.ts. */
-const plan = (state: State): Action => nextAction(state, { now: Date.now(), checked, nextAuditAt });
+const plan = (state: State): Action => nextAction(state, { now: Date.now(), checked });
 
 /** Vérifie un paquet de comptes à bloquer : déjà bloqués, ou introuvables. */
 async function check(state: State, batch: string[]): Promise<Next> {
@@ -247,11 +268,15 @@ function logRefusal(handle: string, { param, detail }: Extract<Outcome, { kind: 
   console.warn("[Barrage] refus de X pour", handle, param, detail);
 }
 
+/** Une vérification de route disparue compte dans le budget, voir api.ts. */
+const countLookup = (state: State) => (): Promise<void> => write("recordRequest", "lookup", state.account);
+
 async function block(state: State, handle: string): Promise<Next> {
-  if (switched(state)) return continueIn();
-  const outcome = await blockUser(handle);
+  if (!(await clearedToSend(state, "action"))) return continueIn();
+  const outcome = await blockUser(handle, countLookup(state));
   if (isGlobal(outcome)) return handleGlobal(state, outcome);
 
+  reconnected = false;
   const at = Date.now();
   if (outcome.kind === "ok") {
     await setResults(state.prefix, { [handle]: { state: "blocked", at } }, succeeded(state));
@@ -270,10 +295,11 @@ async function block(state: State, handle: string): Promise<Next> {
 
 /** Débloque un compte désactivé par l'utilisateur après que Barrage l'a bloqué. */
 async function unblock(state: State, handle: string): Promise<Next> {
-  if (switched(state)) return continueIn();
-  const outcome = await unblockUser(handle);
+  if (!(await clearedToSend(state, "action"))) return continueIn();
+  const outcome = await unblockUser(handle, countLookup(state));
   if (isGlobal(outcome)) return handleGlobal(state, outcome);
 
+  reconnected = false;
   const at = Date.now();
   if (outcome.kind === "failed") {
     logRefusal(handle, outcome);
@@ -341,12 +367,12 @@ let dirty = false;
  * nouvelle session (reconnexion) ou après AUTH_RETRY_MS. Un compte verrouillé
  * garde son cookie, sa présence ne prouve rien.
  */
-async function authCleared(error: BlockingError, pageLoad: boolean): Promise<boolean> {
-  if (!pageLoad) return false;
+async function authResume(error: BlockingError, pageLoad: boolean): Promise<"renewed" | "elapsed" | null> {
+  if (!pageLoad) return null;
   const session = await sessionId();
-  if (!session) return false;
-  const renewed = error.session !== undefined && error.session !== session;
-  return renewed || Date.now() - (error.at ?? 0) >= AUTH_RETRY_MS;
+  if (!session) return null;
+  if (error.session !== undefined && error.session !== session) return "renewed";
+  return Date.now() - (error.at ?? 0) >= AUTH_RETRY_MS ? "elapsed" : null;
 }
 
 async function start(pageLoad = false): Promise<void> {
@@ -357,7 +383,9 @@ async function start(pageLoad = false): Promise<void> {
   await ensureAccount(account);
   let state = await getState(account);
   if (state.error?.reason === "auth") {
-    if (!(await authCleared(state.error, pageLoad))) return;
+    const resume = await authResume(state.error, pageLoad);
+    if (!resume) return;
+    reconnected = resume === "renewed";
     await setError(state.prefix, null);
     state = { ...state, error: null };
   }

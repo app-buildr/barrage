@@ -3,7 +3,16 @@
 import { X_REQUEST_TIMEOUT_MS } from "../../core/config.ts";
 import { handleFromUserNameText } from "../timeline/authors.ts";
 import { ACCOUNT_BUTTON_SELECTOR } from "../timeline/selectors.ts";
-import { classify, failureOf, noUserMatch, readLookup, routeMaybeGone, type Lookup, type Outcome } from "./outcome.ts";
+import {
+  classify,
+  failureOf,
+  noUserMatch,
+  quotaEnd,
+  readLookup,
+  routeMaybeGone,
+  type Lookup,
+  type Outcome,
+} from "./outcome.ts";
 
 /**
  * Jeton public du client web de X, identique pour tous les visiteurs et présent
@@ -75,9 +84,10 @@ export async function sessionId(): Promise<string | null> {
 
 /**
  * Requête de même origine que la page : le cookie de session part avec.
- * Renvoie l'issue classée, et le corps pour qui doit le lire.
+ * Renvoie l'issue classée, le corps pour qui doit le lire, et la fin du quota
+ * si X annonce qu'il est épuisé.
  */
-async function call(path: string, init: RequestInit): Promise<{ outcome: Outcome; body?: unknown }> {
+async function call(path: string, init: RequestInit): Promise<{ outcome: Outcome; body?: unknown; quota?: number | null }> {
   const csrf = readCsrfToken();
   if (!csrf) return { outcome: { kind: "auth", code: "session_missing" } };
   let response: Response;
@@ -99,11 +109,13 @@ async function call(path: string, init: RequestInit): Promise<{ outcome: Outcome
     return { outcome: { kind: "network", code: "network_down" } };
   }
   const body: unknown = await response.json().catch(() => null);
-  const outcome = classify(response.status, body, response.headers.get("x-rate-limit-reset"), Date.now());
-  return { outcome, body };
+  const reset = response.headers.get("x-rate-limit-reset");
+  const outcome = classify(response.status, body, reset, Date.now());
+  return { outcome, body, quota: quotaEnd(response.headers.get("x-rate-limit-remaining"), reset, Date.now()) };
 }
 
-async function post(path: string, handle: string): Promise<Outcome> {
+/** @param beforeLookup appelé avant la vérification d'une route disparue, une requête lookup de plus */
+async function post(path: string, handle: string, beforeLookup: () => Promise<unknown>): Promise<Outcome> {
   const { outcome, body } = await call(path, {
     method: "POST",
     body: new URLSearchParams({ screen_name: handle, skip_status: "1" }),
@@ -111,18 +123,23 @@ async function post(path: string, handle: string): Promise<Outcome> {
   if (!routeMaybeGone(body)) return outcome;
   // Un compte qui existe encore prouve que c'est la route qui a disparu : sans
   // cette vérification, un déblocage serait noté fait sans avoir eu lieu.
+  await beforeLookup();
   const reply = await lookupBlocking([handle]);
   if ("kind" in reply) return reply.kind === "failed" ? { kind: "broken", ...failureOf(reply) } : reply;
   return reply.found.has(handle) ? { kind: "broken", code: "route_gone" } : outcome;
 }
 
-export const blockUser = (handle: string): Promise<Outcome> => post(BLOCK_PATH, handle);
+const noCount = async (): Promise<void> => {};
+
+export const blockUser = (handle: string, beforeLookup: () => Promise<unknown> = noCount): Promise<Outcome> =>
+  post(BLOCK_PATH, handle, beforeLookup);
 
 /**
  * Débloque un compte. Issue "ok" : le compte est débloqué. Issue "not_found" :
  * compte disparu, rien à débloquer.
  */
-export const unblockUser = (handle: string): Promise<Outcome> => post(UNBLOCK_PATH, handle);
+export const unblockUser = (handle: string, beforeLookup: () => Promise<unknown> = noCount): Promise<Outcome> =>
+  post(UNBLOCK_PATH, handle, beforeLookup);
 
 export type LookupReply = Lookup | Exclude<Outcome, { kind: "ok" }>;
 
@@ -132,11 +149,13 @@ export type LookupReply = Lookup | Exclude<Outcome, { kind: "ok" }>;
  */
 export async function lookupBlocking(handles: readonly string[]): Promise<LookupReply> {
   const query = new URLSearchParams({ screen_name: handles.join(",") });
-  const { outcome, body } = await call(`${LOOKUP_PATH}?${query}`, { method: "GET" });
+  const { outcome, body, quota } = await call(`${LOOKUP_PATH}?${query}`, { method: "GET" });
+  const quotaInfo = typeof quota === "number" ? { quotaEnd: quota } : {};
   // Seul ce code prouve qu'aucun compte du paquet n'existe. Un autre (route
   // disparue après un changement de l'API…) marquerait à tort 100 comptes introuvables.
-  if (noUserMatch(body)) return { found: new Set(), blocking: new Set() };
+  if (noUserMatch(body)) return { found: new Set(), blocking: new Set(), ...quotaInfo };
   if (outcome.kind === "not_found") return { kind: "failed", ...failureOf(outcome) };
   if (outcome.kind !== "ok") return outcome;
-  return readLookup(body) ?? { kind: "failed", code: "unreadable_reply" };
+  const lookup = readLookup(body);
+  return lookup ? { ...lookup, ...quotaInfo } : { kind: "failed", code: "unreadable_reply" };
 }
