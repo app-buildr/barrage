@@ -4,6 +4,7 @@
 import { accountStates, readStorage, scoped, stringArray, type State } from "../../core/state.ts";
 import { blockedByBarrage, resultOf } from "../blocking/queue.ts";
 import type { NetworkId } from "../networks/networks.ts";
+import { DEFAULT_HANDLES } from "./defaults.ts";
 import {
   IMPORTED_NAME,
   OFFICIAL_ID,
@@ -161,6 +162,28 @@ export async function replaceOfficial(
     Object.assign(values, scoped(own.prefix, { retired, retiredAt, seen: own.seen.filter((h) => !removed.has(h)) }));
   }
   await chrome.storage.local.set(values);
+}
+
+/** Liste intégrée à la version précédente de l'extension. */
+const BUNDLED_KEY = "bundled";
+
+/**
+ * Mise à jour de l'extension : tant qu'aucune liste n'est reçue de GitHub, la
+ * liste intégrée fait foi, un compte qu'elle ne contient plus est retiré comme
+ * il le serait de la liste en ligne.
+ */
+export async function syncBundled(): Promise<void> {
+  const stored = await readStorage();
+  const previous = Array.isArray(stored[BUNDLED_KEY]) ? stringArray(stored[BUNDLED_KEY]) : null;
+  const bundled = { [BUNDLED_KEY]: [...DEFAULT_HANDLES] };
+  const states = accountStates(stored);
+  const [shared] = states;
+  if (previous && shared.remote === null) {
+    const update = compareLists(previous, DEFAULT_HANDLES, otherActiveHandles(shared.lists, "x"));
+    if (update.ok) return replaceOfficial(states, DEFAULT_HANDLES, update, bundled);
+    console.warn("[Barrage] liste intégrée sans retrait :", update.reason);
+  }
+  await chrome.storage.local.set(bundled);
 }
 
 /** Listes avec cette date de synchronisation pour la liste collaborative. */

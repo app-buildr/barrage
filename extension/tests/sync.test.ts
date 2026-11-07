@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
-import { RETIRE_GRACE_MS } from "../src/core/config.ts";
+import { LIST_MAX_BYTES, RETIRE_GRACE_MS } from "../src/core/config.ts";
 import { IMPORT_LIST, REFRESH_LISTS } from "../src/core/messages.ts";
 import { getState, resultKey, unblockQueue } from "../src/core/state.ts";
 import { BAD_HOST_MESSAGE, DOWNLOAD_ERROR, INVALID_WARNING, TABLE_MESSAGE } from "../src/features/lists/import.ts";
 import { officialList, type ListDef } from "../src/features/lists/lists.ts";
 import { acceptPendingList } from "../src/features/lists/store.ts";
-import { syncLists } from "../src/features/lists/sync.ts";
+import { refreshLists, syncLists } from "../src/features/lists/sync.ts";
+import { checkLatestVersion } from "../src/features/updates/check.ts";
 import { installChrome } from "./helpers/chrome.ts";
 
 const GITHUB = "https://raw.githubusercontent.com/a/b/main/l.txt";
@@ -41,7 +42,7 @@ beforeEach(() => {
     if (!match) return new Response("", { status: 404 });
     return (responses[match] as () => Response)();
   }) as typeof fetch;
-  syncLists();
+  syncLists(refreshLists);
 });
 
 test("un compte retiré de la collaborative n'est débloqué qu'après le délai de grâce", async () => {
@@ -232,15 +233,15 @@ test("les listes GitHub sont synchronisées, désactivées comprises", async () 
 
 test("une liste GitHub illisible, en tableau ou trop grosse garde son contenu", async () => {
   store.lists = [officialList(true), github(["e"])];
-  const cases: Array<() => Response> = [
-    () => new Response("", { status: 500 }),
-    () => new Response("id,nom\n1,Alain\n2,David\n"),
-    () => new Response("e ".repeat(600_000)),
+  const cases: Array<[string, () => Response]> = [
+    ["erreur HTTP", () => new Response("", { status: 500 })],
+    ["tableau", () => new Response("id,nom\n1,Alain\n2,David\n")],
+    ["trop grosse", () => new Response("e ".repeat(600_000))],
   ];
-  for (const response of cases) {
+  for (const [label, response] of cases) {
     responses["l.txt"] = response;
     await send({ type: REFRESH_LISTS });
-    assert.deepEqual((await getState()).lists[1]?.handles, ["e"]);
+    assert.deepEqual((await getState()).lists[1]?.handles, ["e"], label);
   }
 });
 
@@ -277,4 +278,72 @@ test("l'import rend compte d'un tableau et d'un téléchargement impossible", as
   assert.deepEqual(await send({ type: IMPORT_LIST, url: GITHUB }), { ok: false, reason: TABLE_MESSAGE });
   delete responses["l.txt"];
   assert.deepEqual(await send({ type: IMPORT_LIST, url: GITHUB }), { ok: false, reason: DOWNLOAD_ERROR });
+});
+
+test("un téléchargement de la collaborative ne suit pas de redirection et n'envoie pas de cookie", async () => {
+  responses["/x.json"] = json(["a", "b", "c", "d"]);
+  await send({ type: REFRESH_LISTS });
+  const init = fetched.find(({ url }) => url.endsWith("/x.json"))?.init;
+  assert.equal(init?.redirect, "error");
+  assert.equal(init?.credentials, "omit");
+});
+
+test("une réponse qui n'est pas un tableau n'écrit rien d'autre qu'un refus", async () => {
+  responses["/x.json"] = json({ handles: ["z"] });
+  await send({ type: REFRESH_LISTS });
+  const state = await getState();
+  assert.deepEqual(state.remote, ["a", "b", "c", "d"]);
+  assert.deepEqual(store.lists, [officialList(true)]);
+  assert.equal(state.listGuards.official?.pending?.reason, "le fichier n'est pas une liste");
+  assert.equal(state.listGuards.official?.pending?.handles, undefined);
+});
+
+test("une réponse illisible, en erreur ou trop grosse laisse tout en place, avec une trace", async (t) => {
+  const warn = t.mock.method(console, "warn", () => {});
+  const before = JSON.stringify(store);
+  const cases: Array<[string, () => Response]> = [
+    ["JSON illisible", () => new Response("<html>")],
+    ["erreur HTTP", () => new Response("", { status: 503 })],
+    ["taille annoncée", () => new Response("[]", { headers: { "content-length": String(LIST_MAX_BYTES + 1) } })],
+    ["taille réelle", () => new Response(`["${"a".repeat(LIST_MAX_BYTES)}"]`)],
+  ];
+  for (const [label, response] of cases) {
+    warn.mock.resetCalls();
+    responses["/x.json"] = response;
+    await send({ type: REFRESH_LISTS });
+    assert.equal(JSON.stringify(store), before, label);
+    assert.equal(warn.mock.callCount(), 1, label);
+  }
+});
+
+test("hors ligne, rien n'est signalé", async (t) => {
+  const warn = t.mock.method(console, "warn", () => {});
+  const online = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  t.after(() => Object.defineProperty(globalThis, "navigator", online as PropertyDescriptor));
+  Object.defineProperty(globalThis, "navigator", { value: { onLine: false }, configurable: true });
+  globalThis.fetch = (async () => {
+    throw new TypeError("Failed to fetch");
+  }) as typeof fetch;
+  await send({ type: REFRESH_LISTS });
+  assert.equal(warn.mock.callCount(), 0);
+});
+
+test("la dernière version publiée est relevée, sans redirection ni cookie", async () => {
+  responses["/releases/latest"] = json({ tag_name: "v9.8.7" });
+  await checkLatestVersion();
+  assert.equal((await getState()).latestVersion, "9.8.7");
+  const init = fetched.find(({ url }) => url.endsWith("/releases/latest"))?.init;
+  assert.equal(init?.redirect, "error");
+  assert.equal(init?.credentials, "omit");
+});
+
+test("une réponse de GitHub refusée ou sans version laisse la version relevée", async (t) => {
+  const warn = t.mock.method(console, "warn", () => {});
+  store.latestVersion = "1.0.0";
+  responses["/releases/latest"] = () => new Response("", { status: 403 });
+  await checkLatestVersion();
+  assert.equal(warn.mock.callCount(), 1);
+  responses["/releases/latest"] = json({ tag_name: "pas une version" });
+  await checkLatestVersion();
+  assert.equal(store.latestVersion, "1.0.0");
 });

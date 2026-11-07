@@ -164,6 +164,60 @@ test("une ancienne installation sans liste perso se reconnaît à ses résultats
   assert.deepEqual(state.lists.map((list) => list.id), ["official"]);
 });
 
+test("l'installation enchaîne badges et liste intégrée avant le premier téléchargement", async () => {
+  const order: string[] = [];
+  start({ account: "1", legacy: "1", accounts: { "1": {} }, blockCount: 0 });
+  const set = chrome.storage.local.set;
+  (chrome.storage.local as any).set = async (values: Stored) => {
+    order.push(...Object.keys(values).filter((key) => key === "bundled" || key === "blockCount"));
+    return set(values);
+  };
+  (chrome.alarms as any).create = () => void order.push("alarme");
+  globalThis.fetch = (async () => {
+    order.push("téléchargement");
+    return new Response("", { status: 404 });
+  }) as typeof fetch;
+  await boot();
+  assert.deepEqual(order, []);
+  chromeStub.onInstalled.fire({ reason: "install" });
+  await settle();
+  assert.deepEqual(order.slice(0, 4), ["blockCount", "bundled", "alarme", "téléchargement"]);
+});
+
+test("le démarrage du navigateur planifie l'alarme sans toucher à la liste intégrée", async () => {
+  const alarms: string[] = [];
+  start({ onboarded: true });
+  (chrome.alarms as any).create = (name: string) => void alarms.push(name);
+  await boot();
+  chromeStub.onStartup.fire();
+  await settle();
+  assert.deepEqual(alarms, ["barrage-lists"]);
+  assert.equal("bundled" in store, false);
+});
+
+test("une migration qui échoue n'empêche ni les étapes suivantes ni le téléchargement", async (t) => {
+  const failure = t.mock.method(console, "error", () => {});
+  start(fixture("1.3.0"));
+  const get = chrome.storage.local.get;
+  let failing = true;
+  (chrome.storage.local as any).get = async (query: unknown) => {
+    if (failing && Array.isArray(query)) throw new Error("lecture impossible");
+    return (get as (query: unknown) => Promise<unknown>)(query);
+  };
+  let downloads = 0;
+  globalThis.fetch = (async () => {
+    downloads++;
+    return new Response("", { status: 404 });
+  }) as typeof fetch;
+  await boot();
+  chromeStub.onInstalled.fire({ reason: "update", previousVersion: "1.3.0" });
+  await settle();
+  failing = false;
+  assert.ok(failure.mock.callCount() >= 1);
+  assert.ok(downloads >= 1);
+  assert.deepEqual(store.bundled, DEFAULT_HANDLES);
+});
+
 test("une mise à jour depuis une version sans aucune donnée n'affiche pas l'accueil", async () => {
   start({});
   await migrate("1.3.0");

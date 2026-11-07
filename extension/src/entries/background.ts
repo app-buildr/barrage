@@ -3,24 +3,38 @@ import { syncAllBadges } from "../features/badges/store.ts";
 import { watchActionBadge } from "../features/blocking/action-badge.ts";
 import { repairInheritedBlocks } from "../features/blocking/store.ts";
 import { migrate } from "../features/lists/migrate.ts";
-import { syncLists } from "../features/lists/sync.ts";
+import { syncBundled } from "../features/lists/store.ts";
+import { refreshLists, syncLists } from "../features/lists/sync.ts";
 import { servePages } from "../features/onboarding/open.ts";
+import { checkLatestVersion } from "../features/updates/check.ts";
 import { serial, serveWrites } from "../core/writer.ts";
 
-const runMigration = (previousVersion?: string): Promise<void> =>
-  serial(() => migrate(previousVersion)).catch((err: unknown) => console.error("[Barrage] migration échouée :", err));
+const logFailure = (err: unknown): void => console.error("[Barrage]", err);
+
+/** Écriture à la suite des autres : un échec est journalisé, la suite s'applique quand même. */
+const inOrder = (task: () => Promise<void>): Promise<void> => serial(task).catch(logFailure);
+
+/** Listes en ligne et dernière version de l'extension, relevées ensemble. */
+const refresh = (): Promise<unknown> => Promise.all([refreshLists(), checkLatestVersion()]).catch(logFailure);
+
+const schedule = syncLists(refresh);
 
 // À chaque démarrage, avant tout le reste : une mise à jour dont l'événement a
 // été manqué est rattrapée d'après les données, voir migrate.
-void runMigration();
-// Avant syncLists : la migration passe avant toute synchronisation des listes.
+void inOrder(() => migrate());
+
+// Seul écouteur qui touche à l'état, pour que l'ordre se lise ici : migration,
+// réparation d'une mise à jour, badges, liste intégrée, puis premier téléchargement.
 chrome.runtime.onInstalled.addListener(({ reason, previousVersion }) => {
-  if (reason === "update") void runMigration(previousVersion);
-  // Une mise à jour de l'extension répare l'état laissé par la 1.1.0.
-  if (reason === "update") void serial(() => repairInheritedBlocks(previousVersion));
-  void serial(syncAllBadges);
+  if (reason === "update") {
+    void inOrder(() => migrate(previousVersion));
+    void inOrder(() => repairInheritedBlocks(previousVersion));
+  }
+  void inOrder(syncAllBadges);
+  void inOrder(syncBundled).finally(schedule);
 });
+chrome.runtime.onStartup.addListener(schedule);
+
 servePages();
 serveWrites();
 watchActionBadge();
-syncLists();

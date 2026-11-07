@@ -58,6 +58,11 @@ test("au-delà de la part d'ajouts permise, la liste est refusée, même si elle
   assert.deepEqual(update, { ok: false, reason: "251 comptes ajoutés d'un coup à 1000" });
 });
 
+test("le plancher vaut aussi pour les retraits, à l'unité près", () => {
+  assert.equal(compareLists(["a", "b", "c", "d", "e", "f"], ["f"], []).ok, true);
+  assert.equal(compareLists(["a", "b", "c", "d", "e", "f"], ["z"], []).ok, false);
+});
+
 test("une petite liste change sans refus, dans la limite du plancher", () => {
   assert.equal(compareLists(["a", "b"], ["a", "c", "d", "e", "f", "g"], []).ok, true);
   assert.equal(compareLists(["a", "b"], ["a", "c", "d", "e", "f", "g", "h"], []).ok, false);

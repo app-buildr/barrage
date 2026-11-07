@@ -3,15 +3,22 @@ import { beforeEach, test } from "node:test";
 import { installChrome } from "./helpers/chrome.ts";
 import { DEFAULT_HANDLES } from "../src/features/lists/defaults.ts";
 import { parseHandle } from "../src/features/lists/handles.ts";
+import { MAX_ATTEMPTS } from "../src/core/config.ts";
 import { active, getState, resultChanges, resultHandle, resultKey, unblockQueue } from "../src/core/state.ts";
 import { addHandles, requestBlock, requestUnblock, setEnabled } from "../src/features/accounts/store.ts";
 import {
   finishUnblock,
   markAlreadyBlocked,
   recordAudit,
+  recordBlockFailure,
+  refuseUnblock,
   repairInheritedBlocks,
+  setError,
+  setPauseUntil,
   useAccount,
 } from "../src/features/blocking/store.ts";
+import { halted, resumable } from "../src/features/blocking/plan.ts";
+import { pendingIn } from "../src/features/blocking/queue.ts";
 import { setNotify } from "../src/features/notifications/store.ts";
 import { officialList } from "../src/features/lists/lists.ts";
 import { addSeen } from "../src/features/timeline/store.ts";
@@ -415,4 +422,66 @@ test("un nouveau compte X est enregistré et à vérifier en une seule écriture
   const second = await getState("2");
   assert.deepEqual(second.audit, ["a", "b"]);
   assert.deepEqual(second.accounts["2"], { handle: "deux" });
+});
+
+test("des refus répétés sortent le compte de la file au dernier essai permis", async () => {
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    assert.deepEqual(pendingIn(["a"], (await getState()).results), ["a"], `avant l'essai ${attempt}`);
+    await recordBlockFailure("a", "refus", attempt);
+  }
+  const { results } = await getState();
+  assert.deepEqual(results.a, { state: "failed", at: MAX_ATTEMPTS, message: "refus", attempts: MAX_ATTEMPTS });
+  assert.deepEqual(pendingIn(["a"], results), []);
+});
+
+test("un déblocage refusé sort de la file, reste bloqué et se signale", async () => {
+  putResults({ a: { state: "blocked", at: 1 } });
+  store.disabled = ["a"];
+  store.unblock = ["a"];
+  await refuseUnblock("a", "non");
+  const state = await getState();
+  assert.equal(state.results.a?.state, "blocked");
+  assert.equal(state.results.a?.unblockFailed, true);
+  assert.deepEqual(unblockQueue(state), []);
+  assert.deepEqual(state.unblock, []);
+  assert.match(state.error?.message ?? "", /Déblocage de @a impossible : non/);
+});
+
+test("une erreur permanente garde une échéance finie, après le passage en JSON", async () => {
+  await setError("", "arrêt", "api", Infinity);
+  const { error } = await getState();
+  assert.equal(error?.staleAt, Number.MAX_SAFE_INTEGER);
+  await setError("", null);
+  assert.equal((await getState()).error, null);
+});
+
+test("une erreur passagère expire après son délai, marge comprise", async () => {
+  const before = Date.now();
+  await setError("", "réseau", "network", 1000);
+  const { error } = await getState();
+  assert.ok((error?.staleAt ?? 0) > before + 1000);
+  assert.ok((error?.staleAt ?? Infinity) < Number.MAX_SAFE_INTEGER);
+});
+
+test("une pause est écrite sous le préfixe du compte X", async () => {
+  await setPauseUntil("acct:2/", 42);
+  assert.equal(store["acct:2/pauseUntil"], 42);
+  assert.equal((await getState()).pauseUntil, 0);
+});
+
+test("une erreur stockée illisible garde le traitement arrêté, et se lève dans les options", async () => {
+  for (const value of [{ reason: "network" }, { message: "sans échéance", reason: "other" }, { staleAt: 1 }]) {
+    store.error = value;
+    const { error } = await getState();
+    assert.equal(halted(error, Date.now()), true, JSON.stringify(value));
+    assert.equal(resumable(error), true, JSON.stringify(value));
+    assert.ok(error?.message, JSON.stringify(value));
+  }
+});
+
+test("une erreur stockée qui n'est pas un objet ne vaut pas arrêt", async () => {
+  store.error = null;
+  assert.equal((await getState()).error, null);
+  store.error = "texte";
+  assert.equal((await getState()).error, null);
 });

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createBadgeStore, createToastStore, MAX_TOASTS, type Content } from "../src/features/notifications/toasts.ts";
+import { createBadgeStore, createToastStore, type Content } from "../src/features/notifications/toasts.ts";
 
 const blocked: Content = { kind: "blocked", title: " vient d'être bloqué", detail: "par Barrage" };
 const unblocked: Content = { kind: "unblocked", title: " a été débloqué.", detail: "" };
@@ -28,7 +28,7 @@ test("au-delà du maximum, les plus anciennes cèdent la place", () => {
   for (const handle of ["a", "b", "c", "d"]) store.show(handle, blocked);
   assert.deepEqual(
     store.getSnapshot().map((t) => t.handle),
-    ["b", "c", "d"].slice(-MAX_TOASTS),
+    ["b", "c", "d"],
   );
 });
 
