@@ -3,6 +3,7 @@
 // viennent (onglets x.com, options, service worker lui-même). Sans cela, deux
 // écritures simultanées liraient le même état et la seconde effacerait la
 // première.
+import { restoreBackup } from "../features/backup/store.ts";
 import { dismissBadge, recordBlockSuccess, setNotifyBadges, syncBadges } from "../features/badges/store.ts";
 import {
   acceptPendingList,
@@ -44,6 +45,7 @@ const WRITES = {
   renameList,
   requestBlock,
   requestUnblock,
+  restoreBackup,
   resumeBlocking,
   setEnabled,
   setListActive,

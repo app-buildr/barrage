@@ -9,6 +9,7 @@ import type { State } from "@/core/state.ts";
 import { useExtensionState } from "@/core/use-extension-state.ts";
 import { AccountsSection } from "@/features/accounts/AccountsSection.tsx";
 import { BackgroundAlert } from "@/features/accounts/BackgroundAlert.tsx";
+import { BackupSettings } from "@/features/backup/BackupSettings.tsx";
 import { BADGES, earnedCount } from "@/features/badges/badges.ts";
 import { BadgesTab } from "@/features/badges/BadgesTab.tsx";
 import { ConnectionBadge } from "@/features/blocking/ConnectionBadge.tsx";
@@ -53,6 +54,7 @@ function Options({ state, tab }: { state: State; tab: MainTab }) {
           <TabsContent value="reglages" forceMount className={PANEL}>
             <ListsSettings state={state} />
             <NotificationSettings notify={state.notify} notifyBadges={state.notifyBadges} />
+            <BackupSettings />
           </TabsContent>
         </div>
       </Tabs>
