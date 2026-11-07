@@ -30,15 +30,17 @@ const text = (
 
 const BLOCKED: Status = { label: "Bloqué", className: "", action: "unblock", category: "blocked", tag: "blocked" };
 const UNBLOCKING = text("Déblocage en cours…", "disabled", "muted");
+const WAITING = text("En attente", "visible", "muted");
 const VISIBLE: Status = { label: "Visible", className: "", action: "block", category: "visible", tag: "visible" };
 
 /**
  * Compte dont le blocage automatique est sur On. « Bloqué », qu'il l'ait été
  * par l'extension ou déjà par l'utilisateur : la distinction, qui décide d'un
- * déblocage au passage sur Off, n'est pas affichée.
+ * déblocage au passage sur Off, n'est pas affichée. `paused` : rien ne part
+ * vers X pour l'instant, limite de X ou traitement arrêté.
  */
-export function describe(result: Result | undefined, queued: boolean): Status {
-  if (queued && isPending(result)) return text("Blocage en cours…", "visible", "muted");
+export function describe(result: Result | undefined, queued: boolean, paused = false): Status {
+  if (queued && isPending(result)) return paused ? WAITING : text("Blocage en cours…", "visible", "muted");
   switch (result?.state) {
     case "blocked":
     case "already_blocked":

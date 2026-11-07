@@ -1,5 +1,4 @@
-// Liste des comptes d'un réseau pris en charge : encart info, alerte de fond,
-// progression, recherche, filtres par état et tableau. Elle porte sur la liste
+// Liste des comptes d'un réseau pris en charge : encart info, progression, recherche, filtres par état et tableau. Elle porte sur la liste
 // effective, plus les comptes bloqués qui en sont sortis (« hors liste »).
 import { useDeferredValue, useMemo, useState } from "react";
 import type { State } from "@/core/state.ts";
@@ -9,7 +8,6 @@ import { coversNetwork } from "../lists/lists.ts";
 import type { Network } from "../networks/networks.ts";
 import { AccountRow } from "./AccountRow.tsx";
 import { AccountTable, HEAD, TableHead } from "./AccountTable.tsx";
-import { BackgroundAlert } from "./BackgroundAlert.tsx";
 import { matches, noMatchMessage, normalizeQuery } from "./filter.ts";
 import { ProgressCard } from "./ProgressCard.tsx";
 import { SearchInput } from "./SearchInput.tsx";
@@ -37,7 +35,6 @@ export function AccountList({ state, network }: { state: State; network: Network
         pour que Barrage ignore un compte, et le débloque s'il l'avait bloqué.
       </p>
       <Tip />
-      <BackgroundAlert error={state.error} />
       {noActiveList ? (
         <Panel className="mb-5">
           Aucune liste active.{" "}

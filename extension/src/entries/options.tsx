@@ -8,6 +8,7 @@ import { REFRESH_LISTS } from "@/core/messages.ts";
 import type { State } from "@/core/state.ts";
 import { useExtensionState } from "@/core/use-extension-state.ts";
 import { AccountsSection } from "@/features/accounts/AccountsSection.tsx";
+import { BackgroundAlert } from "@/features/accounts/BackgroundAlert.tsx";
 import { BADGES, earnedCount } from "@/features/badges/badges.ts";
 import { BadgesTab } from "@/features/badges/BadgesTab.tsx";
 import { ConnectionBadge } from "@/features/blocking/ConnectionBadge.tsx";
@@ -33,6 +34,7 @@ function Options({ state, tab }: { state: State; tab: MainTab }) {
         <ConnectionBadge />
       </Header>
       <UpdateBanner latestVersion={state.latestVersion} />
+      <BackgroundAlert error={state.error} pauseUntil={state.pauseUntil} />
       <Tabs
         value={tab}
         onValueChange={(next) => {

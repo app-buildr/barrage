@@ -13,18 +13,17 @@
 import {
   AUDIT_INTERVAL_MS,
   AUTH_RETRY_MS,
-  CHECK_MAX_AGE_MS,
+  CHECK_RETRY_MS,
   DELAY_JITTER,
   DELAY_SECONDS,
-  LOOKUP_BATCH,
+  MAX_CONSECUTIVE_FAILURES,
+  MAX_PAUSE_MS,
   NETWORK_RETRY_MS,
 } from "../../core/config.ts";
 import {
   QUEUE_KEYS,
   getState,
   onStateChange,
-  queueOrder,
-  unblockQueue,
   type Account,
   type BlockingError,
   type State,
@@ -39,9 +38,10 @@ import {
   unblockUser,
 } from "./api.ts";
 import type { Lookup, Outcome } from "./outcome.ts";
-import { nextPending, uncheckedPending, type Result, type Results } from "./queue.ts";
+import { nextAction, type Action } from "./plan.ts";
+import type { Result, Results } from "./queue.ts";
 import { write } from "../../core/write.ts";
-import { setError, setPauseUntil, setResults } from "./store.ts";
+import { recordAutomation, setError, setFailures, setPauseUntil, setResults } from "./store.ts";
 import { contextAlive } from "../../core/context.ts";
 
 const LOCK_NAME = "barrage-queue";
@@ -96,17 +96,29 @@ const STOP: Next = { stop: true };
 const now = (waitMs = 0): Next => ({ stop: false, waitMs });
 
 /** Issue qui concerne tout le traitement, pas le compte visé. */
-type GlobalOutcome = Extract<Outcome, { kind: "rate_limited" | "auth" | "network" }>;
+type GlobalOutcome = Extract<Outcome, { kind: "rate_limited" | "automation" | "broken" | "auth" | "network" }>;
 
-const isGlobal = (outcome: { kind: string }): outcome is GlobalOutcome =>
-  outcome.kind === "rate_limited" || outcome.kind === "auth" || outcome.kind === "network";
+const GLOBAL_KINDS: readonly string[] = ["rate_limited", "automation", "broken", "auth", "network"];
+
+const isGlobal = (outcome: { kind: string }): outcome is GlobalOutcome => GLOBAL_KINDS.includes(outcome.kind);
+
+/** X a changé : tout s'arrête, tentatives et files intactes, jusqu'à la reprise demandée dans les options. */
+const stopBroken = (state: State, message: string): Promise<void> =>
+  setError(state.prefix, `${message} Barrage s'est arrêté : X a peut-être changé.`, "api", Infinity);
 
 async function handleGlobal(state: State, outcome: GlobalOutcome): Promise<Next> {
   switch (outcome.kind) {
     case "rate_limited":
       // Stocké, pour qu'un autre onglet qui reprendrait le verrou attende aussi.
-      await setPauseUntil(state.prefix, outcome.until);
+      // La variation évite de reprendre à la seconde annoncée, jamais avant.
+      await setPauseUntil(state.prefix, Math.min(outcome.until, Date.now() + MAX_PAUSE_MS) + jittered(DELAY_SECONDS));
       return now();
+    case "automation":
+      await recordAutomation(state.prefix, state.strikes, outcome.message);
+      return STOP;
+    case "broken":
+      await stopBroken(state, outcome.message);
+      return STOP;
     case "auth":
       // L'alerte reste affichée jusqu'à la reprise, voir authCleared.
       await setError(state.prefix, outcome.message, "auth", Infinity, (await sessionId()) ?? undefined);
@@ -157,13 +169,17 @@ async function audit(state: State, batch: string[]): Promise<Next> {
   return now();
 }
 
+/** Décision du moment pour cet état, voir plan.ts. */
+const plan = (state: State): Action => nextAction(state, { now: Date.now(), checked, nextAuditAt });
+
 /** Vérifie un paquet de comptes à bloquer : déjà bloqués, ou introuvables. */
 async function check(state: State, batch: string[]): Promise<Next> {
   const reply = await lookup(state, batch);
   if ("stop" in reply) return reply;
   if ("failed" in reply) {
-    // Sans vérification, on risquerait de rebloquer : on s'arrête.
-    await setError(state.prefix, `Vérification impossible : ${reply.failed}`, "other", Infinity);
+    // Sans vérification, on risquerait de rebloquer : on s'arrête, voir halted.
+    const retry = `Nouvel essai au prochain compte vu, dans ${CHECK_RETRY_MS / 60_000} minutes au plus tôt.`;
+    await setError(state.prefix, `Vérification impossible : ${reply.failed} ${retry}`, "other", Infinity);
     return STOP;
   }
   const at = Date.now();
@@ -190,6 +206,25 @@ function recovered(state: State): Record<string, unknown> {
   return state.error ? { error: null } : {};
 }
 
+/** X a répondu sur ce compte : la série de refus s'arrête là. */
+function answered(state: State): Record<string, unknown> {
+  return { ...recovered(state), ...(state.failures.length ? { failures: [] } : {}) };
+}
+
+/** L'action a abouti : seul un blocage ou un déblocage réussi lève le soupçon d'automatisation. */
+function succeeded(state: State): Record<string, unknown> {
+  return { ...answered(state), ...(state.strikes ? { strikes: 0 } : {}) };
+}
+
+/** Refus de ce compte : au dernier permis, tout s'arrête sans le lui imputer. */
+async function tripped(state: State, handle: string, message: string): Promise<boolean> {
+  const failures = [...new Set([...state.failures, handle])];
+  await setFailures(state.prefix, failures);
+  if (failures.length < MAX_CONSECUTIVE_FAILURES) return false;
+  await stopBroken(state, `${failures.length} comptes refusés de suite (${message}).`);
+  return true;
+}
+
 async function block(state: State, handle: string): Promise<Next> {
   if (switched(state)) return now();
   const outcome = await blockUser(handle);
@@ -197,12 +232,15 @@ async function block(state: State, handle: string): Promise<Next> {
 
   const at = Date.now();
   if (outcome.kind === "ok") {
-    await setResults(state.prefix, { [handle]: { state: "blocked", at } }, recovered(state));
+    await setResults(state.prefix, { [handle]: { state: "blocked", at } }, succeeded(state));
     await updateBadges("recordBlockSuccess", state);
   } else if (outcome.kind === "not_found") {
     const result: Result = { state: "not_found", at, message: outcome.message };
-    await setResults(state.prefix, { [handle]: result }, recovered(state));
-  } else await write("recordBlockFailure", handle, outcome.message, at, state.account);
+    await setResults(state.prefix, { [handle]: result }, answered(state));
+  } else {
+    if (await tripped(state, handle, outcome.message)) return STOP;
+    await write("recordBlockFailure", handle, outcome.message, at, state.account);
+  }
   // Le délai entre deux blocages ne se raccourcit pas quand la liste change.
   return now(jittered(DELAY_SECONDS));
 }
@@ -214,20 +252,18 @@ async function unblock(state: State, handle: string): Promise<Next> {
   if (isGlobal(outcome)) return handleGlobal(state, outcome);
 
   const at = Date.now();
-  if (outcome.kind === "failed") await write("refuseUnblock", handle, outcome.message, state.account);
-  else {
+  if (outcome.kind === "failed") {
+    if (await tripped(state, handle, outcome.message)) return STOP;
+    await write("refuseUnblock", handle, outcome.message, state.account);
+  } else {
     const result: Result =
       outcome.kind === "ok" ? { state: "unblocked", at } : { state: "not_found", at, message: outcome.message };
-    await write("finishUnblock", handle, result, recovered(state), state.account);
+    await write("finishUnblock", handle, result, outcome.kind === "ok" ? succeeded(state) : answered(state), state.account);
   }
   return now(jittered(DELAY_SECONDS));
 }
 
-/**
- * Un tour : une vérification du compte X, un déblocage, une vérification, un
- * blocage, ou l'arrêt. Sans compte à vérifier, à débloquer ni à bloquer (vu
- * dans le fil ou demandé à la main), rien : ni requête à X, ni écriture.
- */
+/** Un tour : l'action décidée par nextAction, voir plan.ts. */
 async function step(): Promise<Next> {
   const account = accountId();
   // Sans compte X connecté, rien n'est possible. La connexion recharge x.com,
@@ -239,33 +275,21 @@ async function step(): Promise<Next> {
     checkedFor = account;
   }
   const state = await getState(account);
-  // Les déblocages demandés passent avant tout nouveau blocage.
-  const toUnblock = unblockQueue(state)[0];
-  const order = queueOrder(state);
-  const toBlock = nextPending(order, state.results);
-  if (!toUnblock && !toBlock && !state.audit.length) return STOP;
-
-  const remaining = state.pauseUntil - Date.now();
-  if (remaining > 0) return now(remaining);
-
-  // La vérification du compte X passe en premier quand elle est due, sans
-  // retenir les blocages et déblocages entre deux paquets.
-  const auditWait = nextAuditAt - Date.now();
-  if (state.audit.length && auditWait <= 0) return audit(state, state.audit.slice(0, LOOKUP_BATCH));
-  if (toUnblock) return unblock(state, toUnblock);
-  if (!toBlock) return now(auditWait);
-
-  const unchecked = uncheckedPending(order, state.results, checked, Date.now(), CHECK_MAX_AGE_MS);
-  if (unchecked.length) return check(state, unchecked.slice(0, LOOKUP_BATCH));
-  return block(state, toBlock);
-}
-
-function hasWork(state: State): boolean {
-  return (
-    state.audit.length > 0 ||
-    unblockQueue(state).length > 0 ||
-    nextPending(queueOrder(state), state.results) !== undefined
-  );
+  const action = plan(state);
+  switch (action.kind) {
+    case "stop":
+      return STOP;
+    case "wait":
+      return now(action.ms);
+    case "audit":
+      return audit(state, action.batch);
+    case "unblock":
+      return unblock(state, action.handle);
+    case "check":
+      return check(state, action.batch);
+    case "block":
+      return block(state, action.handle);
+  }
 }
 
 async function run(): Promise<void> {
@@ -307,12 +331,13 @@ async function start(pageLoad = false): Promise<void> {
   const account = accountId();
   if (!account) return;
   await ensureAccount(account);
-  const state = await getState(account);
+  let state = await getState(account);
   if (state.error?.reason === "auth") {
     if (!(await authCleared(state.error, pageLoad))) return;
     await setError(state.prefix, null);
+    state = { ...state, error: null };
   }
-  if (!hasWork(state)) return;
+  if (plan(state).kind === "stop") return;
   if (running) return; // un autre appel a démarré pendant la lecture
   running = true;
   // Sans ifAvailable : un onglet qui ne travaille pas attend le verrou, et

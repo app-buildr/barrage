@@ -24,6 +24,8 @@ export type Result = {
    * automatiquement, seul un clic sur « Débloquer » relance la demande.
    */
   unblockFailed?: boolean;
+  /** Déblocages refusés d'un compte retiré de la liste, voir refuseUnblock. */
+  unblockAttempts?: number;
 };
 
 /** Résultats indexés par identifiant minuscule. */

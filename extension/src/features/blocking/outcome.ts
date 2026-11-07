@@ -9,11 +9,15 @@ export type Outcome =
   | { kind: "not_found"; message: string }
   /** Limite atteinte : tout le traitement attend jusqu'à `until`. */
   | { kind: "rate_limited"; until: number }
+  /** X soupçonne une automatisation : tout s'arrête, voir recordAutomation. */
+  | { kind: "automation"; message: string }
+  /** Réponse sans code d'erreur connu : X a changé, ce compte n'y est pour rien. Tout s'arrête. */
+  | { kind: "broken"; message: string }
   /** Session absente, expirée ou compte verrouillé : tout le traitement attend. */
   | { kind: "auth"; message: string }
   /** Panne passagère sans réponse de X : retenter sans compter d'échec. */
   | { kind: "network"; message: string }
-  /** Refus propre à ce compte : compté comme une tentative échouée. */
+  /** Refus de X avec un code d'erreur, propre à ce compte : compté comme une tentative échouée. */
   | { kind: "failed"; message: string };
 
 // Codes d'erreur de l'API v1.1 de X.
@@ -35,8 +39,10 @@ const AUTH_CODES: Record<number, string> = {
 };
 /** Réponse de `friendships/lookup` quand aucun compte du paquet n'existe, voir noUserMatch. */
 const NO_USER_MATCH_CODE = 17;
-/** X soupçonne une automatisation : tout s'arrête le temps de la pause par défaut. */
+/** X soupçonne une automatisation. */
 const AUTOMATION_CODE = 226;
+/** « Compte introuvable », mais aussi ce que répond une route disparue, voir routeMaybeGone. */
+const PAGE_NOT_FOUND_CODE = 34;
 
 type ApiError = { code?: unknown; message?: unknown };
 
@@ -54,6 +60,11 @@ export function noUserMatch(body: unknown): boolean {
   return firstError(body).code === NO_USER_MATCH_CODE;
 }
 
+/** La réponse vaut « introuvable », sans prouver que c'est le compte qui manque et pas la route. */
+export function routeMaybeGone(body: unknown): boolean {
+  return firstError(body).code === PAGE_NOT_FOUND_CODE;
+}
+
 /**
  * @param resetHeader valeur de `x-rate-limit-reset`, en secondes epoch
  * @param now horodatage courant, en millisecondes
@@ -61,7 +72,9 @@ export function noUserMatch(body: unknown): boolean {
 export function classify(status: number, body: unknown, resetHeader: string | null, now: number): Outcome {
   const { code, message } = firstError(body);
 
-  if (code === AUTOMATION_CODE) return { kind: "rate_limited", until: now + RATE_LIMIT_FALLBACK_MS };
+  if (code === AUTOMATION_CODE) {
+    return { kind: "automation", message: "X soupçonne une activité automatisée : Barrage s'est arrêté pour protéger votre compte." };
+  }
   if (status === 429 || code === RATE_LIMIT_CODE) {
     const reset = Number(resetHeader) * 1000;
     // Un en-tête absent, illisible ou déjà passé ne doit pas relancer aussitôt.
@@ -78,10 +91,11 @@ export function classify(status: number, body: unknown, resetHeader: string | nu
   }
   if (status >= 200 && status < 300 && code === null) {
     // Sans corps JSON (page HTML, réponse vide), rien ne prouve que X a traité la demande.
-    return body === null ? { kind: "failed", message: "Réponse de X illisible." } : { kind: "ok" };
+    return body === null ? { kind: "broken", message: "Réponse de X illisible." } : { kind: "ok" };
   }
   if (status >= 500) return { kind: "network", message: `X indisponible (HTTP ${status}).` };
-  return { kind: "failed", message: message ?? `Refus de X (HTTP ${status}).` };
+  if (code === null) return { kind: "broken", message: `Refus de X sans explication (HTTP ${status}).` };
+  return { kind: "failed", message: message ?? `Refus de X (code ${code}).` };
 }
 
 export type Lookup = {

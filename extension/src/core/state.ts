@@ -11,7 +11,8 @@ import { activeHandles, eligible, isBlocked, resultOf, type Result, type Results
 import { effectiveHandles, readLists, type ListDef } from "../features/lists/lists.ts";
 import { readGuards, type ListGuard } from "../features/lists/remote.ts";
 
-export type ErrorReason = "auth" | "network" | "other";
+/** "automation" : soupçon d'automatisation par X. "api" : réponses de X que Barrage ne sait plus lire. */
+export type ErrorReason = "auth" | "network" | "automation" | "api" | "other";
 
 /**
  * Erreur qui empêche tout blocage, affichée dans les options. `staleAt` :
@@ -82,6 +83,10 @@ export type State = {
   badgeNotified: number;
   /** Fin de la limite imposée par X, en millisecondes. 0 si aucune. */
   pauseUntil: number;
+  /** Soupçons d'automatisation depuis le dernier blocage ou déblocage réussi. */
+  strikes: number;
+  /** Comptes refusés de suite par X, voir MAX_CONSECUTIVE_FAILURES. */
+  failures: string[];
   error: BlockingError | null;
   /**
    * Comptes de la liste à vérifier auprès de X, une fois par compte X : son
@@ -115,6 +120,8 @@ const ACCOUNT_FIELDS = [
   "unblock",
   "seen",
   "pauseUntil",
+  "strikes",
+  "failures",
   "error",
   "audit",
   "blockCount",
@@ -178,7 +185,7 @@ export type StateKey = keyof State;
 
 /**
  * Clés dont la modification relance le traitement : liste changée, compte vu
- * dans le fil ou blocage demandé à la main.
+ * dans le fil, blocage demandé à la main ou arrêt levé.
  */
 export const QUEUE_KEYS: readonly StateKey[] = [
   "lists",
@@ -190,6 +197,8 @@ export const QUEUE_KEYS: readonly StateKey[] = [
   "seen",
   "audit",
   "account",
+  // Une erreur levée dans les options relance le traitement.
+  "error",
 ];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -279,6 +288,7 @@ export function readState(stored: Record<string, unknown>, account?: string | nu
   const badges = own("badges");
   const badgeNotified = own("badgeNotified");
   const pauseUntil = own("pauseUntil");
+  const strikes = own("strikes");
   const error = own("error");
   const retiredAt = own("retiredAt");
   return {
@@ -303,6 +313,8 @@ export function readState(stored: Record<string, unknown>, account?: string | nu
     badges: isRecord(badges) ? Object.assign(Object.create(null), badges) : Object.create(null),
     badgeNotified: typeof badgeNotified === "number" ? badgeNotified : 0,
     pauseUntil: typeof pauseUntil === "number" ? pauseUntil : 0,
+    strikes: typeof strikes === "number" ? strikes : 0,
+    failures: strings(own("failures")),
     error: isRecord(error) ? (error as BlockingError) : null,
     audit: strings(own("audit")),
     latestVersion: typeof stored.latestVersion === "string" ? stored.latestVersion : null,

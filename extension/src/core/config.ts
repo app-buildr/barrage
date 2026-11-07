@@ -19,6 +19,24 @@ export const DELAY_JITTER = 0.3;
 /** Attente par défaut quand X signale une limite sans dire jusqu'à quand. */
 export const RATE_LIMIT_FALLBACK_MS = 15 * 60_000;
 
+/**
+ * Première pause après un soupçon d'automatisation (code 226 de X), doublée à
+ * chaque rechute : c'est le signal le plus proche d'une restriction de compte.
+ */
+export const AUTOMATION_PAUSE_MS = 60 * 60_000;
+
+/** Pause la plus longue, y compris quand X annonce une échéance plus lointaine. */
+export const MAX_PAUSE_MS = 24 * 60 * 60_000;
+
+/**
+ * Comptes distincts refusés de suite par X avant d'arrêter le traitement : des
+ * refus en série viennent de X, pas de ces comptes.
+ */
+export const MAX_CONSECUTIVE_FAILURES = 3;
+
+/** Après un échec de vérification, délai avant de la retenter. */
+export const CHECK_RETRY_MS = 15 * 60_000;
+
 /** Attente après une coupure réseau. */
 export const NETWORK_RETRY_MS = 60_000;
 

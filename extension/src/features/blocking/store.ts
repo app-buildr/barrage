@@ -17,7 +17,8 @@ import {
   type ErrorReason,
 } from "../../core/state.ts";
 import { syncBadges } from "../badges/store.ts";
-import { failure, isBlocked, isPending, resultOf, type Result, type Results } from "./queue.ts";
+import { automationPause, resumable } from "./plan.ts";
+import { MAX_ATTEMPTS, failure, isBlocked, isPending, resultOf, type Result, type Results } from "./queue.ts";
 
 /**
  * Enregistre des résultats en une écriture, avec d'autres champs à écrire en
@@ -57,20 +58,44 @@ export async function recordBlockFailure(
 /**
  * Déblocage refusé par X : le compte sort de la file quand même, un refus se
  * répéterait à l'identique. Il reste bloqué, marqué pour que « Débloquer »
- * permette de réessayer.
+ * permette de réessayer. Un compte retiré de la liste collaborative n'a pas
+ * d'autre chance d'être débloqué : il reste en file MAX_ATTEMPTS tentatives.
  */
 export async function refuseUnblock(handle: string, message: string, account?: string | null): Promise<void> {
-  const previous = resultOf((await getState(account)).results, handle);
-  await finishUnblock(
-    handle,
-    previous ? { ...previous, unblockFailed: true, message } : null,
-    { error: errorValue(`Déblocage de @${handle} impossible : ${message}`, "other", 0) },
-    account,
-  );
+  const { results, retired, prefix } = await getState(account);
+  const previous = resultOf(results, handle);
+  const error = errorValue(`Déblocage de @${handle} impossible : ${message}`, "other", 0);
+  const attempts = (previous?.unblockAttempts ?? 0) + 1;
+  if (previous && retired.includes(handle) && attempts < MAX_ATTEMPTS) {
+    await setResults(prefix, { [handle]: { ...previous, unblockAttempts: attempts, message } }, { error });
+    return;
+  }
+  await finishUnblock(handle, previous ? { ...previous, unblockFailed: true, message } : null, { error }, account);
 }
 
 export async function setPauseUntil(prefix: string, pauseUntil: number): Promise<void> {
   await chrome.storage.local.set(scoped(prefix, { pauseUntil }));
+}
+
+export async function setFailures(prefix: string, failures: string[]): Promise<void> {
+  await chrome.storage.local.set(scoped(prefix, { failures }));
+}
+
+/**
+ * Soupçon d'automatisation : tout s'arrête, et la pause croît à chaque rechute.
+ * Même la pause finie, rien ne reprend sans un clic dans les options.
+ */
+export async function recordAutomation(prefix: string, strikes: number, message: string): Promise<void> {
+  const pauseUntil = Date.now() + automationPause(strikes);
+  const error = errorValue(message, "automation", Infinity);
+  await chrome.storage.local.set(scoped(prefix, { strikes: strikes + 1, pauseUntil, error }));
+}
+
+/** Reprise demandée dans les options, jamais avant la fin de la pause. Le soupçon reste compté jusqu'à une réussite. */
+export async function resumeBlocking(account?: string | null): Promise<void> {
+  const { error, pauseUntil, prefix } = await getState(account);
+  if (!resumable(error) || pauseUntil > Date.now()) return;
+  await chrome.storage.local.set(scoped(prefix, { error: null, failures: [] }));
 }
 
 /**

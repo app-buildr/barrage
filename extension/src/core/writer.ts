@@ -21,6 +21,7 @@ import {
   recordAudit,
   recordBlockFailure,
   refuseUnblock,
+  resumeBlocking,
   useAccount,
 } from "../features/blocking/store.ts";
 import { addSeen } from "../features/timeline/store.ts";
@@ -43,6 +44,7 @@ const WRITES = {
   renameList,
   requestBlock,
   requestUnblock,
+  resumeBlocking,
   setEnabled,
   setListActive,
   setListNetworks,

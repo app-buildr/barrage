@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { RATE_LIMIT_FALLBACK_MS } from "../src/core/config.ts";
-import { classify, noUserMatch, readLookup } from "../src/features/blocking/outcome.ts";
+import { classify, noUserMatch, readLookup, routeMaybeGone } from "../src/features/blocking/outcome.ts";
 
 const NOW = 1_700_000_000_000;
 const err = (code: number, message = "x") => ({ errors: [{ code, message }] });
@@ -45,7 +45,7 @@ test("une erreur serveur est passagère", () => {
 
 test("un autre refus est un échec propre au compte, message de X conservé", () => {
   assert.deepEqual(classify(403, err(999, "Interdit"), null, NOW), { kind: "failed", message: "Interdit" });
-  assert.deepEqual(classify(400, null, null, NOW), { kind: "failed", message: "Refus de X (HTTP 400)." });
+  assert.deepEqual(classify(403, { errors: [{ code: 999 }] }, null, NOW), { kind: "failed", message: "Refus de X (code 999)." });
 });
 
 test("la vérification repère les comptes déjà bloqués, casse ignorée", () => {
@@ -69,18 +69,29 @@ test("une réponse qui n'est pas une liste est illisible", () => {
   assert.equal(readLookup(null), null);
 });
 
-test("un 200 sans corps JSON ne vaut pas blocage", () => {
-  assert.equal(classify(200, null, null, NOW).kind, "failed");
+test("une réponse sans code connu vient de X, pas du compte visé", () => {
+  assert.equal(classify(200, null, null, NOW).kind, "broken");
+  for (const status of [400, 403, 404]) {
+    assert.deepEqual(classify(status, null, null, NOW), { kind: "broken", message: `Refus de X sans explication (HTTP ${status}).` });
+    assert.equal(classify(status, {}, null, NOW).kind, "broken");
+  }
 });
 
-test("un soupçon d'automatisation met tout en pause", () => {
-  assert.deepEqual(classify(403, err(226), null, NOW), { kind: "rate_limited", until: NOW + RATE_LIMIT_FALLBACK_MS });
+test("un soupçon d'automatisation a sa propre issue, quel que soit le statut", () => {
+  assert.equal(classify(403, err(226), null, NOW).kind, "automation");
+  assert.equal(classify(429, err(226), "9999999999", NOW).kind, "automation");
 });
 
 test("un refus qui vise tout le compte arrête le traitement", () => {
   assert.equal(classify(403, err(64), null, NOW).kind, "auth");
   assert.equal(classify(403, err(261), null, NOW).kind, "auth");
   assert.equal(classify(401, err(89), null, NOW).kind, "auth");
+});
+
+test("seul le code 34 peut cacher une route disparue", () => {
+  assert.equal(routeMaybeGone(err(34)), true);
+  assert.equal(routeMaybeGone(err(50)), false);
+  assert.equal(routeMaybeGone(null), false);
 });
 
 test("seul le code 17 dit qu'aucun compte du paquet n'existe", () => {

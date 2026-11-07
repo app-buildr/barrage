@@ -4,7 +4,8 @@
 import { useEffect, useState } from "react";
 import { getState, onStateChange, type State } from "./state.ts";
 
-const DAY_MS = 24 * 60 * 60_000;
+/** La pause la plus longue, marge comprise. */
+const MAX_TIMER_MS = 2 * 24 * 60 * 60_000;
 
 /** null le temps de la première lecture. */
 export function useExtensionState(): State | null {
@@ -21,7 +22,7 @@ export function useExtensionState(): State | null {
       clearTimeout(expiry);
       const time = Date.now();
       // Une erreur permanente a une échéance infinie : setTimeout la prendrait pour 0.
-      const deadlines = [next.error?.staleAt ?? 0, next.pauseUntil].filter((t) => t > time && t - time < DAY_MS);
+      const deadlines = [next.error?.staleAt ?? 0, next.pauseUntil].filter((t) => t > time && t - time < MAX_TIMER_MS);
       if (deadlines.length) expiry = setTimeout(() => void refresh(), Math.min(...deadlines) - time + 50);
     }
 

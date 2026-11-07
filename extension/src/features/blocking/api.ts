@@ -1,7 +1,7 @@
 // Appels à l'API interne de X, celle qu'utilise le site lui-même.
 // C'est le point qui casse si X change son API : un seul fichier à relire.
 import { handleFromUserNameText } from "../timeline/authors.ts";
-import { classify, noUserMatch, readLookup, type Lookup, type Outcome } from "./outcome.ts";
+import { classify, noUserMatch, readLookup, routeMaybeGone, type Lookup, type Outcome } from "./outcome.ts";
 
 /**
  * Jeton public du client web de X, identique pour tous les visiteurs et présent
@@ -103,11 +103,16 @@ async function call(path: string, init: RequestInit): Promise<{ outcome: Outcome
 }
 
 async function post(path: string, handle: string): Promise<Outcome> {
-  const { outcome } = await call(path, {
+  const { outcome, body } = await call(path, {
     method: "POST",
     body: new URLSearchParams({ screen_name: handle, skip_status: "1" }),
   });
-  return outcome;
+  if (!routeMaybeGone(body)) return outcome;
+  // Un compte qui existe encore prouve que c'est la route qui a disparu : sans
+  // cette vérification, un déblocage serait noté fait sans avoir eu lieu.
+  const reply = await lookupBlocking([handle]);
+  if ("kind" in reply) return reply.kind === "failed" ? { kind: "broken", message: reply.message } : reply;
+  return reply.found.has(handle) ? { kind: "broken", message: "Action refusée par X : route introuvable." } : outcome;
 }
 
 export const blockUser = (handle: string): Promise<Outcome> => post(BLOCK_PATH, handle);
