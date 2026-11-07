@@ -24,6 +24,7 @@ import { WRITES } from "../src/features/writes.ts";
 import { resumeBlocking } from "../src/features/blocking/store.ts";
 import { officialList } from "../src/features/lists/lists.ts";
 import { installChrome, X_TAB } from "./helpers/chrome.ts";
+import { putResults, result } from "./helpers/fixtures.ts";
 import { apiError, BLOCK, installX, LOOKUP, lookupReply, UNBLOCK, type FakeX } from "./helpers/x.ts";
 
 const T0 = Date.UTC(2026, 10, 7);
@@ -363,6 +364,19 @@ test("l'intervalle entre deux paquets de vérification survit à l'onglet", asyn
   assert.equal(x.requests.length, 2);
 });
 
+test("un déblocage demandé pendant l'attente du budget de lookup n'attend pas la fin de celle-ci", async () => {
+  store.audit = ["c"];
+  store.lookups = Array.from({ length: LOOKUP_BUDGET }, (_, i) => T0 - 60_000 + i);
+  store.disabled = [];
+  await openTab();
+  assert.equal(x.requests.length, 0);
+  store.disabled = ["a"];
+  store[resultKey("a")] = { state: "blocked", at: 1 };
+  await advance(SLEEP_SLICE_MS + 1000, 5000);
+  assert.deepEqual(x.posts(UNBLOCK), ["a"]);
+  assert.equal(x.requests.length, 1);
+});
+
 test("X annonce un quota épuisé : plus de lookup jusqu'à l'échéance, le blocage vérifié part quand même", async () => {
   store.seen = ["a", "b"];
   const reset = Math.floor(T0 / 1000) + 300;
@@ -380,7 +394,7 @@ test("X annonce un quota épuisé : plus de lookup jusqu'à l'échéance, le blo
 
 test("un code 34 sur un déblocage compte sa vérification de route dans le budget", async () => {
   store.disabled = ["a"];
-  store[resultKey("a")] = { state: "blocked", at: 1 };
+  putResults(store, { a: result("blocked") });
   x.routes[UNBLOCK] = () => apiError(34, 404);
   await openTab();
   assert.deepEqual(store.lookups, [T0]);
@@ -450,7 +464,7 @@ test("avant la copie de la liste intégrée, rien ne part, puis son arrivée rel
   delete store.remote;
   store.retired = ["a"];
   store.retiredAt = { a: 1 };
-  store[resultKey("a")] = { state: "blocked", at: 1 };
+  putResults(store, { a: result("blocked") });
   await openTab();
   assert.equal(x.requests.length, 0);
   await chrome.storage.local.set({ bundled: ["a", "b"] });
@@ -515,7 +529,7 @@ test("une panne réseau attend et retente, sans compter d'échec", async () => {
 
 test("un code 34 sur un déblocage n'est pas noté fait si le compte existe", async () => {
   store.disabled = ["a"];
-  store[resultKey("a")] = { state: "blocked", at: 1 };
+  putResults(store, { a: result("blocked") });
   x.routes[UNBLOCK] = () => apiError(34, 404);
   await openTab();
   const state = await getState("1");
@@ -526,7 +540,7 @@ test("un code 34 sur un déblocage n'est pas noté fait si le compte existe", as
 test("un compte retiré n'est débloqué qu'après le délai de grâce", async () => {
   store.retired = ["z"];
   store.retiredAt = { z: T0 };
-  store[resultKey("z")] = { state: "blocked", at: 1 };
+  putResults(store, { z: result("blocked") });
   await openTab();
   assert.equal(x.requests.length, 0);
   await advance(RETIRE_GRACE_MS, 6 * 3600_000);

@@ -14,7 +14,7 @@ import {
   MAX_ACTIONS_PER_HOUR,
   MAX_PAUSE_MS,
 } from "../src/core/config.ts";
-import { getState, resultKey, type BlockingError, type State } from "../src/core/state.ts";
+import { getState, type BlockingError, type State } from "../src/core/state.ts";
 import { actionDelay, actionsCapped, automationPause, halted, lookupDelay, nextAction, resumable } from "../src/features/blocking/plan.ts";
 import {
   recordAutomation,
@@ -26,6 +26,7 @@ import type { UnblockRefusal } from "../src/features/blocking/queue.ts";
 import { accountLines } from "../src/features/accounts/lines.ts";
 import { officialList } from "../src/features/lists/lists.ts";
 import { installChrome } from "./helpers/chrome.ts";
+import { putResults, result } from "./helpers/fixtures.ts";
 
 const NOW = 1_000_000_000;
 const PERMANENT = Number.MAX_SAFE_INTEGER;
@@ -142,7 +143,7 @@ test("un déblocage passe avant un blocage", async () => {
 });
 
 test("un compte retiré n'entre pas dans le plan avant la fin du délai de grâce", async () => {
-  store[resultKey("z")] = { state: "blocked", at: 1 };
+  putResults(store, { z: result("blocked") });
   assert.deepEqual(await plan({ retired: ["z"], retiredAt: { z: NOW } }), { kind: "stop" });
   assert.deepEqual(await plan({ retired: ["z"], retiredAt: { z: 1 } }), { kind: "unblock", handle: "z" });
 });
@@ -156,7 +157,7 @@ test("une erreur d'arrêt interdit toute requête, travail en file ou non", asyn
 });
 
 test("tant que la liste collaborative n'est pas là, rien ne part : un compte y paraîtrait sorti", async () => {
-  store[resultKey("z")] = { state: "blocked", at: 1 };
+  putResults(store, { z: result("blocked") });
   const unknown = { remote: null, official: [] };
   assert.deepEqual(await plan({ ...unknown, retired: ["z"], retiredAt: { z: 1 } }), { kind: "stop" });
   assert.deepEqual(await plan({ ...unknown, unblock: ["z"] }), { kind: "stop" });
@@ -222,7 +223,7 @@ test("une erreur de session ne se lève pas depuis les options", async () => {
 test("un compte retiré dont le déblocage est refusé reste en file pour trois tentatives", async () => {
   store.retired = ["z"];
   store.retiredAt = { z: 1 };
-  store[resultKey("z")] = { state: "blocked", at: 1 };
+  putResults(store, { z: result("blocked") });
   for (const attempts of [1, 2]) {
     await refuseUnblock("z", { code: "refused", param: 1 });
     const state = await getState();
@@ -239,7 +240,7 @@ test("un compte retiré dont le déblocage est refusé reste en file pour trois 
 test("un compte sur Off dont le déblocage est refusé sort de la file aussitôt", async () => {
   store.disabled = ["a"];
   store.unblock = ["a"];
-  store[resultKey("a")] = { state: "blocked", at: 1 };
+  putResults(store, { a: result("blocked") });
   await refuseUnblock("a", { code: "refused", param: 1 });
   const state = await getState();
   assert.deepEqual(state.unblock, []);

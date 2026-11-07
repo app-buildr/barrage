@@ -323,7 +323,9 @@ async function step(): Promise<Next> {
     case "stop":
       return STOP;
     case "wait":
-      return continueIn(action.ms);
+      // Par tranches : l'échéance reste dans le stockage, et un déblocage demandé
+      // entre-temps n'attend pas un budget de lookup qui ne le concerne pas.
+      return continueIn(Math.min(action.ms, SLEEP_SLICE_MS));
     case "audit":
       return audit(state, action.batch);
     case "unblock":

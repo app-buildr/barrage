@@ -2,6 +2,7 @@
 // testées dans tests/badges.test.ts.
 import { SITE_URL, X_ACCOUNT } from "../../core/config.ts";
 import { formatCount, plural } from "../../core/format.ts";
+import { xShareUrl } from "../networks/networks.ts";
 
 /** `emoji` : celui du texte de partage. */
 export const BADGES = [
@@ -60,7 +61,7 @@ export function shareText(badge: Badge): string {
   return `J'ai débloqué le badge ${badge.name} ${badge.emoji} : ${formatCount(badge.palier)} comptes bloqués avec ${X_ACCOUNT}. ${signature}`;
 }
 
-export const shareUrl = (badge: Badge): string => `https://x.com/intent/post?text=${encodeURIComponent(shareText(badge))}`;
+export const shareUrl = (badge: Badge): string => xShareUrl(shareText(badge));
 
 /** Palier suivant dans la notification d'un badge obtenu. */
 export function nextStepText(palier: number): string {

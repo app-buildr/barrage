@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
 import { installChrome } from "./helpers/chrome.ts";
+import { putResults, result } from "./helpers/fixtures.ts";
 import { getState, resultKey } from "../src/core/state.ts";
 import { awardBadges, badgeDescription, earnedCount, nextBadge, nextStepText, pendingBadge, shareText, shareUrl, BADGES } from "../src/features/badges/badges.ts";
 import { dismissBadge, recordBlockSuccess, syncAllBadges, syncBadges } from "../src/features/badges/store.ts";
@@ -67,7 +68,7 @@ test("le réglage des notifications de badge est actif par défaut et vaut pour 
 });
 
 test("des badges déjà à jour ne provoquent aucune écriture", async () => {
-  store[resultKey("a")] = { state: "blocked", at: 1 };
+  putResults(store, { a: result("blocked") });
   await syncBadges("1");
   const set = chrome.storage.local.set;
   let writes = 0;

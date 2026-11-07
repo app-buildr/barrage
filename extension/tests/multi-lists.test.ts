@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
 import { installChrome } from "./helpers/chrome.ts";
+import { listDef, putResults, result } from "./helpers/fixtures.ts";
 import { getState, resultKey } from "../src/core/state.ts";
 import { offListHandles, queueOrder, unblockQueue } from "../src/features/blocking/queue.ts";
 import { accountLines, lineCounts } from "../src/features/accounts/lines.ts";
 import { listDetails } from "../src/features/lists/details.ts";
 import { analyzeList, checkListFile, describeReport, looksLikeProse, looksLikeTable, validateListUrl, BAD_HOST_MESSAGE, INVALID_WARNING, PROSE_WARNING, TABLE_MESSAGE } from "../src/features/lists/import.ts";
-import { OFFICIAL_NAME, cleanName, effectiveHandles, listName, officialList, readLists, uniqueName, type ListDef } from "../src/features/lists/lists.ts";
+import { OFFICIAL_NAME, cleanName, effectiveHandles, listName, officialList, readLists, uniqueName } from "../src/features/lists/lists.ts";
 import { migrate } from "../src/features/lists/migrate.ts";
 import { pendingBadge } from "../src/features/badges/badges.ts";
 import { syncAllBadges } from "../src/features/badges/store.ts";
@@ -24,17 +25,7 @@ import {
 
 let store: Record<string, unknown>;
 
-const list = (id: string, handles: string[], extra: Partial<ListDef> = {}) =>
-  ({
-    id,
-    name: id,
-    source: "file",
-    handles,
-    active: true,
-    networks: ["x"],
-    addedAt: 0,
-    ...extra,
-  }) as ListDef;
+const list = listDef;
 
 beforeEach(() => {
   store = { remote: ["a", "b"], lists: [officialList(true)], onboarded: true };
@@ -59,7 +50,7 @@ test("des listes enregistrées corrompues sont écartées, la collaborative rest
 test("désactiver une liste ne débloque rien : ses comptes passent hors liste", async () => {
   store.lists = [officialList(true), list("l1", ["c"])];
   store.seen = ["c"];
-  store[resultKey("c")] = { state: "blocked", at: 1 };
+  putResults(store, { c: result("blocked") });
   await setListActive("l1", false);
   const state = await getState();
   assert.deepEqual(unblockQueue(state), []);
@@ -77,16 +68,16 @@ test("un compte couvert par une autre liste active reste dans la liste effective
 test("un compte retiré de la collaborative n'est pas hors liste : il va être débloqué", async () => {
   store.retired = ["c"];
   store.retiredAt = { c: 1 };
-  store[resultKey("c")] = { state: "blocked", at: 1 };
+  putResults(store, { c: result("blocked") });
   const state = await getState();
   assert.deepEqual(offListHandles(state), []);
   assert.deepEqual(unblockQueue(state), ["c"]);
 });
 
 test("un compte déjà bloqué ou débloqué sort ou reste du tableau selon son résultat", async () => {
-  store[resultKey("c")] = { state: "already_blocked", at: 1 };
-  store[resultKey("d")] = { state: "unblocked", at: 1 };
-  store[resultKey("e")] = { state: "not_found", at: 1 };
+  putResults(store, { c: result("already_blocked") });
+  putResults(store, { d: result("unblocked") });
+  putResults(store, { e: result("not_found") });
   assert.deepEqual(offListHandles(await getState()), ["c"]);
 });
 
@@ -95,7 +86,7 @@ test("activer une liste met ses comptes sans résultat à vérifier, pour chaque
   store.accounts = { "1": {}, "2": {} };
   store.lists = [officialList(true), list("l1", ["c", "d", "e"], { active: false })];
   store.disabled = ["e"];
-  store[resultKey("c")] = { state: "blocked", at: 1 };
+  putResults(store, { c: result("blocked") });
   await setListActive("l1", true);
   assert.deepEqual(store.audit, ["d"]);
   assert.deepEqual(store["acct:2/audit"], ["c", "d"]);
@@ -112,7 +103,7 @@ test("seule une liste désactivée et non collaborative se supprime", async () =
   store.lists = [officialList(false), list("l1", ["c"]), list("l2", ["d"], { active: false })];
   await assert.rejects(removeList("official"));
   await assert.rejects(removeList("l1"));
-  store[resultKey("d")] = { state: "blocked", at: 1 };
+  putResults(store, { d: result("blocked") });
   await removeList("l2");
   const state = await getState();
   assert.deepEqual(state.lists.map((l) => l.id), ["official", "l1"]);
@@ -176,8 +167,8 @@ test("l'ajout dans une « Ma liste perso » qui ne couvre pas X est signalé aus
 // Tableau des comptes
 
 test("le tableau suit la liste effective, puis les comptes hors liste", async () => {
-  store[resultKey("a")] = { state: "blocked", at: 1 };
-  store[resultKey("hors")] = { state: "blocked", at: 1 };
+  putResults(store, { a: result("blocked") });
+  putResults(store, { hors: result("blocked") });
   const lines = accountLines(await getState());
   assert.deepEqual(lines.map((l) => [l.handle, l.offList]), [["a", false], ["b", false], ["hors", true]]);
   const { all, listed } = lineCounts(lines);
@@ -187,11 +178,11 @@ test("le tableau suit la liste effective, puis les comptes hors liste", async ()
 });
 
 test("un compte hors liste débloqué à la main reste affiché jusqu'au déblocage", async () => {
-  store[resultKey("hors")] = { state: "blocked", at: 1 };
+  putResults(store, { hors: result("blocked") });
   store.disabled = ["hors"];
   store.unblock = ["hors"];
   assert.equal(accountLines(await getState()).at(-1)?.status.label, "Déblocage en cours…");
-  store[resultKey("hors")] = { state: "unblocked", at: 2 };
+  putResults(store, { hors: result("unblocked", 2) });
   assert.deepEqual(accountLines(await getState()).map((l) => l.handle), ["a", "b"]);
 });
 
@@ -199,7 +190,7 @@ test("un compte hors liste débloqué à la main reste affiché jusqu'au débloc
 
 test("une liste GitHub qui retire des comptes les laisse bloqués, hors liste", async () => {
   store.lists = [officialList(true), list("g", ["c", "d", "e"], { source: "github" })];
-  store[resultKey("c")] = { state: "blocked", at: 1 };
+  putResults(store, { c: result("blocked") });
   assert.equal(await updateListHandles("g", ["d", "e"], 5), true);
   const state = await getState();
   assert.deepEqual(unblockQueue(state), []);
@@ -343,7 +334,7 @@ const seed = () => {
     notify: false,
   };
   for (let i = 0; i < 12; i++) store[resultKey(`c${i}`)] = { state: "blocked", at: 1 };
-  store[resultKey("deja")] = { state: "already_blocked", at: 1 };
+  putResults(store, { deja: result("already_blocked") });
   store[resultKey("x", "acct:2/")] = { state: "blocked", at: 1 };
 };
 
@@ -379,7 +370,7 @@ test("la migration est idempotente", async () => {
   seed();
   await migrate("1.3.0");
   const after = structuredClone(store);
-  store[resultKey("nouveau")] = { state: "blocked", at: 2 };
+  putResults(store, { nouveau: result("blocked", 2) });
   delete after[resultKey("nouveau")];
   await migrate("1.3.0");
   delete store[resultKey("nouveau")];

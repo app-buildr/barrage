@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
 import { LIST_MAX_BYTES, LISTS_RECHECK_MS, RETIRE_GRACE_MS } from "../src/core/config.ts";
 import { IMPORT_LIST, REFRESH_LISTS } from "../src/core/messages.ts";
-import { QUEUE_KEYS, accountStates, getState, onStateChange, resultKey } from "../src/core/state.ts";
+import { QUEUE_KEYS, accountStates, getState, onStateChange } from "../src/core/state.ts";
 import { unblockQueue } from "../src/features/blocking/queue.ts";
 import { BAD_HOST_MESSAGE, DOWNLOAD_ERROR, INVALID_WARNING, TABLE_MESSAGE } from "../src/features/lists/import.ts";
 import { officialList, type ListDef } from "../src/features/lists/lists.ts";
@@ -10,6 +10,7 @@ import { acceptPendingList, removeList, replaceOfficial } from "../src/features/
 import { refreshLists, syncLists } from "../src/features/lists/sync.ts";
 import { checkLatestVersion } from "../src/features/updates/check.ts";
 import { installChrome } from "./helpers/chrome.ts";
+import { listDef, putResults, result } from "./helpers/fixtures.ts";
 
 const GITHUB = "https://raw.githubusercontent.com/a/b/main/l.txt";
 
@@ -20,17 +21,8 @@ let fetched: Array<{ url: string; init?: RequestInit }>;
 let send: (message: unknown) => Promise<any>;
 
 const json = (value: unknown) => () => new Response(JSON.stringify(value));
-const github = (handles: string[], extra: Partial<ListDef> = {}): ListDef => ({
-  id: "g",
-  name: "g",
-  source: "github",
-  url: GITHUB,
-  handles,
-  active: true,
-  networks: ["x"],
-  addedAt: 0,
-  ...extra,
-});
+const github = (handles: string[], extra: Partial<ListDef> = {}) =>
+  listDef("g", handles, { source: "github", url: GITHUB, ...extra } as Partial<ListDef>);
 
 beforeEach(() => {
   store = { remote: ["a", "b", "c", "d"], lists: [officialList(true)], onboarded: true };
@@ -47,7 +39,7 @@ beforeEach(() => {
 });
 
 test("un compte retiré de la collaborative n'est débloqué qu'après le délai de grâce", async () => {
-  store[resultKey("a")] = { state: "blocked", at: 1 };
+  putResults(store, { a: result("blocked") });
   store.seen = ["a", "c"];
   responses["/x.json"] = json(["b", "c", "d"]);
   await refreshLists();
@@ -61,7 +53,7 @@ test("un compte retiré de la collaborative n'est débloqué qu'après le délai
 });
 
 test("une liste corrigée pendant le délai de grâce ne débloque rien", async () => {
-  store[resultKey("a")] = { state: "blocked", at: 1 };
+  putResults(store, { a: result("blocked") });
   responses["/x.json"] = json(["b", "c", "d"]);
   await refreshLists();
   responses["/x.json"] = json(["a", "b", "c", "d"]);
@@ -73,7 +65,7 @@ test("une liste corrigée pendant le délai de grâce ne débloque rien", async 
 
 test("un compte retiré avant ce délai attend d'être daté, et garde sa date ensuite", async () => {
   store.retired = ["z"];
-  store[resultKey("z")] = { state: "blocked", at: 1 };
+  putResults(store, { z: result("blocked") });
   assert.deepEqual(unblockQueue(await getState(), Date.now() + 2 * RETIRE_GRACE_MS), []);
   responses["/x.json"] = json(["a", "b", "c", "d"]);
   await refreshLists();
@@ -99,7 +91,7 @@ const accounts = (count: number, from = 0) => Array.from({ length: count }, (_, 
 test("une liste refusée n'applique rien et attend dans les options", async () => {
   const base = accounts(100);
   store.remote = base;
-  store[resultKey("c0")] = { state: "blocked", at: 1 };
+  putResults(store, { c0: result("blocked") });
   store.seen = ["c0"];
   store.disabled = ["c1"];
   const list = store.lists;
@@ -119,7 +111,7 @@ test("une liste refusée n'applique rien et attend dans les options", async () =
 test("une liste acceptée dans les options s'applique, et ses retraits attendent le délai de grâce", async () => {
   const base = accounts(100);
   store.remote = base;
-  store[resultKey("c0")] = { state: "blocked", at: 1 };
+  putResults(store, { c0: result("blocked") });
   store.disabled = ["c1"];
   responses["/x.json"] = json(base.slice(60));
   await refreshLists();
@@ -176,7 +168,7 @@ test("un fichier invalide se voit dans les options, sans rien à accepter", asyn
 test("une liste GitHub refusée attend aussi, et ses comptes retirés restent bloqués", async () => {
   const base = accounts(100);
   store.lists = [officialList(true), github(base)];
-  store[resultKey("c0")] = { state: "blocked", at: 1 };
+  putResults(store, { c0: result("blocked") });
   responses["l.txt"] = () => new Response(base.slice(50).join("\n"));
   await refreshLists();
   assert.deepEqual((await getState()).lists[1]?.handles, base);
@@ -197,7 +189,7 @@ test("une liste GitHub devenue illisible se voit dans les options", async () => 
 
 test("un compte retiré mais couvert par une autre liste active n'est pas concerné", async () => {
   store.lists = [officialList(true), { ...github(["a"]), url: "" }];
-  store[resultKey("a")] = { state: "blocked", at: 1 };
+  putResults(store, { a: result("blocked") });
   store.disabled = ["a"];
   responses["/x.json"] = json(["b", "c", "d"]);
   await refreshLists();
@@ -208,7 +200,7 @@ test("un compte retiré mais couvert par une autre liste active n'est pas concer
 
 test("une liste désactivée ne protège pas un compte retiré de la collaborative", async () => {
   store.lists = [officialList(true), { ...github(["a"], { active: false }), url: "" }];
-  store[resultKey("a")] = { state: "blocked", at: 1 };
+  putResults(store, { a: result("blocked") });
   responses["/x.json"] = json(["b", "c", "d"]);
   await refreshLists();
   assert.deepEqual((await getState()).retired, ["a"]);
@@ -216,7 +208,7 @@ test("une liste désactivée ne protège pas un compte retiré de la collaborati
 
 test("un compte remis dans la collaborative n'est plus à débloquer, même liste désactivée ensuite", async () => {
   store.retired = ["a"];
-  store[resultKey("a")] = { state: "blocked", at: 1 };
+  putResults(store, { a: result("blocked") });
   store.remote = ["b", "c", "d"];
   responses["/x.json"] = json(["a", "b", "c", "d"]);
   await refreshLists();

@@ -11,10 +11,9 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual, parseArgs } from "node:util";
 import * as config from "../src/core/config.ts";
-import { X_TABS } from "../src/features/blocking/x-tab.ts";
 import { parseHandle } from "../src/features/lists/handles.ts";
 import { compareLists, parseList } from "../src/features/lists/remote.ts";
-import { NETWORKS } from "../src/features/networks/networks.ts";
+import { NETWORKS, X_MATCHES } from "../src/features/networks/networks.ts";
 
 const { values: args } = parseArgs({
   options: {
@@ -138,11 +137,11 @@ function checkManifest() {
   if (args.tag !== undefined && args.tag !== `v${manifest.version}`) {
     errors.push(`version : tag ${args.tag}, manifest en ${manifest.version}`);
   }
-  if (!isDeepStrictEqual(manifest.host_permissions, X_TABS)) {
-    errors.push("manifest.json : host_permissions diffère de X_TABS (features/blocking/x-tab.ts)");
+  if (!isDeepStrictEqual(manifest.host_permissions, X_MATCHES)) {
+    errors.push("manifest.json : host_permissions diffère de X_MATCHES (features/networks/networks.ts)");
   }
-  if (manifest.content_scripts.some((script) => !isDeepStrictEqual(script.matches, X_TABS))) {
-    errors.push("manifest.json : content_scripts.matches diffère de X_TABS (features/blocking/x-tab.ts)");
+  if (manifest.content_scripts.some((script) => !isDeepStrictEqual(script.matches, X_MATCHES))) {
+    errors.push("manifest.json : content_scripts.matches diffère de X_MATCHES (features/networks/networks.ts)");
   }
   const declared = [
     "manifest.json",

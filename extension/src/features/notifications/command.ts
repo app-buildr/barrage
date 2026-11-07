@@ -2,13 +2,13 @@
 // en fin de page x.com, trop loin pour la tabulation : le raccourci l'atteint sans
 // lui donner le focus.
 import { UNDO_LAST, type Message } from "../../core/messages.ts";
-import { X_TABS } from "../blocking/x-tab.ts";
+import { X_MATCHES } from "../networks/networks.ts";
 
 /** Nom déclaré dans la clé `commands` du manifest. */
 export const UNDO_COMMAND = "undo-last-block";
 
 async function undoInActiveTab(): Promise<void> {
-  const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true, url: X_TABS });
+  const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true, url: X_MATCHES });
   if (tab?.id !== undefined) await chrome.tabs.sendMessage(tab.id, { type: UNDO_LAST } satisfies Message);
 }
 

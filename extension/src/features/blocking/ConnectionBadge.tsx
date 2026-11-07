@@ -2,6 +2,7 @@
 // reste à faire pour cela. Le blocage ne fonctionne que depuis un onglet connecté.
 import { Badge } from "@/ui/components/badge.tsx";
 import { cn } from "@/ui/lib/utils.ts";
+import { X_HOME_URL } from "../networks/networks.ts";
 import type { XTabStatus } from "./x-tab.ts";
 
 const PILL = "gap-[7px] px-3 py-1 text-label font-bold before:size-[7px] before:rounded-full before:bg-current before:content-['']";
@@ -17,7 +18,7 @@ export function ConnectionBadge({ status }: { status: XTabStatus | null }) {
     <span role="status" className="flex-none">
       {status === "none" || status === "logged_out" ? (
         <Badge asChild variant="outline" className={cn(PILL, "bg-card")}>
-          <a href="https://x.com/home" target="_blank" rel="noopener" title={TO_DO[status].title}>
+          <a href={X_HOME_URL} target="_blank" rel="noopener" title={TO_DO[status].title}>
             {TO_DO[status].label}
           </a>
         </Badge>

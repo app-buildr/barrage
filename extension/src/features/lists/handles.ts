@@ -1,8 +1,10 @@
 // Analyse des comptes saisis dans les options. Fonctions pures, couvertes par
 // les tests.
 
-/** Règle de X : 1 à 15 caractères parmi lettres, chiffres et tiret bas. */
-const HANDLE_RE = /^[A-Za-z0-9_]{1,15}$/;
+/** Règle de X : 1 à 15 caractères parmi lettres, chiffres et tiret bas. Motif à insérer dans une regex. */
+export const HANDLE = "[A-Za-z0-9_]{1,15}";
+
+const HANDLE_RE = new RegExp(`^${HANDLE}$`);
 
 const PROFILE_URL_RE = /^(?:https?:\/\/)?(?:www\.|mobile\.)?(?:x|twitter)\.com\/([^/?#]+)/i;
 

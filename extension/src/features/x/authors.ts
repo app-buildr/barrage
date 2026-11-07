@@ -1,9 +1,9 @@
 // Lecture de l'identifiant d'un auteur dans le DOM de X. Fonctions pures sur
 // des chaînes, couvertes par les tests.
-import { RESERVED_PATHS } from "../lists/handles.ts";
+import { HANDLE, RESERVED_PATHS } from "../lists/handles.ts";
 
-const PROFILE_HREF_RE = /^\/([A-Za-z0-9_]{1,15})$/;
-const AT_HANDLE_RE = /@([A-Za-z0-9_]{1,15})(?![A-Za-z0-9_])/g;
+const PROFILE_HREF_RE = new RegExp(`^/(${HANDLE})$`);
+const AT_HANDLE_RE = new RegExp(`@(${HANDLE})(?![A-Za-z0-9_])`, "g");
 
 /** `/Nom` → `nom`. Les liens vers `/nom/status/…` ou `/i/…` ne comptent pas. */
 export function handleFromHref(href: string | null): string | null {
@@ -12,7 +12,7 @@ export function handleFromHref(href: string | null): string | null {
 }
 
 /** Onglets d'un profil : « /nom/with_replies », « /nom/media »… */
-const PROFILE_PATH_RE = /^\/([A-Za-z0-9_]{1,15})(?:\/(?:with_replies|media|likes|highlights|articles|affiliates|superfollows))?\/?$/;
+const PROFILE_PATH_RE = new RegExp(`^/(${HANDLE})(?:/(?:with_replies|media|likes|highlights|articles|affiliates|superfollows))?/?$`);
 
 /**
  * Compte dont le profil est affiché, d'après le chemin de la page : `/Nom` et

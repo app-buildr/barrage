@@ -10,6 +10,7 @@ import { formatClock } from "@/core/intl.ts";
 import type { BlockingError, HealthIssue } from "@/core/state.ts";
 import { HEALTH_TITLE, errorText, errorTitle, healthText } from "../blocking/error-text.ts";
 import { resumable } from "../blocking/plan.ts";
+import { X_HOME_URL } from "../networks/networks.ts";
 
 type Props = { error: BlockingError | null; pauseUntil: number; health: HealthIssue | null };
 
@@ -38,7 +39,7 @@ export function BackgroundAlert({ error, pauseUntil, health }: Props) {
               Reprendre
             </Button>
           ) : null}
-          <a href="https://x.com/home" target="_blank" rel="noopener" className="font-bold whitespace-nowrap text-coral-deep">
+          <a href={X_HOME_URL} target="_blank" rel="noopener" className="font-bold whitespace-nowrap text-coral-deep">
             Ouvrir x.com
           </a>
         </div>

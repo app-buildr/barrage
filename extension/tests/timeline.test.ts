@@ -6,6 +6,7 @@ import { WRITES } from "../src/features/writes.ts";
 import { HIDDEN_ATTR } from "../src/features/x/selectors.ts";
 import { officialList } from "../src/features/lists/lists.ts";
 import { installChrome, X_TAB } from "./helpers/chrome.ts";
+import { putResults, result } from "./helpers/fixtures.ts";
 import { FakeElement, fixture, installDom } from "./helpers/dom.ts";
 import { installX, type FakeX } from "./helpers/x.ts";
 
@@ -97,7 +98,7 @@ test("un compte débloqué par Barrage depuis le chargement n'est pas repris pou
 });
 
 test("un compte déjà bloqué par Barrage reste masqué sans revenir en file", async () => {
-  store[resultKey("liste1")] = { state: "blocked", at: 1 };
+  putResults(store, { liste1: result("blocked") });
   const { hidden, state } = await open("tweet");
   assert.equal(hidden("listed"), true);
   assert.deepEqual(state.seen, []);

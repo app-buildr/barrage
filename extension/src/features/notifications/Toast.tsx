@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { clsx } from "clsx";
 import { BarrageMark } from "../../ui/BarrageMark.tsx";
 import { CORAL_BUTTON } from "../../ui/classes.ts";
+import { xProfileUrl } from "../networks/networks.ts";
 import { CloseButton, FOCUS, TOAST_CARD } from "./ToastParts.tsx";
 import { LEAVE_MS, TOAST_MS, type ToastItem, type ToastStore } from "./toasts.ts";
 
@@ -101,7 +102,7 @@ export function Toast({ toast, store }: { toast: ToastItem; store: ToastStore })
         <span className="flex min-w-0 text-[16px] font-bold text-ink">
           {/* Le nom ouvre le profil dans un nouvel onglet. */}
           <a
-            href={`https://x.com/${encodeURIComponent(handle)}`}
+            href={xProfileUrl(handle)}
             target="_blank"
             rel="noopener"
             className={clsx(

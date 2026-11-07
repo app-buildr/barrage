@@ -180,14 +180,14 @@ test("refuse des versions différentes et un tag qui ne correspond pas", () => {
   assertRefused(root, /version : 0\.0\.1 dans package\.json/);
 });
 
-test("refuse des motifs d'hôtes différents de X_TABS", () => {
+test("refuse des motifs d'hôtes différents de X_MATCHES", () => {
   const root = fixture();
   const path = join(root, "extension/manifest.json");
   editJson(path, (manifest) => ({ ...manifest, host_permissions: ["https://x.com/*"] }));
-  assertRefused(root, /host_permissions diffère de X_TABS/);
+  assertRefused(root, /host_permissions diffère de X_MATCHES/);
   cpSync(join(REPO, "extension/manifest.json"), path);
   editJson(path, (manifest) => ({ ...manifest, content_scripts: [{ ...manifest.content_scripts[0], matches: [] }] }));
-  assertRefused(root, /content_scripts\.matches diffère de X_TABS/);
+  assertRefused(root, /content_scripts\.matches diffère de X_MATCHES/);
 });
 
 test("refuse un dist/ auquel il manque un fichier du manifest", () => {
