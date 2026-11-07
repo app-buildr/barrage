@@ -26,10 +26,10 @@ test("un compte introuvable récemment n'est pas retenté", () => {
 });
 
 test("un échec est retenté jusqu'au nombre maximal de tentatives", () => {
-  let result = failure(undefined, "refus", 1);
+  let result = failure(undefined, { code: "refused", param: 1 }, 1);
   assert.equal(result.attempts, 1);
   assert.equal(nextPending(["a"], { a: result }), "a");
-  for (let i = 1; i < MAX_ATTEMPTS; i++) result = failure(result, "refus", 1);
+  for (let i = 1; i < MAX_ATTEMPTS; i++) result = failure(result, { code: "refused", param: 1 }, 1);
   assert.equal(result.attempts, MAX_ATTEMPTS);
   assert.equal(nextPending(["a"], { a: result }), undefined);
 });

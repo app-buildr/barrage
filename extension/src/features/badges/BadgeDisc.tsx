@@ -2,8 +2,9 @@
 import type { ReactNode } from "react";
 import { clsx as cn } from "clsx";
 import { TO_REACH } from "../../ui/classes.ts";
+import type { Palier } from "./badges.ts";
 
-const ICONS: Record<number, ReactNode> = {
+const ICONS: Record<Palier, ReactNode> = {
   1: (
     <>
       <path d="M4.5 17.5l1.8-6.2 4.7-3.8 5.6 1.4 3 5.4-2.3 4.2H7.2z" />
@@ -54,7 +55,7 @@ const ICONS: Record<number, ReactNode> = {
   1000: <polygon points="12 3 14.8 8.8 21 9.6 16.5 14 17.6 20.2 12 17.2 6.4 20.2 7.5 14 3 9.6 9.2 8.8" />,
 };
 
-type Props = { palier: number; earned: boolean; iconSize?: number };
+type Props = { palier: Palier; earned: boolean; iconSize?: number };
 
 export function BadgeDisc({ palier, earned, iconSize = 24 }: Props) {
   return (

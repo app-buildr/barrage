@@ -79,7 +79,7 @@ function Row(props: Props) {
             !enabled && "font-semibold text-muted-foreground",
           )}
         />
-        {offList ? <p className="m-0 text-[13px] text-muted-foreground">Hors liste · sa liste est désactivée</p> : null}
+        {offList ? <p className="m-0 text-[13px] text-muted-foreground">Hors liste · n'est plus dans une liste active</p> : null}
       </TableCell>
       <TableCell className={cn(CELL, "whitespace-normal", TEXT_COLORS[status.className])}>
         <StatusLabel status={status} />

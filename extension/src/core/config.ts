@@ -114,8 +114,6 @@ export const LISTS_RECHECK_MS = 10 * 60_000;
 export const LIST_MAX_SIZE = 5000;
 /** Seuls hôtes acceptés pour une liste importée : ils répondent avec CORS ouvert, sans nouvelle permission. */
 export const LIST_HOSTS: readonly string[] = ["raw.githubusercontent.com", "gist.githubusercontent.com"];
-/** Hôtes acceptés, tels qu'ils s'affichent dans les textes. */
-export const LIST_HOSTS_TEXT = LIST_HOSTS.join(" ou ");
 /** Extensions acceptées pour un fichier local. */
 export const LIST_FILE_EXTENSIONS: readonly string[] = [".txt", ".csv"];
 /** Taille maximale d'une liste importée, fichier ou adresse. */

@@ -5,11 +5,14 @@ import { AVAILABLE_NETWORKS, type NetworkId } from "../networks/networks.ts";
 
 export const OFFICIAL_ID = "official";
 export const MANUAL_ID = "manual";
-const OFFICIAL_NAME = "Liste collaborative Barrage";
+/** Résolu à l'affichage, voir listName : celui stocké reste figé, la liste n'étant pas renommable. */
+export const OFFICIAL_NAME = "Liste collaborative Barrage";
 const MANUAL_NAME = "Ma liste perso";
 export const IMPORTED_NAME = "Nouvelle liste perso";
 
-export type ListSource = "official" | "manual" | "github" | "file";
+const SOURCES = ["official", "manual", "github", "file"] as const;
+
+export type ListSource = (typeof SOURCES)[number];
 
 export type ListDef = {
   /** OFFICIAL_ID, MANUAL_ID, sinon identifiant généré. */
@@ -49,8 +52,6 @@ export function readListSync(value: unknown): ListSync {
 export const withSyncDates = (lists: readonly ListDef[], sync: ListSync): ListDef[] =>
   lists.map((list) => (sync[list.id] === undefined ? list : { ...list, syncedAt: sync[list.id] as number }));
 
-const SOURCES: readonly ListSource[] = ["official", "manual", "github", "file"];
-
 /** Réseaux proposés pour une liste : ceux où le blocage fonctionne. */
 export const LIST_NETWORKS: readonly NetworkId[] = AVAILABLE_NETWORKS.map((n) => n.id);
 
@@ -78,6 +79,9 @@ export function withManualHandles(lists: readonly ListDef[], handles: readonly s
   const fresh = manualList([...handles], at);
   return [...lists, { ...fresh, name: uniqueName(fresh.name, lists.map((list) => list.name)) }];
 }
+
+/** Nom affiché. Les autres noms sont des données de l'utilisateur, à ne jamais retraduire. */
+export const listName = (list: ListDef): string => (list.id === OFFICIAL_ID ? OFFICIAL_NAME : list.name);
 
 /** La liste s'applique sur ce réseau. */
 export const coversNetwork = (list: ListDef, network: NetworkId): boolean =>

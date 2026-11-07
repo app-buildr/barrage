@@ -16,7 +16,7 @@ export function BadgeToast({ palier, onDismiss, onOpenBadges }: Props) {
   return (
     <div className={cn(TOAST_CARD, "p-4 text-[15px] leading-[1.45] text-muted-ink")}>
       <div className="flex items-center gap-3 pr-8">
-        <BadgeDisc palier={palier} earned iconSize={26} />
+        <BadgeDisc palier={badge.palier} earned iconSize={26} />
         <div className="min-w-0">
           <div className="text-[13px] font-bold tracking-[.04em] text-coral-deep uppercase">Nouveau badge</div>
           <div className="truncate text-[21px] leading-tight font-extrabold text-ink">

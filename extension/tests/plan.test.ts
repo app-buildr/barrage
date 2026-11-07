@@ -106,7 +106,7 @@ test("la pause d'automatisation double à chaque rechute et plafonne", () => {
 
 test("un soupçon d'automatisation écrit le compteur, la pause et l'erreur, sous le préfixe du compte", async () => {
   const before = Date.now();
-  await recordAutomation("acct:2/", 2, "soupçon");
+  await recordAutomation("acct:2/", 2, { code: "automation" });
   const pauseUntil = store["acct:2/pauseUntil"] as number;
   assert.equal(store["acct:2/strikes"], 3);
   assert.ok(pauseUntil >= before + 4 * AUTOMATION_PAUSE_MS);
@@ -115,7 +115,7 @@ test("un soupçon d'automatisation écrit le compteur, la pause et l'erreur, sou
 });
 
 test("la reprise attend la fin de la pause, puis lève l'arrêt sans oublier le soupçon", async () => {
-  await recordAutomation("", 0, "soupçon");
+  await recordAutomation("", 0, { code: "automation" });
   await resumeBlocking();
   assert.equal((await getState()).error?.reason, "automation");
   store.pauseUntil = Date.now() - 1;
@@ -128,7 +128,7 @@ test("la reprise attend la fin de la pause, puis lève l'arrêt sans oublier le 
 });
 
 test("une erreur de session ne se lève pas depuis les options", async () => {
-  await setError("", "session", "auth", Infinity);
+  await setError("", { code: "session_expired" }, "auth", Infinity);
   await resumeBlocking();
   assert.equal((await getState()).error?.reason, "auth");
   assert.equal(resumable(error("auth")), false);
@@ -140,13 +140,13 @@ test("un compte retiré dont le déblocage est refusé reste en file pour trois 
   store.retiredAt = { z: 1 };
   store[resultKey("z")] = { state: "blocked", at: 1 };
   for (const attempts of [1, 2]) {
-    await refuseUnblock("z", "non");
+    await refuseUnblock("z", { code: "refused", param: 1 });
     const state = await getState();
     assert.deepEqual(state.retired, ["z"]);
     assert.equal(state.results.z?.unblockAttempts, attempts);
     assert.equal(state.results.z?.unblockFailed, undefined);
   }
-  await refuseUnblock("z", "non");
+  await refuseUnblock("z", { code: "refused", param: 1 });
   const state = await getState();
   assert.deepEqual(state.retired, []);
   assert.equal(state.results.z?.unblockFailed, true);
@@ -156,7 +156,7 @@ test("un compte sur Off dont le déblocage est refusé sort de la file aussitôt
   store.disabled = ["a"];
   store.unblock = ["a"];
   store[resultKey("a")] = { state: "blocked", at: 1 };
-  await refuseUnblock("a", "non");
+  await refuseUnblock("a", { code: "refused", param: 1 });
   const state = await getState();
   assert.deepEqual(state.unblock, []);
   assert.equal(state.results.a?.unblockFailed, true);

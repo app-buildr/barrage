@@ -1,7 +1,7 @@
 // Accueil du premier lancement : choix de la liste à bloquer.
 import { useState, type ReactNode } from "react";
 import { ArrowRight } from "lucide-react";
-import { LIST_HOSTS_TEXT } from "@/core/config.ts";
+import { plural } from "@/core/format.ts";
 import type { State } from "@/core/state.ts";
 import { useSafeWrite } from "@/ui/use-safe-write.ts";
 import { write } from "@/core/write.ts";
@@ -12,7 +12,8 @@ import { Header } from "@/ui/layout/Header.tsx";
 import { Panel, StatusMessage } from "@/ui/layout/Section.tsx";
 import { cn } from "@/ui/lib/utils.ts";
 import { AutoUpdateNotice, FilePicker, FormatHint, ListPreview, ListUrlInput, NetworkChips } from "../lists/ListFields.tsx";
-import { LIST_NETWORKS } from "../lists/lists.ts";
+import { LIST_FILE_EXTENSIONS_TEXT, LIST_HOSTS_TEXT } from "../lists/import.ts";
+import { LIST_NETWORKS, OFFICIAL_NAME } from "../lists/lists.ts";
 import { useListAnalysis, type Analysis } from "../lists/use-list-analysis.ts";
 import type { NetworkId } from "../networks/networks.ts";
 
@@ -75,16 +76,16 @@ export function Welcome({ state }: { state: State }) {
             onSelect={() => setChoice("official")}
             title={
               <>
-                Liste collaborative Barrage
+                {OFFICIAL_NAME}
                 <Badge className={CORAL_PILL}>Recommandée</Badge>
               </>
             }
           >
-            {state.official.length} comptes, maintenue sur GitHub et relue par la communauté. Mise à jour automatique.
+            {plural(state.official.length, "compte")}, maintenue sur GitHub et relue par la communauté. Mise à jour automatique.
           </Option>
           <Option selected={choice === "own"} onSelect={() => setChoice("own")} title="Importer ma propre liste">
-            Depuis un fichier hébergé sur GitHub ({LIST_HOSTS_TEXT}), ou un fichier texte (.txt ou .csv) de votre
-            ordinateur.
+            Depuis un fichier hébergé sur GitHub ({LIST_HOSTS_TEXT}), ou un fichier texte ({LIST_FILE_EXTENSIONS_TEXT})
+            de votre ordinateur.
           </Option>
         </fieldset>
         {choice === "own" ? (

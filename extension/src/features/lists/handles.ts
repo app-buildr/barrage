@@ -30,20 +30,23 @@ export function parseHandle(raw: string): string | null {
 
 export type ParsedInput = { handles: string[]; invalid: string[] };
 
-/**
- * Découpe une saisie de plusieurs comptes, séparés par des espaces (ou des
- * virgules, points-virgules, retours à la ligne, pour un copier-coller).
- */
-export function parseInput(text: string): ParsedInput {
+/** Comptes valides, sans doublon, et entrées écartées. */
+export function parseEntries(entries: readonly string[]): ParsedInput {
   const handles = new Set<string>();
   const invalid: string[] = [];
-  for (const token of splitEntries(text)) {
+  for (const token of entries) {
     const handle = parseHandle(token);
     if (handle === null) invalid.push(token);
     else handles.add(handle);
   }
   return { handles: [...handles], invalid };
 }
+
+/**
+ * Découpe une saisie de plusieurs comptes, séparés par des espaces (ou des
+ * virgules, points-virgules, retours à la ligne, pour un copier-coller).
+ */
+export const parseInput = (text: string): ParsedInput => parseEntries(splitEntries(text));
 
 /** Entrées d'une saisie ou d'un fichier, sans les vides. */
 export function splitEntries(text: string): string[] {

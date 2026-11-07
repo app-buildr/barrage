@@ -14,10 +14,12 @@ import {
   resultKey,
   scoped,
   type BlockingError,
+  type ErrorCause,
   type ErrorReason,
 } from "../../core/state.ts";
 import { syncBadges } from "../badges/store.ts";
 import { isNewer } from "../updates/version.ts";
+import type { Failure } from "./outcome.ts";
 import { automationPause, resumable } from "./plan.ts";
 import { failure, isBlocked, isPending, resultOf, type Result, type Results } from "./queue.ts";
 
@@ -48,12 +50,12 @@ export async function finishUnblock(
 /** Échec d'un blocage : le compteur de tentatives progresse, d'après le résultat enregistré. */
 export async function recordBlockFailure(
   handle: string,
-  message: string,
+  cause: Failure,
   at: number,
   account?: string | null,
 ): Promise<void> {
   const { results, prefix } = await getState(account);
-  await setResults(prefix, { [handle]: failure(resultOf(results, handle), message, at) });
+  await setResults(prefix, { [handle]: failure(resultOf(results, handle), cause, at) });
 }
 
 /**
@@ -62,16 +64,16 @@ export async function recordBlockFailure(
  * permette de réessayer. Un compte retiré de la liste collaborative n'a pas
  * d'autre chance d'être débloqué : il reste en file MAX_ATTEMPTS tentatives.
  */
-export async function refuseUnblock(handle: string, message: string, account?: string | null): Promise<void> {
+export async function refuseUnblock(handle: string, cause: Failure, account?: string | null): Promise<void> {
   const { results, retired, prefix } = await getState(account);
   const previous = resultOf(results, handle);
-  const error = errorValue(`Déblocage de @${handle} impossible : ${message}`, "other", 0);
+  const error = errorValue({ ...cause, context: { unblock: handle } }, "other", 0);
   const attempts = (previous?.unblockAttempts ?? 0) + 1;
   if (previous && retired.includes(handle) && attempts < MAX_ATTEMPTS) {
-    await setResults(prefix, { [handle]: { ...previous, unblockAttempts: attempts, message } }, { error });
+    await setResults(prefix, { [handle]: { ...previous, unblockAttempts: attempts, ...cause } }, { error });
     return;
   }
-  await finishUnblock(handle, previous ? { ...previous, unblockFailed: true, message } : null, { error }, account);
+  await finishUnblock(handle, previous ? { ...previous, unblockFailed: true, ...cause } : null, { error }, account);
 }
 
 export async function setPauseUntil(prefix: string, pauseUntil: number): Promise<void> {
@@ -86,9 +88,9 @@ export async function setFailures(prefix: string, failures: string[]): Promise<v
  * Soupçon d'automatisation : tout s'arrête, et la pause croît à chaque rechute.
  * Même la pause finie, rien ne reprend sans un clic dans les options.
  */
-export async function recordAutomation(prefix: string, strikes: number, message: string): Promise<void> {
+export async function recordAutomation(prefix: string, strikes: number, cause: Failure): Promise<void> {
   const pauseUntil = Date.now() + automationPause(strikes);
-  const error = errorValue(message, "automation", Infinity);
+  const error = errorValue(cause, "automation", Infinity);
   await chrome.storage.local.set(scoped(prefix, { strikes: strikes + 1, pauseUntil, error }));
 }
 
@@ -108,19 +110,19 @@ export async function resumeBlocking(account?: string | null): Promise<void> {
  */
 export async function setError(
   prefix: string,
-  message: string | null,
+  cause: ErrorCause | null,
   reason: ErrorReason = "other",
   expectedMs = 0,
   session?: string,
 ): Promise<void> {
-  const error = message ? errorValue(message, reason, expectedMs, session) : null;
+  const error = cause ? errorValue(cause, reason, expectedMs, session) : null;
   await chrome.storage.local.set(scoped(prefix, { error }));
 }
 
-function errorValue(message: string, reason: ErrorReason, expectedMs: number, session?: string): BlockingError {
+function errorValue(cause: ErrorCause, reason: ErrorReason, expectedMs: number, session?: string): BlockingError {
   const at = Date.now();
   const staleAt = Number.isFinite(expectedMs) ? at + expectedMs + RUNNER_GRACE_MS : Number.MAX_SAFE_INTEGER;
-  return { message, reason, staleAt, at, ...(session ? { session } : {}) };
+  return { ...cause, reason, staleAt, at, ...(session ? { session } : {}) };
 }
 
 /**

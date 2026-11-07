@@ -6,8 +6,8 @@ import { accountStates, getState, readStorage, resultKey, scoped } from "../../c
 import { resultOf } from "../blocking/queue.ts";
 import { MANUAL_ID, coversNetwork, manualList, uniqueName } from "../lists/lists.ts";
 
-/** `inactive` : « Ma liste perso » ne couvre pas X, ces comptes ne seront pas bloqués. */
-export type AddResult = { added: string[]; existing: string[]; inactive: boolean };
+/** `inactiveList` : nom réel de « Ma liste perso » si elle ne couvre pas X, ces comptes ne seront pas bloqués. */
+export type AddResult = { added: string[]; existing: string[]; inactiveList: string | null };
 
 /**
  * Ajoute des comptes, déjà normalisés par parseHandle, à « Ma liste perso »,
@@ -18,7 +18,8 @@ export async function addHandles(handles: readonly string[]): Promise<AddResult>
   const { lists, handles: effective } = await getState();
   const manual = lists.find((list) => list.id === MANUAL_ID);
   const known = new Set([...effective, ...(manual?.handles ?? [])]);
-  const result: AddResult = { added: [], existing: [], inactive: manual !== undefined && !coversNetwork(manual, "x") };
+  const inactiveList = manual !== undefined && !coversNetwork(manual, "x") ? manual.name : null;
+  const result: AddResult = { added: [], existing: [], inactiveList };
   for (const handle of new Set(handles)) {
     (known.has(handle) ? result.existing : result.added).push(handle);
   }

@@ -1,12 +1,12 @@
 // Onglet Badges des options, pour le compte X affiché.
 import { Check } from "lucide-react";
 import type { State } from "@/core/state.ts";
-import { percent } from "@/core/format.ts";
+import { formatCount, percent, pluralWord } from "@/core/format.ts";
 import { CORAL_LINK, PROGRESS_BAR, TO_REACH } from "@/ui/classes.ts";
 import { Progress } from "@/ui/components/progress.tsx";
 import { Panel } from "@/ui/layout/Section.tsx";
 import { cn } from "@/ui/lib/utils.ts";
-import { BADGES, earnedCount, hasBadge, nextBadge, shareUrl, type Badge } from "./badges.ts";
+import { BADGES, badgeDescription, earnedCount, hasBadge, nextBadge, shareUrl, type Badge } from "./badges.ts";
 import { BadgeDisc } from "./BadgeDisc.tsx";
 
 function Tile({ badge, count, earned }: { badge: Badge; count: number; earned: boolean }) {
@@ -26,7 +26,7 @@ function Tile({ badge, count, earned }: { badge: Badge; count: number; earned: b
           <Check className="size-3.5" strokeWidth={3} aria-hidden="true" />
         </span>
       </div>
-      <p className="m-0 text-[15px] text-muted-foreground">{badge.description}</p>
+      <p className="m-0 text-[15px] text-muted-foreground">{badgeDescription(badge.palier)}</p>
       {earned ? (
         <a
           href={shareUrl(badge)}
@@ -41,7 +41,7 @@ function Tile({ badge, count, earned }: { badge: Badge; count: number; earned: b
         <div className="flex items-center gap-3">
           <Progress value={percent(count, badge.palier)} aria-label={badge.name} className={cn("h-2 flex-1", PROGRESS_BAR)} />
           <span className="flex-none text-sm font-bold text-muted-foreground">
-            {count} / {badge.palier}
+            {formatCount(count)} / {formatCount(badge.palier)}
           </span>
         </div>
       )}
@@ -64,8 +64,9 @@ function NextBadge({ count }: { count: number }) {
         </div>
       </div>
       <p className="mt-3 mb-3 text-muted-foreground">
-        <strong className="text-coral-deep">{count}</strong> {count > 1 ? "comptes bloqués" : "compte bloqué"} sur{" "}
-        {next.palier}, plus que {next.palier - count}.
+        <strong className="text-coral-deep">{formatCount(count)}</strong>{" "}
+        {pluralWord(count, "compte bloqué", "comptes bloqués")} sur {formatCount(next.palier)}, plus que{" "}
+        {formatCount(next.palier - count)}.
       </p>
       <Progress value={percent(count, next.palier)} aria-label={`Progression vers ${next.name}`} className={cn("h-3", PROGRESS_BAR)} />
     </div>
@@ -74,6 +75,7 @@ function NextBadge({ count }: { count: number }) {
 
 export function BadgesTab({ state }: { state: State }) {
   const { account, badges, blockCount } = state;
+  const earned = earnedCount(badges);
   if (!account) {
     return <Panel>Connectez-vous à x.com pour suivre vos badges.</Panel>;
   }
@@ -82,7 +84,7 @@ export function BadgesTab({ state }: { state: State }) {
       <div className="mb-5 flex items-baseline justify-between gap-3">
         <h2 className="text-2xl leading-tight">Mes badges</h2>
         <span className="text-muted-foreground">
-          <strong className="text-ink">{earnedCount(badges)}</strong> sur {BADGES.length} obtenus
+          <strong className="text-ink">{earned}</strong> sur {BADGES.length} {pluralWord(earned, "obtenu")}
         </span>
       </div>
       <NextBadge count={blockCount} />

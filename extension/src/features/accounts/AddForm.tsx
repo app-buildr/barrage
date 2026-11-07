@@ -20,7 +20,7 @@ export function AddForm() {
     event.preventDefault();
     const { handles, invalid } = parseInput(value);
     if (!handles.length && !invalid.length) return;
-    let reply: AddResult = { added: [], existing: [], inactive: false };
+    let reply: AddResult = { added: [], existing: [], inactiveList: null };
     try {
       if (handles.length) reply = await write("addHandles", handles);
     } catch {

@@ -7,7 +7,7 @@ import {
   LIST_MAX_REMOVED_SHARE,
   LIST_MAX_SIZE,
 } from "../../core/config.ts";
-import { parseHandle } from "./handles.ts";
+import { parseEntries } from "./handles.ts";
 
 export type Parsed = { ok: true; handles: string[] } | { ok: false; reason: string };
 
@@ -19,9 +19,7 @@ export type Parsed = { ok: true; handles: string[] } | { ok: false; reason: stri
 export function parseList(body: unknown): Parsed {
   if (!Array.isArray(body)) return { ok: false, reason: "le fichier n'est pas une liste" };
   if (body.length > LIST_MAX_SIZE) return { ok: false, reason: `plus de ${LIST_MAX_SIZE} comptes` };
-  const handles = [
-    ...new Set(body.map((entry) => (typeof entry === "string" ? parseHandle(entry) : null)).filter((h) => h !== null)),
-  ];
+  const { handles } = parseEntries(body.filter((entry) => typeof entry === "string"));
   if (!handles.length) return { ok: false, reason: "liste vide" };
   return { ok: true, handles };
 }

@@ -2,6 +2,7 @@
 // Clavier (flèches, Début, Fin) géré par Radix. Un réseau pas encore disponible
 // a un onglet grisé « Bientôt », que ni le clic ni le clavier n'ouvrent.
 import { useState, type ReactNode } from "react";
+import { formatCount } from "@/core/format.ts";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/ui/components/tabs.tsx";
 import { AVAILABLE_NETWORKS, ENGINE_NETWORK, NETWORKS, toNetworkId, type Network, type NetworkId } from "./networks.ts";
 
@@ -36,7 +37,7 @@ export function NetworkTabs({ count, panel }: Props) {
             <span>{network.label}</span>
             {network.available ? (
               <span className="rounded-full bg-cream px-2 py-px text-xs font-bold text-muted-foreground in-data-[state=active]:bg-white/20 in-data-[state=active]:text-white">
-                {count(network)}
+                {formatCount(count(network))}
               </span>
             ) : (
               <span className="rounded-full bg-soon px-2 py-px text-xs font-bold text-disabled">Bientôt</span>

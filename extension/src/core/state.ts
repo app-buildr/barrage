@@ -8,6 +8,7 @@
 import { RETIRE_GRACE_MS, STATE_COALESCE_MS } from "./config.ts";
 import { DEFAULT_HANDLES } from "../features/lists/defaults.ts";
 import type { Earned } from "../features/badges/badges.ts";
+import type { Failure } from "../features/blocking/outcome.ts";
 import { activeHandles, eligible, isBlocked, resultOf, type Result, type Results } from "../features/blocking/queue.ts";
 import { effectiveHandles, readListSync, readLists, withSyncDates, type ListDef } from "../features/lists/lists.ts";
 import { readGuards, type ListGuard } from "../features/lists/remote.ts";
@@ -16,11 +17,21 @@ import { readGuards, type ListGuard } from "../features/lists/remote.ts";
 export type ErrorReason = "auth" | "network" | "automation" | "api" | "other";
 
 /**
- * Erreur qui empêche tout blocage, affichée dans les options. `staleAt` :
- * au-delà, sans nouvelle écriture, l'onglet qui l'a vue est réputé fermé.
+ * Ce que le traitement faisait quand l'échec est survenu, pour le texte affiché.
+ * "stopped" : arrêt, X a sans doute changé. "retry" : nouvel essai après
+ * NETWORK_RETRY_MS. "check" : vérification impossible, reprise après CHECK_RETRY_MS.
  */
-export type BlockingError = {
-  message: string;
+export type ErrorContext = "stopped" | "retry" | "check" | { refusals: number } | { unblock: string };
+
+export type ErrorCause = Failure & { context?: ErrorContext };
+
+/**
+ * Erreur qui empêche tout blocage, affichée dans les options, voir errorText.
+ * `staleAt` : au-delà, sans nouvelle écriture, l'onglet qui l'a vue est réputé
+ * fermé. `message` : lecture seule, texte rédigé par une version antérieure.
+ */
+export type BlockingError = Partial<ErrorCause> & {
+  message?: string;
   reason: ErrorReason;
   staleAt: number;
   /** Horodatage de l'erreur, en millisecondes. */
@@ -331,9 +342,9 @@ export function readState(stored: Record<string, unknown>, account?: string | nu
  */
 function readError(value: unknown): BlockingError | null {
   if (!isRecord(value)) return null;
-  const { message, staleAt } = value;
-  if (typeof message === "string" && typeof staleAt === "number") return value as BlockingError;
-  return { message: "Erreur illisible : Barrage s'est arrêté.", reason: "api", staleAt: Number.MAX_SAFE_INTEGER };
+  const { code, message, staleAt } = value;
+  if ((typeof code === "string" || typeof message === "string") && typeof staleAt === "number") return value as BlockingError;
+  return { code: "unreadable_error", reason: "api", staleAt: Number.MAX_SAFE_INTEGER };
 }
 
 /** Comptes X connus, d'après le contenu du stockage. */

@@ -1,7 +1,7 @@
 // Carte « Listes de comptes » de Réglages : listes actives, désactivées, ajout.
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { List, Pencil, Plus, Trash2 } from "lucide-react";
-import { LIST_HOSTS_TEXT, LIST_NAME_MAX, RETIRE_GRACE_MS } from "@/core/config.ts";
+import { LIST_NAME_MAX, RETIRE_GRACE_MS } from "@/core/config.ts";
 import type { State } from "@/core/state.ts";
 import { useSafeWrite, type Attempt } from "@/ui/use-safe-write.ts";
 import { write } from "@/core/write.ts";
@@ -14,9 +14,10 @@ import { Panel, StatusMessage } from "@/ui/layout/Section.tsx";
 import { cn } from "@/ui/lib/utils.ts";
 import type { NetworkId } from "../networks/networks.ts";
 import { listDetails } from "./details.ts";
+import { LIST_FILE_EXTENSIONS_TEXT, LIST_HOSTS_TEXT } from "./import.ts";
 import { plural } from "@/core/format.ts";
 import { AutoUpdateNotice, FilePicker, FormatHint, ListPreview, ListUrlInput, NetworkChips } from "./ListFields.tsx";
-import { LIST_NETWORKS, OFFICIAL_ID, cleanName, listHandles, type ListDef } from "./lists.ts";
+import { LIST_NETWORKS, OFFICIAL_ID, cleanName, listHandles, listName, type ListDef } from "./lists.ts";
 import type { PendingList } from "./remote.ts";
 import { useListAnalysis, type Analysis } from "./use-list-analysis.ts";
 
@@ -66,7 +67,7 @@ function ListName({ list, attempt }: ListProps) {
   }
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="text-lg font-bold text-ink">{list.name}</span>
+      <span className="text-lg font-bold text-ink">{listName(list)}</span>
       {list.id === OFFICIAL_ID ? (
         <Badge className={CORAL_PILL}>Officielle</Badge>
       ) : (
@@ -191,7 +192,7 @@ function ListCard({ list, attempt, count, now, pending, current }: CardProps) {
           {list.active ? <span className="text-ink">Active</span> : "Désactivée"}
           <Switch
             checked={list.active}
-            aria-label={`${list.active ? "Désactiver" : "Activer"} ${list.name}`}
+            aria-label={`${list.active ? "Désactiver" : "Activer"} ${listName(list)}`}
             onCheckedChange={(active) => void attempt(write("setListActive", list.id, active))}
           />
         </label>
@@ -253,8 +254,8 @@ function NewListPanel({ attempt }: { attempt: Attempt }) {
         <h3 className="font-sans text-lg font-bold tracking-normal">Nouvelle liste</h3>
       </div>
       <p className="m-0 text-[15px] text-muted-foreground">
-        Collez l'adresse d'une liste hébergée sur GitHub ({LIST_HOSTS_TEXT}), ou importez un fichier texte (.txt ou
-        .csv) depuis votre ordinateur. Les autres sites ne sont pas acceptés.
+        Collez l'adresse d'une liste hébergée sur GitHub ({LIST_HOSTS_TEXT}), ou importez un fichier texte (
+        {LIST_FILE_EXTENSIONS_TEXT}) depuis votre ordinateur. Les autres sites ne sont pas acceptés.
       </p>
       <FormatHint />
       <AutoUpdateNotice />

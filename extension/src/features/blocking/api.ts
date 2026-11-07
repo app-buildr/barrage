@@ -3,7 +3,7 @@
 import { X_REQUEST_TIMEOUT_MS } from "../../core/config.ts";
 import { handleFromUserNameText } from "../timeline/authors.ts";
 import { ACCOUNT_BUTTON_SELECTOR } from "../timeline/selectors.ts";
-import { classify, noUserMatch, readLookup, routeMaybeGone, type Lookup, type Outcome } from "./outcome.ts";
+import { classify, failureOf, noUserMatch, readLookup, routeMaybeGone, type Lookup, type Outcome } from "./outcome.ts";
 
 /**
  * Jeton public du client web de X, identique pour tous les visiteurs et présent
@@ -79,7 +79,7 @@ export async function sessionId(): Promise<string | null> {
  */
 async function call(path: string, init: RequestInit): Promise<{ outcome: Outcome; body?: unknown }> {
   const csrf = readCsrfToken();
-  if (!csrf) return { outcome: { kind: "auth", message: "Aucune session X : connectez-vous à x.com." } };
+  if (!csrf) return { outcome: { kind: "auth", code: "session_missing" } };
   let response: Response;
   try {
     response = await fetch(location.origin + path, {
@@ -96,7 +96,7 @@ async function call(path: string, init: RequestInit): Promise<{ outcome: Outcome
       },
     });
   } catch {
-    return { outcome: { kind: "network", message: "Réseau indisponible." } };
+    return { outcome: { kind: "network", code: "network_down" } };
   }
   const body: unknown = await response.json().catch(() => null);
   const outcome = classify(response.status, body, response.headers.get("x-rate-limit-reset"), Date.now());
@@ -112,8 +112,8 @@ async function post(path: string, handle: string): Promise<Outcome> {
   // Un compte qui existe encore prouve que c'est la route qui a disparu : sans
   // cette vérification, un déblocage serait noté fait sans avoir eu lieu.
   const reply = await lookupBlocking([handle]);
-  if ("kind" in reply) return reply.kind === "failed" ? { kind: "broken", message: reply.message } : reply;
-  return reply.found.has(handle) ? { kind: "broken", message: "Action refusée par X : route introuvable." } : outcome;
+  if ("kind" in reply) return reply.kind === "failed" ? { kind: "broken", ...failureOf(reply) } : reply;
+  return reply.found.has(handle) ? { kind: "broken", code: "route_gone" } : outcome;
 }
 
 export const blockUser = (handle: string): Promise<Outcome> => post(BLOCK_PATH, handle);
@@ -136,7 +136,7 @@ export async function lookupBlocking(handles: readonly string[]): Promise<Lookup
   // Seul ce code prouve qu'aucun compte du paquet n'existe. Un autre (route
   // disparue après un changement de l'API…) marquerait à tort 100 comptes introuvables.
   if (noUserMatch(body)) return { found: new Set(), blocking: new Set() };
-  if (outcome.kind === "not_found") return { kind: "failed", message: outcome.message };
+  if (outcome.kind === "not_found") return { kind: "failed", ...failureOf(outcome) };
   if (outcome.kind !== "ok") return outcome;
-  return readLookup(body) ?? { kind: "failed", message: "Réponse de X illisible." };
+  return readLookup(body) ?? { kind: "failed", code: "unreadable_reply" };
 }

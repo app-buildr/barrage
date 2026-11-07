@@ -4,7 +4,8 @@ import { installChrome } from "./helpers/chrome.ts";
 import { DEFAULT_HANDLES } from "../src/features/lists/defaults.ts";
 import { parseHandle } from "../src/features/lists/handles.ts";
 import { MAX_ATTEMPTS } from "../src/core/config.ts";
-import { active, getState, resultChanges, resultHandle, resultKey, unblockQueue } from "../src/core/state.ts";
+import { active, getState, resultChanges, resultHandle, resultKey, unblockQueue, type BlockingError } from "../src/core/state.ts";
+import { errorText } from "../src/features/blocking/error-text.ts";
 import { addHandles, requestBlock, requestUnblock, setEnabled } from "../src/features/accounts/store.ts";
 import {
   finishUnblock,
@@ -63,8 +64,8 @@ test("les comptes de la liste collaborative s'ajoutent à une liste perso, sans 
 
 test("des comptes ajoutés rejoignent la fin de la liste, une seule fois", async () => {
   const first = await addHandles(["un", "deux", "un", DEFAULT_HANDLES[0] ?? ""]);
-  assert.deepEqual(first, { added: ["un", "deux"], existing: [DEFAULT_HANDLES[0]], inactive: false });
-  assert.deepEqual(await addHandles(["deux", "trois"]), { added: ["trois"], existing: ["deux"], inactive: false });
+  assert.deepEqual(first, { added: ["un", "deux"], existing: [DEFAULT_HANDLES[0]], inactiveList: null });
+  assert.deepEqual(await addHandles(["deux", "trois"]), { added: ["trois"], existing: ["deux"], inactiveList: null });
   const { handles } = await getState();
   assert.deepEqual(handles.slice(-3), ["un", "deux", "trois"]);
   assert.equal(handles.length, DEFAULT_HANDLES.length + 3);
@@ -427,10 +428,10 @@ test("un nouveau compte X est enregistré et à vérifier en une seule écriture
 test("des refus répétés sortent le compte de la file au dernier essai permis", async () => {
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     assert.deepEqual(pendingIn(["a"], (await getState()).results), ["a"], `avant l'essai ${attempt}`);
-    await recordBlockFailure("a", "refus", attempt);
+    await recordBlockFailure("a", { code: "refused", param: 9 }, attempt);
   }
   const { results } = await getState();
-  assert.deepEqual(results.a, { state: "failed", at: MAX_ATTEMPTS, message: "refus", attempts: MAX_ATTEMPTS });
+  assert.deepEqual(results.a, { state: "failed", at: MAX_ATTEMPTS, code: "refused", param: 9, attempts: MAX_ATTEMPTS });
   assert.deepEqual(pendingIn(["a"], results), []);
 });
 
@@ -438,17 +439,19 @@ test("un déblocage refusé sort de la file, reste bloqué et se signale", async
   putResults({ a: { state: "blocked", at: 1 } });
   store.disabled = ["a"];
   store.unblock = ["a"];
-  await refuseUnblock("a", "non");
+  await refuseUnblock("a", { code: "refused", param: 9 });
   const state = await getState();
   assert.equal(state.results.a?.state, "blocked");
   assert.equal(state.results.a?.unblockFailed, true);
   assert.deepEqual(unblockQueue(state), []);
   assert.deepEqual(state.unblock, []);
-  assert.match(state.error?.message ?? "", /Déblocage de @a impossible : non/);
+  assert.deepEqual(state.error?.context, { unblock: "a" });
+  assert.equal(state.error?.message, undefined);
+  assert.match(errorText(state.error as BlockingError), /Déblocage de @a impossible : Refus de X \(code 9\)/);
 });
 
 test("une erreur permanente garde une échéance finie, après le passage en JSON", async () => {
-  await setError("", "arrêt", "api", Infinity);
+  await setError("", { code: "route_gone" }, "api", Infinity);
   const { error } = await getState();
   assert.equal(error?.staleAt, Number.MAX_SAFE_INTEGER);
   await setError("", null);
@@ -457,7 +460,7 @@ test("une erreur permanente garde une échéance finie, après le passage en JSO
 
 test("une erreur passagère expire après son délai, marge comprise", async () => {
   const before = Date.now();
-  await setError("", "réseau", "network", 1000);
+  await setError("", { code: "network_down" }, "network", 1000);
   const { error } = await getState();
   assert.ok((error?.staleAt ?? 0) > before + 1000);
   assert.ok((error?.staleAt ?? Infinity) < Number.MAX_SAFE_INTEGER);
@@ -475,7 +478,7 @@ test("une erreur stockée illisible garde le traitement arrêté, et se lève da
     const { error } = await getState();
     assert.equal(halted(error, Date.now()), true, JSON.stringify(value));
     assert.equal(resumable(error), true, JSON.stringify(value));
-    assert.ok(error?.message, JSON.stringify(value));
+    assert.equal(error?.code, "unreadable_error", JSON.stringify(value));
   }
 });
 

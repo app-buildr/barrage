@@ -2,14 +2,13 @@
 // restaurer après un aperçu.
 import { useRef, useState } from "react";
 import { Download, Upload } from "lucide-react";
+import { formatLongDate } from "@/core/intl.ts";
 import { readStorage } from "@/core/state.ts";
 import { useSafeWrite } from "@/ui/use-safe-write.ts";
 import { write } from "@/core/write.ts";
 import { Button } from "@/ui/components/button.tsx";
 import { Hint, Panel, StatusMessage, type StatusKind } from "@/ui/layout/Section.tsx";
 import { BACKUP_INVALID, BACKUP_MAX_BYTES, backupFileName, checkBackup, createBackup, describeBackup } from "./backup.ts";
-
-const DATE = new Intl.DateTimeFormat("fr-FR", { dateStyle: "long" });
 
 async function download(): Promise<void> {
   const now = Date.now();
@@ -43,7 +42,7 @@ export function BackupSettings() {
     }
     const check = checkBackup(backup);
     if (!check.ok) return setStatus({ kind: "error", message: check.reason });
-    const date = check.exportedAt ? `Sauvegarde du ${DATE.format(check.exportedAt)} : ` : "Sauvegarde : ";
+    const date = check.exportedAt ? `Sauvegarde du ${formatLongDate(check.exportedAt)} : ` : "Sauvegarde : ";
     setReady({ backup, summary: date + describeBackup(check) });
   }
 

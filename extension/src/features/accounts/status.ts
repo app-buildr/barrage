@@ -1,12 +1,13 @@
 // État affiché d'un compte dans la liste : libellé, pastille, bouton possible,
 // et catégorie pour la progression et les filtres. Fonctions pures, testées
 // dans tests/status.test.ts.
+import { resultText } from "../blocking/error-text.ts";
 import { isPending, type Result } from "../blocking/queue.ts";
 
 /** Catégories exclusives : leur somme est le nombre de comptes de la liste. */
-export type Category = "blocked" | "visible" | "problem" | "disabled";
+export const CATEGORIES = ["blocked", "visible", "problem", "disabled"] as const;
 
-export const CATEGORIES: readonly Category[] = ["blocked", "visible", "problem", "disabled"];
+export type Category = (typeof CATEGORIES)[number];
 
 /**
  * `tag` : l'état s'affiche en pastille ; `note` le précise à côté.
@@ -46,9 +47,9 @@ export function describe(result: Result | undefined, queued: boolean, paused = f
     case "already_blocked":
       return BLOCKED;
     case "not_found":
-      return text(result.message ?? "Introuvable", "problem", "warn", "block");
+      return text(resultText(result) ?? "Introuvable", "problem", "warn", "block");
     case "failed":
-      return text(`Échec : ${result.message ?? "refus de X"}`, "problem", "error", "block");
+      return text(`Échec : ${resultText(result) ?? "refus de X"}`, "problem", "error", "block");
     default:
       return VISIBLE;
   }

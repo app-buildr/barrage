@@ -1,9 +1,11 @@
 // Carte « Notifications » de Réglages : activer ou couper les notifications sur x.com.
+import { plural } from "@/core/format.ts";
 import { useSafeWrite } from "@/ui/use-safe-write.ts";
 import { write } from "@/core/write.ts";
 import { Switch } from "@/ui/components/switch.tsx";
 import { Hint, Panel, StatusMessage } from "@/ui/layout/Section.tsx";
 import { setNotify } from "./store.ts";
+import { TOAST_MS } from "./toasts.ts";
 
 export function NotificationSettings({ notify, notifyBadges }: { notify: boolean; notifyBadges: boolean }) {
   const { error, attempt } = useSafeWrite();
@@ -16,8 +18,8 @@ export function NotificationSettings({ notify, notifyBadges }: { notify: boolean
           Afficher une notification sur X à chaque compte bloqué
         </label>
         <Hint>
-          Un message « @nom vient d'être bloqué ! » s'affiche 5 secondes en haut à droite de x.com, avec un lien
-          pour annuler.
+          Un message « @nom vient d'être bloqué ! » s'affiche {plural(TOAST_MS / 1000, "seconde")} en haut à droite de
+          x.com, avec un lien pour annuler.
         </Hint>
         <hr className="my-5 border-line" />
         <label className="flex min-h-11 cursor-pointer items-center gap-3.5 font-bold">

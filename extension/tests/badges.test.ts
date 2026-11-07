@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
 import { installChrome } from "./helpers/chrome.ts";
 import { getState, resultKey } from "../src/core/state.ts";
-import { awardBadges, earnedCount, nextBadge, nextStepText, pendingBadge, shareText, shareUrl, BADGES } from "../src/features/badges/badges.ts";
+import { awardBadges, badgeDescription, earnedCount, nextBadge, nextStepText, pendingBadge, shareText, shareUrl, BADGES } from "../src/features/badges/badges.ts";
 import { dismissBadge, recordBlockSuccess, setNotifyBadges, syncAllBadges, syncBadges } from "../src/features/badges/store.ts";
 import { markAlreadyBlocked } from "../src/features/blocking/store.ts";
 import { manualList } from "../src/features/lists/lists.ts";
@@ -124,4 +124,10 @@ test("un compte repéré comme déjà bloqué compte pour les badges", async () 
   const state = await getState("2");
   assert.equal(state.blockCount, 1);
   assert.equal(pendingBadge(state.badges, state.badgeNotified), 1);
+});
+
+test("la description d'un badge suit son palier", () => {
+  assert.equal(badgeDescription(1), "Votre premier compte bloqué");
+  assert.equal(badgeDescription(10), "10 comptes bloqués");
+  assert.equal(badgeDescription(1000), "1\u202f000 comptes bloqués");
 });

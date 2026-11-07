@@ -14,7 +14,6 @@ import {
   AUDIT_INTERVAL_MS,
   AUTH_RETRY_MS,
   BLOCK_DELAY_MS,
-  CHECK_RETRY_MS,
   DELAY_JITTER,
   MAX_CONSECUTIVE_FAILURES,
   MAX_PAUSE_MS,
@@ -28,6 +27,7 @@ import {
   getState,
   onStateChange,
   type BlockingError,
+  type ErrorCause,
   type State,
 } from "../../core/state.ts";
 import {
@@ -39,7 +39,7 @@ import {
   sessionId,
   unblockUser,
 } from "./api.ts";
-import type { Lookup, Outcome } from "./outcome.ts";
+import { failureOf, type Failure, type Lookup, type Outcome } from "./outcome.ts";
 import { nextAction, type Action } from "./plan.ts";
 import type { Result, Results } from "./queue.ts";
 import { write } from "../../core/write.ts";
@@ -119,8 +119,8 @@ const GLOBAL_KINDS: readonly string[] = ["rate_limited", "automation", "broken",
 const isGlobal = (outcome: { kind: string }): outcome is GlobalOutcome => GLOBAL_KINDS.includes(outcome.kind);
 
 /** X a changé : tout s'arrête, tentatives et files intactes, jusqu'à la reprise demandée dans les options. */
-const stopBroken = (state: State, message: string): Promise<void> =>
-  setError(state.prefix, `${message} Barrage s'est arrêté : X a peut-être changé.`, "api", Infinity);
+const stopBroken = (state: State, cause: ErrorCause): Promise<void> =>
+  setError(state.prefix, cause, "api", Infinity);
 
 async function handleGlobal(state: State, outcome: GlobalOutcome): Promise<Next> {
   switch (outcome.kind) {
@@ -130,17 +130,17 @@ async function handleGlobal(state: State, outcome: GlobalOutcome): Promise<Next>
       await setPauseUntil(state.prefix, Math.min(outcome.until, Date.now() + MAX_PAUSE_MS) + jittered(BLOCK_DELAY_MS));
       return continueIn();
     case "automation":
-      await recordAutomation(state.prefix, state.strikes, outcome.message);
+      await recordAutomation(state.prefix, state.strikes, failureOf(outcome));
       return STOP;
     case "broken":
-      await stopBroken(state, outcome.message);
+      await stopBroken(state, { ...failureOf(outcome), context: "stopped" });
       return STOP;
     case "auth":
       // L'alerte reste affichée jusqu'à la reprise, voir authCleared.
-      await setError(state.prefix, outcome.message, "auth", Infinity, (await sessionId()) ?? undefined);
+      await setError(state.prefix, failureOf(outcome), "auth", Infinity, (await sessionId()) ?? undefined);
       return STOP;
     case "network":
-      await setError(state.prefix, `${outcome.message} Nouvel essai dans une minute.`, "network", NETWORK_RETRY_MS);
+      await setError(state.prefix, { ...failureOf(outcome), context: "retry" }, "network", NETWORK_RETRY_MS);
       return continueIn(NETWORK_RETRY_MS);
   }
 }
@@ -150,12 +150,12 @@ async function handleGlobal(state: State, outcome: GlobalOutcome): Promise<Next>
  * si la demande échoue : une limite, une session ou un réseau en cause valent
  * pour tout le traitement. Un autre refus renvoie `failed`, à traiter par l'appelant.
  */
-async function lookup(state: State, batch: string[]): Promise<Lookup | Next | { failed: string }> {
+async function lookup(state: State, batch: string[]): Promise<Lookup | Next | { failed: Failure }> {
   if (switched(state)) return continueIn();
   const reply = await lookupBlocking(batch);
   if (!("kind" in reply)) return reply;
   if (isGlobal(reply)) return handleGlobal(state, reply);
-  return { failed: reply.message };
+  return { failed: failureOf(reply) };
 }
 
 /**
@@ -194,8 +194,7 @@ async function check(state: State, batch: string[]): Promise<Next> {
   if ("stop" in reply) return reply;
   if ("failed" in reply) {
     // Sans vérification, on risquerait de rebloquer : on s'arrête, voir halted.
-    const retry = `Nouvel essai au prochain compte vu, dans ${CHECK_RETRY_MS / 60_000} minutes au plus tôt.`;
-    await setError(state.prefix, `Vérification impossible : ${reply.failed} ${retry}`, "other", Infinity);
+    await setError(state.prefix, { ...reply.failed, context: "check" }, "other", Infinity);
     return STOP;
   }
   const at = Date.now();
@@ -204,7 +203,7 @@ async function check(state: State, batch: string[]): Promise<Next> {
   for (const handle of batch) {
     if (reply.blocking.has(handle)) entries[handle] = { state: "already_blocked", at };
     else if (!reply.found.has(handle)) {
-      entries[handle] = { state: "not_found", at, message: "Compte introuvable ou suspendu." };
+      entries[handle] = { state: "not_found", at, code: "lookup_missing" };
     } else checked.set(handle, at);
   }
   // Le cas courant, comptes trouvés et non bloqués, n'écrit rien.
@@ -235,12 +234,17 @@ function succeeded(state: State): Record<string, unknown> {
 }
 
 /** Refus de ce compte : au dernier permis, tout s'arrête sans le lui imputer. */
-async function tripped(state: State, handle: string, message: string): Promise<boolean> {
+async function tripped(state: State, handle: string, cause: Failure): Promise<boolean> {
   const failures = [...new Set([...state.failures, handle])];
   await setFailures(state.prefix, failures);
   if (failures.length < MAX_CONSECUTIVE_FAILURES) return false;
-  await stopBroken(state, `${failures.length} comptes refusés de suite (${message}).`);
+  await stopBroken(state, { ...cause, context: { refusals: failures.length } });
   return true;
+}
+
+/** Le message brut de X ne va que dans la console, voir Outcome. */
+function logRefusal(handle: string, { param, detail }: Extract<Outcome, { kind: "failed" }>): void {
+  console.warn("[Barrage] refus de X pour", handle, param, detail);
 }
 
 async function block(state: State, handle: string): Promise<Next> {
@@ -253,11 +257,12 @@ async function block(state: State, handle: string): Promise<Next> {
     await setResults(state.prefix, { [handle]: { state: "blocked", at } }, succeeded(state));
     await updateBadges("recordBlockSuccess", state);
   } else if (outcome.kind === "not_found") {
-    const result: Result = { state: "not_found", at, message: outcome.message };
+    const result: Result = { state: "not_found", at, ...failureOf(outcome) };
     await setResults(state.prefix, { [handle]: result }, answered(state));
   } else {
-    if (await tripped(state, handle, outcome.message)) return STOP;
-    await write("recordBlockFailure", handle, outcome.message, at, state.account);
+    logRefusal(handle, outcome);
+    if (await tripped(state, handle, failureOf(outcome))) return STOP;
+    await write("recordBlockFailure", handle, failureOf(outcome), at, state.account);
   }
   // Le délai entre deux blocages ne se raccourcit pas quand la liste change.
   return continueIn(jittered(BLOCK_DELAY_MS));
@@ -271,11 +276,12 @@ async function unblock(state: State, handle: string): Promise<Next> {
 
   const at = Date.now();
   if (outcome.kind === "failed") {
-    if (await tripped(state, handle, outcome.message)) return STOP;
-    await write("refuseUnblock", handle, outcome.message, state.account);
+    logRefusal(handle, outcome);
+    if (await tripped(state, handle, failureOf(outcome))) return STOP;
+    await write("refuseUnblock", handle, failureOf(outcome), state.account);
   } else {
     const result: Result =
-      outcome.kind === "ok" ? { state: "unblocked", at } : { state: "not_found", at, message: outcome.message };
+      outcome.kind === "ok" ? { state: "unblocked", at } : { state: "not_found", at, ...failureOf(outcome) };
     await write("finishUnblock", handle, result, outcome.kind === "ok" ? succeeded(state) : answered(state), state.account);
   }
   return continueIn(jittered(BLOCK_DELAY_MS));

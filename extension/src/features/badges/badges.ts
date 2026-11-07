@@ -1,25 +1,27 @@
 // Badges de progression : paliers, attribution et partage. Fonctions pures,
 // testées dans tests/badges.test.ts.
 import { SITE_URL, X_ACCOUNT } from "../../core/config.ts";
+import { formatCount, plural } from "../../core/format.ts";
 
-export type Badge = {
-  palier: number;
-  name: string;
-  /** Emoji du texte de partage. */
-  emoji: string;
-  description: string;
-};
+/** `emoji` : celui du texte de partage. */
+export const BADGES = [
+  { palier: 1, name: "Première pierre", emoji: "🪨" },
+  { palier: 10, name: "Premier rempart", emoji: "🛡️" },
+  { palier: 25, name: "Digue", emoji: "🌊" },
+  { palier: 50, name: "Muraille", emoji: "🧱" },
+  { palier: 100, name: "Barrage", emoji: "✊" },
+  { palier: 250, name: "Forteresse", emoji: "🏰" },
+  { palier: 500, name: "Bastion", emoji: "🚩" },
+  { palier: 1000, name: "Légende", emoji: "🏆" },
+] as const satisfies ReadonlyArray<{ palier: number; name: string; emoji: string }>;
 
-export const BADGES: readonly Badge[] = [
-  { palier: 1, name: "Première pierre", emoji: "🪨", description: "Votre premier compte bloqué" },
-  { palier: 10, name: "Premier rempart", emoji: "🛡️", description: "10 comptes bloqués" },
-  { palier: 25, name: "Digue", emoji: "🌊", description: "25 comptes bloqués" },
-  { palier: 50, name: "Muraille", emoji: "🧱", description: "50 comptes bloqués" },
-  { palier: 100, name: "Barrage", emoji: "✊", description: "100 comptes bloqués" },
-  { palier: 250, name: "Forteresse", emoji: "🏰", description: "250 comptes bloqués" },
-  { palier: 500, name: "Bastion", emoji: "🚩", description: "500 comptes bloqués" },
-  { palier: 1000, name: "Légende", emoji: "🏆", description: "1000 comptes bloqués" },
-];
+export type Badge = (typeof BADGES)[number];
+
+export type Palier = Badge["palier"];
+
+/** Ce que récompense un badge, d'après son palier. */
+export const badgeDescription = (palier: Palier): string =>
+  palier === 1 ? "Votre premier compte bloqué" : plural(palier, "compte bloqué", "comptes bloqués");
 
 /** Badges obtenus : palier, date d'obtention en millisecondes. */
 export type Earned = Record<string, number>;
@@ -55,7 +57,7 @@ export function pendingBadge(earned: Earned, notified: number): number | null {
 export function shareText(badge: Badge): string {
   const signature = `Vos réseaux sociaux, vos règles. ${SITE_URL.replace("https://", "")}`;
   if (badge.palier === 1) return `J'ai bloqué mon premier compte avec ${X_ACCOUNT} ${badge.emoji} ${signature}`;
-  return `J'ai débloqué le badge ${badge.name} ${badge.emoji} : ${badge.palier} comptes bloqués avec ${X_ACCOUNT}. ${signature}`;
+  return `J'ai débloqué le badge ${badge.name} ${badge.emoji} : ${formatCount(badge.palier)} comptes bloqués avec ${X_ACCOUNT}. ${signature}`;
 }
 
 export const shareUrl = (badge: Badge): string => `https://x.com/intent/post?text=${encodeURIComponent(shareText(badge))}`;
@@ -63,5 +65,5 @@ export const shareUrl = (badge: Badge): string => `https://x.com/intent/post?tex
 /** Palier suivant dans la notification d'un badge obtenu. */
 export function nextStepText(palier: number): string {
   const next = nextBadge(palier);
-  return next ? `Prochain palier : ${next.name}, à ${next.palier}.` : "Vous avez atteint le dernier palier.";
+  return next ? `Prochain palier : ${next.name}, à ${formatCount(next.palier)}.` : "Vous avez atteint le dernier palier.";
 }

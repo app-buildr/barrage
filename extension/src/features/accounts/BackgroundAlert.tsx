@@ -8,24 +8,10 @@ import { Alert, AlertDescription, AlertTitle } from "@/ui/components/alert.tsx";
 import { Button } from "@/ui/components/button.tsx";
 import { StatusMessage } from "@/ui/layout/Section.tsx";
 import { cn } from "@/ui/lib/utils.ts";
-import type { BlockingError, ErrorReason } from "@/core/state.ts";
+import { formatClock } from "@/core/intl.ts";
+import type { BlockingError } from "@/core/state.ts";
+import { errorText, errorTitle } from "../blocking/error-text.ts";
 import { resumable } from "../blocking/plan.ts";
-
-const TITLES: Record<ErrorReason, string> = {
-  auth: "Session X expirée",
-  network: "Réseau indisponible",
-  automation: "Blocage arrêté par prudence",
-  api: "Blocage arrêté",
-  other: "Blocage interrompu",
-};
-
-const TIME = new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" });
-const DAY_TIME = new Intl.DateTimeFormat("fr-FR", { weekday: "long", hour: "2-digit", minute: "2-digit" });
-
-/** « 14:32 », avec le jour si ce n'est pas aujourd'hui. */
-function clock(at: number): string {
-  return (new Date(at).toDateString() === new Date().toDateString() ? TIME : DAY_TIME).format(at);
-}
 
 type Props = { error: BlockingError | null; pauseUntil: number };
 
@@ -37,8 +23,8 @@ export function BackgroundAlert({ error, pauseUntil }: Props) {
   if (!shown && !paused) return null;
 
   const canResume = resumable(shown);
-  const title = shown ? TITLES[shown.reason] : "X limite les blocages";
-  const message = shown?.message ?? `Reprise vers ${clock(pauseUntil)}.`;
+  const title = shown ? errorTitle(shown) : "X limite les blocages";
+  const message = shown ? errorText(shown) : `Reprise vers ${formatClock(pauseUntil)}.`;
   return (
     <Alert
       className={cn(
@@ -54,7 +40,7 @@ export function BackgroundAlert({ error, pauseUntil }: Props) {
           <>
             {" "}
             {paused
-              ? `Vous pourrez reprendre à partir de ${clock(pauseUntil)}.`
+              ? `Vous pourrez reprendre à partir de ${formatClock(pauseUntil)}.`
               : "Vérifiez que votre compte fonctionne normalement sur x.com avant de reprendre."}
           </>
         ) : null}

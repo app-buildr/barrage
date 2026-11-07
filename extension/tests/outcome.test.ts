@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { RATE_LIMIT_FALLBACK_MS } from "../src/core/config.ts";
-import { classify, noUserMatch, readLookup, routeMaybeGone } from "../src/features/blocking/outcome.ts";
+import { classify, failureOf, noUserMatch, readLookup, routeMaybeGone } from "../src/features/blocking/outcome.ts";
 
 const NOW = 1_700_000_000_000;
 const err = (code: number, message = "x") => ({ errors: [{ code, message }] });
@@ -13,7 +13,7 @@ test("une réponse 200 avec l'utilisateur vaut blocage", () => {
 test("compte inexistant ou suspendu : introuvable", () => {
   assert.equal(classify(404, err(34), null, NOW).kind, "not_found");
   assert.equal(classify(403, err(50), null, NOW).kind, "not_found");
-  assert.deepEqual(classify(403, err(63), null, NOW), { kind: "not_found", message: "Compte suspendu." });
+  assert.deepEqual(classify(403, err(63), null, NOW), { kind: "not_found", code: "account_suspended" });
 });
 
 test("la limite suit l'en-tête de réinitialisation", () => {
@@ -43,9 +43,17 @@ test("une erreur serveur est passagère", () => {
   assert.equal(classify(503, null, null, NOW).kind, "network");
 });
 
-test("un autre refus est un échec propre au compte, message de X conservé", () => {
-  assert.deepEqual(classify(403, err(999, "Interdit"), null, NOW), { kind: "failed", message: "Interdit" });
-  assert.deepEqual(classify(403, { errors: [{ code: 999 }] }, null, NOW), { kind: "failed", message: "Refus de X (code 999)." });
+test("un autre refus est un échec propre au compte : le message de X reste à part, pour la console", () => {
+  assert.deepEqual(classify(403, err(999, "Forbidden"), null, NOW), { kind: "failed", code: "refused", param: 999, detail: "Forbidden" });
+  assert.deepEqual(classify(403, { errors: [{ code: 999 }] }, null, NOW), { kind: "failed", code: "refused", param: 999 });
+});
+
+test("seuls le code et son paramètre se stockent", () => {
+  assert.deepEqual(failureOf({ code: "refused", param: 999 }), { code: "refused", param: 999 });
+  const outcome = classify(403, err(999, "Forbidden"), null, NOW);
+  assert.ok(outcome.kind === "failed");
+  assert.deepEqual(failureOf(outcome), { code: "refused", param: 999 });
+  assert.deepEqual(failureOf({ code: "network_down" }), { code: "network_down" });
 });
 
 test("la vérification repère les comptes déjà bloqués, casse ignorée", () => {
@@ -72,7 +80,7 @@ test("une réponse qui n'est pas une liste est illisible", () => {
 test("une réponse sans code connu vient de X, pas du compte visé", () => {
   assert.equal(classify(200, null, null, NOW).kind, "broken");
   for (const status of [400, 403, 404]) {
-    assert.deepEqual(classify(status, null, null, NOW), { kind: "broken", message: `Refus de X sans explication (HTTP ${status}).` });
+    assert.deepEqual(classify(status, null, null, NOW), { kind: "broken", code: "refused_silently", param: status });
     assert.equal(classify(status, {}, null, NOW).kind, "broken");
   }
 });

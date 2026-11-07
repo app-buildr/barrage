@@ -1,6 +1,7 @@
 // État de traitement de la liste : quels comptes restent à bloquer. Fonctions
 // pures, couvertes par les tests.
 import { MAX_ATTEMPTS, NOT_FOUND_RETRY_MS } from "../../core/config.ts";
+import type { Failure, FailureCode } from "./outcome.ts";
 
 /**
  * "blocked" : bloqué par Barrage. "already_blocked" : X a indiqué que le compte
@@ -13,6 +14,10 @@ export type Result = {
   state: ResultState;
   /** Horodatage de la dernière tentative, en millisecondes. */
   at: number;
+  /** Cause d'un échec, voir Failure. Texte résolu à l'affichage, voir resultText. */
+  code?: FailureCode;
+  param?: number;
+  /** Lecture seule : texte rédigé par une version antérieure, qui n'avait pas de code. */
   message?: string;
   /** Nombre de tentatives échouées, renseigné pour l'état "failed". */
   attempts?: number;
@@ -90,9 +95,9 @@ export function uncheckedPending(
 }
 
 /** Résultat après un échec : le compteur de tentatives progresse. */
-export function failure(previous: Result | undefined, message: string, now: number): Result {
+export function failure(previous: Result | undefined, cause: Failure, now: number): Result {
   const attempts = previous?.state === "failed" ? (previous.attempts ?? 1) + 1 : 1;
-  return { state: "failed", at: now, message, attempts };
+  return { state: "failed", at: now, ...cause, attempts };
 }
 
 /** Compte bloqué sur X, par Barrage ou déjà avant lui. */

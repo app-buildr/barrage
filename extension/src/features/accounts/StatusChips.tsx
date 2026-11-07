@@ -1,4 +1,5 @@
 // Puces de filtre par état : Tous, Bloqués, Visibles, Problèmes, Désactivés.
+import { formatCount } from "@/core/format.ts";
 import { ToggleGroup, ToggleGroupItem } from "@/ui/components/toggle-group.tsx";
 import { cn } from "@/ui/lib/utils.ts";
 import { CATEGORIES, totalCount, type Category, type Counts } from "./status.ts";
@@ -49,7 +50,7 @@ export function StatusChips({ counts, selected, onSelect }: Props) {
           ) : null}
           {category ? LABELS[category] : "Tous"}
           <span className="font-medium text-muted-foreground group-data-[state=on]:font-bold group-data-[state=on]:text-white">
-            {category ? counts[category] : totalCount(counts)}
+            {formatCount(category ? counts[category] : totalCount(counts))}
           </span>
         </ToggleGroupItem>
       ))}

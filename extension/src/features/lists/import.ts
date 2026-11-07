@@ -4,12 +4,17 @@ import {
   IMPORT_MAX_INVALID_SHARE,
   LIST_FILE_EXTENSIONS,
   LIST_HOSTS,
-  LIST_HOSTS_TEXT,
   LIST_MAX_BYTES,
   LIST_MAX_SIZE,
 } from "../../core/config.ts";
-import { plural } from "../../core/format.ts";
-import { parseInput, splitEntries } from "./handles.ts";
+import { formatCount, plural } from "../../core/format.ts";
+import { formatList } from "../../core/intl.ts";
+import { parseEntries, splitEntries } from "./handles.ts";
+
+/** Hôtes acceptés, tels qu'ils s'affichent dans les textes. */
+export const LIST_HOSTS_TEXT = formatList(LIST_HOSTS, "or");
+/** Extensions acceptées, telles qu'elles s'affichent dans les textes. */
+export const LIST_FILE_EXTENSIONS_TEXT = formatList(LIST_FILE_EXTENSIONS, "or");
 
 export const BAD_HOST_MESSAGE = `Seules les adresses GitHub sont acceptées (${LIST_HOSTS_TEXT}).`;
 export const DOWNLOAD_ERROR = "Impossible de télécharger cette liste : vérifiez l'adresse.";
@@ -62,7 +67,7 @@ export function looksLikeProse(text: string): boolean {
 /** Fichier local : extension et taille, avant toute lecture. Renvoie la raison d'un refus, sinon null. */
 export function checkListFile(name: string, size: number): string | null {
   if (!LIST_FILE_EXTENSIONS.some((extension) => name.toLowerCase().endsWith(extension))) {
-    return `Seuls les fichiers ${LIST_FILE_EXTENSIONS.join(" et ")} sont acceptés.`;
+    return `Seuls les fichiers ${formatList(LIST_FILE_EXTENSIONS, "and")} sont acceptés.`;
   }
   return size > LIST_MAX_BYTES ? `Ce fichier dépasse ${LIST_MAX_BYTES / 1_000_000} Mo.` : null;
 }
@@ -76,8 +81,8 @@ export function analyzeList(text: string): ImportReport {
   if (looksLikeTable(text)) return { ok: false, reason: TABLE_MESSAGE };
   const entries = splitEntries(text);
   // Avant l'analyse : un fichier de 1 Mo peut compter des centaines de milliers d'entrées.
-  if (entries.length > LIST_MAX_SIZE) return { ok: false, reason: `Plus de ${LIST_MAX_SIZE} entrées dans cette liste.` };
-  const { handles, invalid } = parseInput(text);
+  if (entries.length > LIST_MAX_SIZE) return { ok: false, reason: `Plus de ${formatCount(LIST_MAX_SIZE)} entrées dans cette liste.` };
+  const { handles, invalid } = parseEntries(entries);
   if (!handles.length) return { ok: false, reason: "Aucun compte valide dans cette liste." };
   const warning = looksLikeProse(text)
     ? PROSE_WARNING

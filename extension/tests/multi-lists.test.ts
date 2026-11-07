@@ -6,7 +6,7 @@ import { addHandles } from "../src/features/accounts/store.ts";
 import { accountLines, lineCounts } from "../src/features/accounts/lines.ts";
 import { listDetails } from "../src/features/lists/details.ts";
 import { analyzeList, checkListFile, describeReport, looksLikeProse, looksLikeTable, validateListUrl, BAD_HOST_MESSAGE, INVALID_WARNING, PROSE_WARNING, TABLE_MESSAGE } from "../src/features/lists/import.ts";
-import { cleanName, effectiveHandles, officialList, readLists, uniqueName, type ListDef } from "../src/features/lists/lists.ts";
+import { OFFICIAL_NAME, cleanName, effectiveHandles, listName, officialList, readLists, uniqueName, type ListDef } from "../src/features/lists/lists.ts";
 import { migrate } from "../src/features/lists/migrate.ts";
 import { pendingBadge } from "../src/features/badges/badges.ts";
 import { syncAllBadges } from "../src/features/badges/store.ts";
@@ -160,7 +160,7 @@ test("l'ajout à la main crée « Ma liste perso », active, au premier ajout", 
 
 test("l'ajout dans une « Ma liste perso » désactivée est enregistré et signalé", async () => {
   store.lists = [officialList(true), list("manual", ["c"], { source: "manual", active: false })];
-  assert.deepEqual(await addHandles(["c", "d"]), { added: ["d"], existing: ["c"], inactive: true });
+  assert.deepEqual(await addHandles(["c", "d"]), { added: ["d"], existing: ["c"], inactiveList: "manual" });
   const state = await getState();
   assert.deepEqual(state.lists[1]?.handles, ["c", "d"]);
   assert.ok(!state.handles.includes("d"));
@@ -168,7 +168,7 @@ test("l'ajout dans une « Ma liste perso » désactivée est enregistré et sign
 
 test("l'ajout dans une « Ma liste perso » qui ne couvre pas X est signalé aussi", async () => {
   store.lists = [officialList(true), list("manual", [], { source: "manual", networks: [] })];
-  assert.equal((await addHandles(["c"])).inactive, true);
+  assert.equal((await addHandles(["c"])).inactiveList, "manual");
 });
 
 // Tableau des comptes
@@ -323,8 +323,8 @@ test("accueil : « plus tard » ne laisse aucune liste active", async () => {
 
 test("les détails d'une liste suivent sa source", () => {
   const now = Date.UTC(2026, 10, 6, 12);
-  assert.equal(listDetails(officialList(true), 1426, now), "1426 comptes · GitHub");
-  assert.equal(listDetails({ ...officialList(true), syncedAt: now - 2 * 3_600_000 }, 1426, now), "1426 comptes · GitHub · mise à jour il y a 2 h");
+  assert.equal(listDetails(officialList(true), 1426, now), "1\u202f426 comptes · GitHub");
+  assert.equal(listDetails({ ...officialList(true), syncedAt: now - 2 * 3_600_000 }, 1426, now), "1\u202f426 comptes · GitHub · mise à jour il y a 2\u00a0h");
   assert.equal(listDetails(list("f", [], { addedAt: Date.UTC(2026, 10, 3, 12) }), 1, now), "1 compte · fichier importé le 3 nov.");
   assert.equal(listDetails(list("m", [], { source: "manual" }), 1, now), "1 compte · ajouté à la main");
   assert.equal(listDetails(list("m", [], { source: "manual" }), 2, now), "2 comptes · ajoutés à la main");
@@ -422,4 +422,9 @@ test("une liste aux entrées largement invalides met en garde, un écart isolé 
   assert.ok(few.ok && few.warning === undefined);
   const many = analyzeList([...good, "a!", "b!", "c!"].join("\n"));
   assert.ok(many.ok && many.warning === INVALID_WARNING);
+});
+
+test("le nom de la liste collaborative se résout à l'affichage, pas celui d'une liste de l'utilisateur", () => {
+  assert.equal(listName({ ...officialList(true), name: "Ancien nom figé" }), OFFICIAL_NAME);
+  assert.equal(listName(list("m", [], { name: "Amis" })), "Amis");
 });

@@ -38,7 +38,7 @@ test("le message refuse un autre type, et ce qui n'est pas un objet", async () =
 
 test("une écriture passe par le service worker et renvoie sa valeur", async () => {
   const reply = await write("addHandles", ["z"]);
-  assert.deepEqual(reply, { added: ["z"], existing: [], inactive: false });
+  assert.deepEqual(reply, { added: ["z"], existing: [], inactiveList: null });
   assert.ok((await getState()).handles.includes("z"));
 });
 
