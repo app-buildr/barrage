@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { beforeEach, test } from "node:test";
 import { installChrome } from "./helpers/chrome.ts";
 import { putResults, result } from "./helpers/fixtures.ts";
 import { getState, resultKey } from "../src/core/state.ts";
-import { awardBadges, badgeDescription, earnedCount, nextBadge, nextStepText, pendingBadge, shareText, shareUrl, BADGES } from "../src/features/badges/badges.ts";
+import { awardBadges, badgeDescription, earnedCount, nextBadge, nextStepText, pendingBadge, shareText, shareUrl, badgePageUrl, BADGES } from "../src/features/badges/badges.ts";
 import { dismissBadge, recordBlockSuccess, syncAllBadges, syncBadges } from "../src/features/badges/store.ts";
 import { setNotifications } from "../src/features/notifications/store.ts";
+import { BADGE_IMAGE, imageName, pageHtml } from "../src/features/badges/sharePages.ts";
 import { WRITES } from "../src/features/writes.ts";
 import { manualList } from "../src/features/lists/lists.ts";
 
@@ -91,11 +93,11 @@ test("le texte de partage suit la spec, palier 1 compris", () => {
   const [first, , , , fifth] = BADGES;
   assert.equal(
     shareText(first!),
-    "J'ai bloqué mon premier compte avec @BarrageApp 🪨 Vos réseaux sociaux, vos règles. app-buildr.github.io/barrage",
+    "J'ai bloqué mon premier compte avec @BarrageApp 🪨 Vos réseaux sociaux, vos règles. https://app-buildr.github.io/barrage/badge/premiere-pierre/",
   );
   assert.equal(
     shareText(fifth!),
-    "J'ai débloqué le badge Barrage ✊ : 100 comptes bloqués avec @BarrageApp. Vos réseaux sociaux, vos règles. app-buildr.github.io/barrage",
+    "J'ai débloqué le badge Barrage ✊ : 100 comptes bloqués avec @BarrageApp. Vos réseaux sociaux, vos règles. https://app-buildr.github.io/barrage/badge/barrage/",
   );
   const url = new URL(shareUrl(fifth!));
   assert.equal(url.origin + url.pathname, "https://x.com/intent/post");
@@ -132,4 +134,21 @@ test("la description d'un badge suit son palier", () => {
   assert.equal(badgeDescription(1), "Votre premier compte bloqué");
   assert.equal(badgeDescription(10), "10 comptes bloqués");
   assert.equal(badgeDescription(1000), "1\u202f000 comptes bloqués");
+});
+
+test("les pages de partage et leurs images sont à jour : sinon, relancer make-badge-pages.mjs", async () => {
+  const docs = new URL("../../docs/", import.meta.url);
+  const images: string[] = [];
+  for (const badge of BADGES) {
+    const image = await imageName(badge);
+    images.push(image);
+    const page = readFileSync(new URL(`badge/${badge.slug}/index.html`, docs), "utf8");
+    assert.equal(page, pageHtml(badge, image), `page de ${badge.slug} périmée`);
+    assert.ok(page.includes(`<meta property="og:url" content="${badgePageUrl(badge)}">`), badge.slug);
+    assert.ok(page.includes('<meta name="robots" content="noindex, follow">'), badge.slug);
+    assert.ok(statSync(new URL(`assets/${image}`, docs)).size > 0, `image absente : ${image}`);
+  }
+  // Ni page ni image d'un badge disparu ou renommé.
+  assert.deepEqual(readdirSync(new URL("badge/", docs)).sort(), BADGES.map((b) => b.slug).sort());
+  assert.deepEqual(readdirSync(new URL("assets/", docs)).filter((f) => BADGE_IMAGE.test(f)).sort(), images.sort());
 });
