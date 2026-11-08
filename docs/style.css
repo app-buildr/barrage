@@ -400,6 +400,22 @@ p { margin: 0; }
 
 /* ---------- Documentation ---------- */
 
+/* Page de partage d'un badge (docs/badge/, générée par make-badge-pages.mjs). */
+.hero--badge { padding: 72px 0 88px; }
+.hero--badge .hero__inner { grid-template-columns: 1.4fr 1fr; }
+.badge-disc {
+  justify-self: center;
+  display: grid;
+  place-items: center;
+  width: min(300px, 70vw);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--white);
+  color: var(--coral);
+  box-shadow: 0 0 0 14px rgba(255, 255, 255, .22), var(--shadow-cta);
+}
+.badge-disc svg { width: 50%; height: 50%; }
+
 .hero--doc { padding: 72px 0 80px; }
 .hero--doc h1 { max-width: 900px; }
 .hero--doc .hero__lead { max-width: 760px; }
@@ -600,7 +616,7 @@ a:focus-visible { outline: 3px solid var(--coral-deep); outline-offset: 3px; }
 }
 
 @media (max-width: 960px) {
-  .hero__inner, .oss, .step { grid-template-columns: 1fr; }
+  .hero__inner, .hero--badge .hero__inner, .oss, .step { grid-template-columns: 1fr; }
   .hero__inner { gap: 56px; }
   .screen { max-width: 520px; }
   .features, .cmp { grid-template-columns: 1fr; }
