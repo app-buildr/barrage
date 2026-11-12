@@ -37,6 +37,7 @@ import type { Result, Results } from "./queue.ts";
 import { write } from "../../core/write.ts";
 import { clearedValues, recordAutomation, setError, setFailures, setPauseUntil, setResults, type Cleared } from "./store.ts";
 import { contextAlive } from "../../core/context.ts";
+import { forgetProfile, saveProfile } from "../profiles/store.ts";
 
 /**
  * La page peut lire ce nom, et même tenir le verrou : le traitement attendrait
@@ -272,6 +273,9 @@ async function block(state: State, handle: string): Promise<Next> {
   reconnected = false;
   const at = Date.now();
   if (outcome.kind === "ok") {
+    // Avant le résultat : la notification qui le suit trouve le profil en place.
+    // Écriture à part, sans échec possible : le résultat ne dépend pas d'un cache.
+    await saveProfile(handle, outcome.profile);
     await setResults(state.prefix, { [handle]: { state: "blocked", at } }, clearedValues(succeeded(state)));
     await updateBadges("recordBlockSuccess", state);
   } else if (outcome.kind === "not_found") {
@@ -302,6 +306,7 @@ async function unblock(state: State, handle: string): Promise<Next> {
     const result: Result =
       outcome.kind === "ok" ? { state: "unblocked", at } : { state: "not_found", at, ...failureOf(outcome) };
     await write("finishUnblock", handle, result, outcome.kind === "ok" ? succeeded(state) : answered(state), state.account);
+    if (outcome.kind === "ok") await forgetProfile(handle);
   }
   return continueIn(jittered(BLOCK_DELAY_MS));
 }

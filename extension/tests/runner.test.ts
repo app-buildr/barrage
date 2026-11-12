@@ -21,6 +21,7 @@ import { write } from "../src/core/write.ts";
 import { serveWrites } from "../src/core/writer.ts";
 import { WRITES } from "../src/features/writes.ts";
 import { resumeBlocking } from "../src/features/blocking/store.ts";
+import { profileKey } from "../src/features/profiles/store.ts";
 import { officialList } from "../src/features/lists/lists.ts";
 import { resolveListUpdate } from "../src/features/lists/store.ts";
 import { installChrome, X_TAB } from "./helpers/chrome.ts";
@@ -86,6 +87,71 @@ test("un compte en file est vérifié puis bloqué, et le résultat écrit", asy
   const state = await getState("1");
   assert.equal(state.results.a?.state, "blocked");
   assert.equal(state.blockCount, 1);
+});
+
+const PROFILE_REPLY = {
+  json: { screen_name: "A", name: "Compte A", description: "Bio", profile_image_url_https: "https://pbs.twimg.com/profile_images/1/a_normal.jpg" },
+};
+
+/** Clés de chaque écriture, dans l'ordre ; `fail` fait échouer celles qui contiennent cette clé. */
+function spyWrites(fail?: string): string[][] {
+  const writes: string[][] = [];
+  const set = chrome.storage.local.set.bind(chrome.storage.local);
+  chrome.storage.local.set = ((values: Record<string, unknown>) => {
+    writes.push(Object.keys(values));
+    return fail && fail in values ? Promise.reject(new Error("quota")) : set(values);
+  }) as typeof chrome.storage.local.set;
+  return writes;
+}
+
+test("le profil renvoyé par X est enregistré à part, juste avant le résultat du blocage", async () => {
+  store.seen = ["a"];
+  x.routes[BLOCK] = () => PROFILE_REPLY;
+  const writes = spyWrites();
+  await openTab();
+  assert.deepEqual(store[profileKey("a")], {
+    name: "Compte A",
+    screenName: "A",
+    avatar: "https://pbs.twimg.com/profile_images/1/a_normal.jpg",
+    bio: "Bio",
+    followers: null,
+    verified: false,
+  });
+  const profileAt = writes.findIndex((keys) => keys.includes(profileKey("a")));
+  const resultAt = writes.findIndex((keys) => keys.includes(resultKey("a")));
+  assert.ok(profileAt >= 0 && profileAt < resultAt);
+  assert.ok(!writes[resultAt]?.includes(profileKey("a")));
+});
+
+test("un profil qui ne s'enregistre pas n'empêche pas d'enregistrer le blocage", async () => {
+  store.seen = ["a"];
+  x.routes[BLOCK] = () => PROFILE_REPLY;
+  spyWrites(profileKey("a"));
+  const warn = mock.method(console, "warn", () => {});
+  await openTab();
+  warn.mock.restore();
+  assert.equal((await getState("1")).results.a?.state, "blocked");
+  assert.equal(store[profileKey("a")], undefined);
+  assert.deepEqual(x.posts(BLOCK), ["a"]);
+});
+
+test("une réponse de blocage sans profil lisible bloque quand même, et oublie l'ancien profil", async () => {
+  store.seen = ["a"];
+  store[profileKey("a")] = { name: "Ancien titulaire", screenName: "A", avatar: null, bio: "" };
+  await openTab();
+  assert.equal((await getState("1")).results.a?.state, "blocked");
+  assert.equal(store[profileKey("a")], undefined);
+});
+
+test("un compte débloqué perd son profil", async () => {
+  store[resultKey("a")] = { state: "blocked", at: T0 - 1000 };
+  store.disabled = ["a"];
+  store.unblock = ["a"];
+  store[profileKey("a")] = { name: "Compte A", screenName: "A", avatar: null, bio: "" };
+  await openTab();
+  assert.deepEqual(x.posts(UNBLOCK), ["a"]);
+  assert.equal((await getState("1")).results.a?.state, "unblocked");
+  assert.equal(store[profileKey("a")], undefined);
 });
 
 test("sans travail, aucune requête", async () => {

@@ -10,6 +10,7 @@
 /* Palette commune avec la page d'options. */
 @import "../../ui/palette.css";
 @source "./Toast.tsx";
+@source "./ProfilePreview.tsx";
 @source "./Toaster.tsx";
 @source "./BadgeToast.tsx";
 @source "./ToastParts.tsx";

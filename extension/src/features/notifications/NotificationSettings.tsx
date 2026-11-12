@@ -17,8 +17,8 @@ export function NotificationSettings({ notify, notifyBadges }: { notify: boolean
           Afficher une notification sur X à chaque compte bloqué
         </label>
         <Hint>
-          Un message « @nom vient d'être bloqué ! » s'affiche {plural(TOAST_MS / 1000, "seconde")} en haut à droite de
-          x.com, avec un lien pour annuler. Au clavier, Alt+Maj+Z (Option+Maj+Z sur Mac) annule le dernier blocage
+          Un aperçu du compte bloqué s'affiche {plural(TOAST_MS / 1000, "seconde")} en haut à droite de x.com, avec
+          un lien pour annuler. Au clavier, Alt+Maj+Z (Option+Maj+Z sur Mac) annule le dernier blocage
           affiché, sans quitter la page. Vous pouvez aussi annuler plus tard depuis l'onglet Comptes, avec l'interrupteur
           du compte.
         </Hint>

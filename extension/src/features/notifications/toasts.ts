@@ -1,5 +1,6 @@
 // Pile des notifications affichées sur x.com, sans DOM : les composants de
 // Toaster.tsx la dessinent, watch.ts l'alimente. Testée dans tests/toasts.test.ts.
+import type { Profile } from "../profiles/profile.ts";
 
 /** Le temps de lire et, au besoin, de cliquer « Annuler ». */
 export const TOAST_MS = 5000;
@@ -25,6 +26,8 @@ export type Content = {
   duration?: number;
   /** Faux : le décompte continue sous la souris, rien à cliquer. Vrai par défaut. */
   pausable?: boolean;
+  /** Nom, avatar et bio du compte bloqué, s'ils sont connus, voir features/profiles. */
+  profile?: Profile;
 };
 
 /**

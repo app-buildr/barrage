@@ -65,6 +65,14 @@ test("les réponses globales passent telles quelles", async () => {
   }
 });
 
+test("un blocage abouti rapporte le profil renvoyé par X, sans requête de plus", async () => {
+  x.routes[BLOCK] = () => ({ json: { screen_name: "Nom", name: "Le Nom", description: "" } });
+  const reply = await blockUser("nom");
+  assert.equal(reply.kind, "ok");
+  assert.equal(reply.kind === "ok" ? reply.profile?.name : null, "Le Nom");
+  assert.equal(x.requests.length, 1);
+});
+
 test("sans cookie ct0, aucune requête ne part", async () => {
   delete x.cookies.ct0;
   assert.equal((await blockUser("a")).kind, "auth");

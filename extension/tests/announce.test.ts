@@ -5,6 +5,7 @@ import { serveWrites } from "../src/core/writer.ts";
 import { WRITES } from "../src/features/writes.ts";
 import { officialList } from "../src/features/lists/lists.ts";
 import { createAnnouncer } from "../src/features/notifications/announce.ts";
+import { profileKey } from "../src/features/profiles/store.ts";
 import type { Content } from "../src/features/notifications/toasts.ts";
 import { installChrome, X_TAB } from "./helpers/chrome.ts";
 import { installX } from "./helpers/x.ts";
@@ -35,6 +36,14 @@ test("un blocage est annoncé, avec « Annuler »", async () => {
   assert.equal(shown[0]?.handle, "a");
   assert.equal(shown[0]?.content.kind, "blocked");
   assert.equal(typeof shown[0]?.content.undo, "function");
+});
+
+test("un blocage est annoncé avec le profil enregistré, s'il y en a un", async () => {
+  const profile = { name: "Compte A", screenName: "A", avatar: null, bio: "Bio", followers: 12, verified: true };
+  store[profileKey("a")] = profile;
+  store[profileKey("b")] = { name: "mal formé" };
+  await announce({ ...change("a", null, "blocked"), ...change("b", null, "blocked") });
+  assert.deepEqual(shown.map((s) => s.content.profile), [profile, undefined]);
 });
 
 test("« Annuler » désactive le compte, le confirme, et le déblocage n'en reparle pas", async () => {

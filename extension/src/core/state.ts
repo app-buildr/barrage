@@ -253,7 +253,8 @@ export const QUEUE_KEYS: readonly StateKey[] = [
   "error",
 ];
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+/** Objet simple : ni null, ni tableau. */
+export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 

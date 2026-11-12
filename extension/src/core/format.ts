@@ -10,6 +10,17 @@ export const LOCALE = "fr-FR";
  */
 export const formatCount = (count: number): string => count.toLocaleString(LOCALE);
 
+/**
+ * Nombre abrégé comme sur X : « 845 », « 12,4 k », « 1,2 M ». Arrondi vers le
+ * bas : 999 999 donne « 999,9 k », jamais « 1 000 k ».
+ */
+export function compactCount(count: number): string {
+  const [unit, size] = count >= 1e6 ? ["M", 1e6] : count >= 1e3 ? ["k", 1e3] : ["", 1];
+  if (!unit) return formatCount(count);
+  const value = Math.floor((count / size) * 10) / 10;
+  return `${value.toLocaleString(LOCALE, { maximumFractionDigits: 1 })}\u00a0${unit}`;
+}
+
 /** Le mot seul, accordé : « bloqué », « bloqués ». `many` : pluriel irrégulier ou groupe de mots. */
 export function pluralWord(count: number, one: string, many = `${one}s`): string {
   return count > 1 ? many : one;
