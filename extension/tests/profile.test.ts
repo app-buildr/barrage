@@ -33,6 +33,9 @@ test("certifié par l'un ou l'autre badge de X, abonnés illisibles laissés de 
   assert.equal(readProfile(user({ is_blue_verified: false }), "jeandupont")?.verified, false);
   assert.equal(readProfile(user({ is_blue_verified: false, verified: true }), "jeandupont")?.verified, true);
   assert.equal(readProfile(user({ is_blue_verified: "oui" }), "jeandupont")?.verified, false);
+  // Nom du champ sur l'API 1.1, celle du blocage.
+  assert.equal(readProfile(user({ is_blue_verified: undefined, ext_is_blue_verified: true }), "jeandupont")?.verified, true);
+  assert.equal(readProfile(user({ is_blue_verified: undefined, ext_is_blue_verified: false }), "jeandupont")?.verified, false);
   for (const followers_count of [undefined, -1, 1.5, "12", Number.MAX_VALUE]) {
     assert.equal(readProfile(user({ followers_count }), "jeandupont")?.followers, null);
   }
@@ -81,6 +84,16 @@ test("un « $ » dans une adresse de la bio est gardé tel quel", () => {
   const urls = [{ url: "https://t.co/abc", display_url: "site.fr/$'x$&" }];
   const profile = readProfile(user({ entities: { description: { urls } } }), "jeandupont");
   assert.equal(profile?.bio, "Élu local. Mon site : site.fr/$'x$& & plus");
+});
+
+test("un lien court qui en commence un autre ne l'abîme pas, et une adresse posée n'est pas relue", () => {
+  const urls = [
+    { url: "https://t.co/abc", display_url: "un.fr" },
+    { url: "https://t.co/abcd", display_url: "deux.fr/https://t.co/abc" },
+  ];
+  const description = "https://t.co/abcd et https://t.co/abc, puis https://t.co/abcz.";
+  const profile = readProfile(user({ description, entities: { description: { urls } } }), "jeandupont");
+  assert.equal(profile?.bio, "deux.fr/https://t.co/abc et un.fr, puis https://t.co/abcz.");
 });
 
 test("seule la bio est décodée, pas les adresses qui y entrent", () => {

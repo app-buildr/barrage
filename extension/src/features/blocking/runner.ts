@@ -37,7 +37,8 @@ import type { Result, Results } from "./queue.ts";
 import { write } from "../../core/write.ts";
 import { clearedValues, recordAutomation, setError, setFailures, setPauseUntil, setResults, type Cleared } from "./store.ts";
 import { contextAlive } from "../../core/context.ts";
-import { forgetProfile, saveProfile } from "../profiles/store.ts";
+import type { Profile } from "../profiles/profile.ts";
+import { forgetProfile, profileEntry } from "../profiles/store.ts";
 
 /**
  * La page peut lire ce nom, et même tenir le verrou : le traitement attendrait
@@ -265,6 +266,27 @@ function logRefusal(handle: string, { param, detail }: Extract<Outcome, { kind: 
 /** Une vérification de route disparue compte dans le budget, voir api.ts. */
 const countLookup = (state: State) => (): Promise<void> => write("recordRequest", "lookup", state.account);
 
+/**
+ * Résultat d'un blocage abouti. Le profil part dans la même écriture : la
+ * notification qui suit le lit dans ce changement (voir announce.ts), et rien
+ * ne s'intercale entre le blocage sur X et son résultat. Ce n'est qu'un cache :
+ * s'il fait échouer l'écriture, le résultat est écrit seul.
+ */
+async function recordBlocked(state: State, handle: string, profile: Profile | null, at: number): Promise<void> {
+  const entries: Results = { [handle]: { state: "blocked", at } };
+  const cleared = clearedValues(succeeded(state));
+  if (profile) {
+    try {
+      return await setResults(state.prefix, entries, cleared, profileEntry(handle, profile, at));
+    } catch (err) {
+      console.warn("[Barrage] profil non enregistré :", handle, err);
+    }
+  }
+  await setResults(state.prefix, entries, cleared);
+  // Sans profil neuf, l'ancien pourrait être celui d'un autre titulaire de l'identifiant.
+  await forgetProfile(handle);
+}
+
 async function block(state: State, handle: string): Promise<Next> {
   if (!(await clearedToSend(state, "action"))) return continueIn();
   const outcome = await blockUser(handle, countLookup(state));
@@ -273,10 +295,7 @@ async function block(state: State, handle: string): Promise<Next> {
   reconnected = false;
   const at = Date.now();
   if (outcome.kind === "ok") {
-    // Avant le résultat : la notification qui le suit trouve le profil en place.
-    // Écriture à part, sans échec possible : le résultat ne dépend pas d'un cache.
-    await saveProfile(handle, outcome.profile);
-    await setResults(state.prefix, { [handle]: { state: "blocked", at } }, clearedValues(succeeded(state)));
+    await recordBlocked(state, handle, outcome.profile, at);
     await updateBadges("recordBlockSuccess", state);
   } else if (outcome.kind === "not_found") {
     const result: Result = { state: "not_found", at, ...failureOf(outcome) };

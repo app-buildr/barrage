@@ -50,22 +50,32 @@ const countOf = (value: unknown): number | null =>
 const unescape = (value: string): string =>
   value.replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&amp;", "&");
 
+/** Texte pris tel quel dans une expression régulière. */
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 /**
  * Bio lisible : chaque lien t.co remplacé par l'adresse que X affiche,
  * « exemple.fr/page ». Décodée avant : les adresses, elles, ne sont pas échappées.
  */
 function readBio(user: Record<string, unknown>): string {
-  let bio = unescape(text(user.description));
+  const bio = unescape(text(user.description));
   const entities = isRecord(user.entities) && isRecord(user.entities.description) ? user.entities.description : null;
   const urls = Array.isArray(entities?.urls) ? entities.urls : [];
+  const shown = new Map<string, string>();
   for (const entry of urls) {
     if (!isRecord(entry)) continue;
     const short = text(entry.url);
-    const shown = text(entry.display_url) || text(entry.expanded_url);
-    // Une fonction : un « $& » dans l'adresse resterait sinon un motif de remplacement.
-    if (short && shown) bio = bio.replaceAll(short, () => shown);
+    const address = text(entry.display_url) || text(entry.expanded_url);
+    if (short && address) shown.set(short, address);
   }
-  return bio;
+  if (!shown.size) return bio;
+  // Une seule passe, le lien le plus long d'abord, et jamais le début d'un
+  // lien plus long : un lien court qui en commence un autre ne l'abîme pas, et
+  // une adresse déjà posée n'est pas relue.
+  const shorts = [...shown.keys()].sort((a, b) => b.length - a.length).map(escapeRegExp);
+  const links = new RegExp(`(?:${shorts.join("|")})(?![A-Za-z0-9])`, "g");
+  // Une fonction : un « $& » dans l'adresse resterait sinon un motif de remplacement.
+  return bio.replace(links, (short) => shown.get(short) ?? short);
 }
 
 /**
@@ -84,8 +94,10 @@ export function readProfile(body: unknown, handle: string): Profile | null {
     avatar,
     bio: readBio(body),
     followers: countOf(body.followers_count),
-    // Badge historique ou abonnement : X affiche l'un comme l'autre.
-    verified: body.verified === true || body.is_blue_verified === true,
+    // Badge historique ou abonnement : X affiche l'un comme l'autre. Celui de
+    // l'abonnement s'appelle `ext_is_blue_verified` sur l'API 1.1, qui ne le
+    // donne que sur demande (voir blockUser), et `is_blue_verified` ailleurs.
+    verified: body.verified === true || body.ext_is_blue_verified === true || body.is_blue_verified === true,
   };
 }
 

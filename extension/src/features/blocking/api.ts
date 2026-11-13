@@ -60,16 +60,18 @@ async function call(path: string, init: RequestInit): Promise<{ outcome: Outcome
 
 /**
  * @param beforeLookup appelé avant la vérification d'une route disparue, une requête lookup de plus
+ * @param params paramètres de plus pour X
  * @returns l'issue, et le corps de la réponse de X pour qui doit le lire
  */
 async function post(
   path: string,
   handle: string,
   beforeLookup: () => Promise<unknown>,
+  params: Record<string, string> = {},
 ): Promise<{ outcome: Outcome; body?: unknown }> {
   const { outcome, body } = await call(path, {
     method: "POST",
-    body: new URLSearchParams({ screen_name: handle, skip_status: "1" }),
+    body: new URLSearchParams({ screen_name: handle, skip_status: "1", ...params }),
   });
   if (!routeMaybeGone(body)) return { outcome, body };
   // Un compte qui existe encore prouve que c'est la route qui a disparu : sans
@@ -85,12 +87,18 @@ const noCount = async (): Promise<void> => {};
 /** Blocage abouti, avec le profil du compte que X renvoie, ou null s'il est illisible. */
 export type Blocked = { kind: "ok"; profile: Profile | null };
 
+/**
+ * Sans ce paramètre, le compte renvoyé ne porte que le badge historique : la
+ * certification par abonnement manquerait à l'aperçu, voir readProfile.
+ */
+const PROFILE_PARAMS = { include_ext_is_blue_verified: "1" };
+
 /** Bloque un compte. En cas de succès, son profil vient avec, sans requête de plus. */
 export async function blockUser(
   handle: string,
   beforeLookup: () => Promise<unknown> = noCount,
 ): Promise<Blocked | Exclude<Outcome, { kind: "ok" }>> {
-  const { outcome, body } = await post(BLOCK_PATH, handle, beforeLookup);
+  const { outcome, body } = await post(BLOCK_PATH, handle, beforeLookup, PROFILE_PARAMS);
   return outcome.kind === "ok" ? { kind: "ok", profile: readProfile(body, handle) } : outcome;
 }
 

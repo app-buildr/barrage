@@ -38,12 +38,19 @@ test("un blocage est annoncé, avec « Annuler »", async () => {
   assert.equal(typeof shown[0]?.content.undo, "function");
 });
 
-test("un blocage est annoncé avec le profil enregistré, s'il y en a un", async () => {
+test("un blocage est annoncé avec le profil écrit en même temps que lui, s'il y en a un", async () => {
   const profile = { name: "Compte A", screenName: "A", avatar: null, bio: "Bio", followers: 12, verified: true };
-  store[profileKey("a")] = profile;
-  store[profileKey("b")] = { name: "mal formé" };
-  await announce({ ...change("a", null, "blocked"), ...change("b", null, "blocked") });
-  assert.deepEqual(shown.map((s) => s.content.profile), [profile, undefined]);
+  // Laissé par un blocage plus ancien : celui-ci, qui n'en écrit pas, ne le montre pas.
+  store[profileKey("c")] = { ...profile, at: 1 };
+  await announce({
+    ...change("a", null, "blocked"),
+    [profileKey("a")]: { newValue: { ...profile, at: 2 } },
+    ...change("b", null, "blocked"),
+    [profileKey("b")]: { newValue: { name: "mal formé" } },
+    ...change("c", null, "blocked"),
+  });
+  assert.deepEqual(shown.map((s) => s.handle), ["a", "b", "c"]);
+  assert.deepEqual(shown.map((s) => s.content.profile), [profile, undefined, undefined]);
 });
 
 test("« Annuler » désactive le compte, le confirme, et le déblocage n'en reparle pas", async () => {

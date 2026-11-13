@@ -5,8 +5,8 @@ import { prefixFor, resultChanges, type StateChanges } from "../../core/state.ts
 import { write } from "../../core/write.ts";
 import { accountId } from "../x/session.ts";
 import { newlyBlocked, newlyUnblocked } from "../blocking/queue.ts";
-import { getProfiles } from "../profiles/store.ts";
-import { CONFIRM_MS, MAX_TOASTS, type Content } from "./toasts.ts";
+import { writtenProfile } from "../profiles/store.ts";
+import { CONFIRM_MS, type Content } from "./toasts.ts";
 
 const BLOCKED: Omit<Content, "undo"> = { kind: "blocked", title: " vient d'être bloqué ! ✊", detail: "par Barrage" };
 const UNBLOCKED: Content = {
@@ -59,14 +59,12 @@ export function createAnnouncer(show: (handle: string, content: Content) => void
     }
     const { notify } = await chrome.storage.local.get({ notify: true });
     if (notify === false) return;
-    // Écrit juste avant le résultat du blocage, voir runner.ts : déjà là. Un
-    // compte bloqué ailleurs (« déjà bloqué », autre version) n'en a pas. Seuls
-    // les derniers restent affichés : inutile de lire les autres.
-    const profiles = await getProfiles(blocked.slice(-MAX_TOASTS));
     // « Annuler » coupe le blocage automatique du compte, ce qui le débloque. La
     // même notification confirme l'annulation.
     for (const handle of blocked) {
-      const profile = profiles[handle];
+      // Écrit avec le résultat du blocage, voir runner.ts : il est dans ces
+      // changements. Un compte bloqué autrement (hérité, restauré) n'en a pas.
+      const profile = writtenProfile(changes, handle);
       show(handle, {
         ...BLOCKED,
         ...(profile ? { profile } : {}),

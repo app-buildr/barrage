@@ -56,13 +56,15 @@ function Avatar({ profile }: { profile: Profile }) {
   );
 }
 
+/** Lien vers le profil d'un compte, dans un nouvel onglet : à étaler sur un `<a>`. */
+export const profileLink = (handle: string) =>
+  ({ href: xProfileUrl(handle), target: "_blank", rel: "noopener noreferrer" }) as const;
+
 /** Carte du profil, entièrement cliquable vers le profil, dans un nouvel onglet. */
 export function ProfileCard({ handle, profile }: { handle: string; profile: Profile }) {
   return (
     <a
-      href={xProfileUrl(handle)}
-      target="_blank"
-      rel="noopener noreferrer"
+      {...profileLink(handle)}
       className={clsx(
         "block rounded-step border border-line bg-cream p-3 text-muted-ink no-underline hover:border-line-strong",
         CARD_FOCUS,

@@ -90,9 +90,11 @@ test("un POST porte la session, le jeton et le compte visé", async () => {
   assert.equal((await blockUser("nom")).kind, "ok");
   assert.equal((await unblockUser("nom")).kind, "ok");
   assert.deepEqual(x.requests.map((r) => r.path), [BLOCK, UNBLOCK]);
-  const [request] = x.requests;
+  const [request, unblock] = x.requests;
   assert.equal(request?.method, "POST");
-  assert.equal(request?.body, "screen_name=nom&skip_status=1");
+  // Seul le blocage lit le compte renvoyé : lui seul demande la certification par abonnement.
+  assert.equal(request?.body, "screen_name=nom&skip_status=1&include_ext_is_blue_verified=1");
+  assert.equal(unblock?.body, "screen_name=nom&skip_status=1");
   assert.equal(request?.headers["x-csrf-token"], "jeton");
   assert.equal(request?.headers["x-twitter-auth-type"], "OAuth2Session");
   assert.match(request?.headers.authorization ?? "", /^Bearer /);

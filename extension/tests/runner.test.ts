@@ -104,11 +104,13 @@ function spyWrites(fail?: string): string[][] {
   return writes;
 }
 
-test("le profil renvoyé par X est enregistré à part, juste avant le résultat du blocage", async () => {
+test("le profil renvoyé par X part dans la même écriture que le résultat du blocage, daté comme lui", async () => {
   store.seen = ["a"];
   x.routes[BLOCK] = () => PROFILE_REPLY;
   const writes = spyWrites();
   await openTab();
+  const result = store[resultKey("a")] as { state: string; at: number };
+  assert.equal(result.state, "blocked");
   assert.deepEqual(store[profileKey("a")], {
     name: "Compte A",
     screenName: "A",
@@ -116,23 +118,27 @@ test("le profil renvoyé par X est enregistré à part, juste avant le résultat
     bio: "Bio",
     followers: null,
     verified: false,
+    at: result.at,
   });
-  const profileAt = writes.findIndex((keys) => keys.includes(profileKey("a")));
-  const resultAt = writes.findIndex((keys) => keys.includes(resultKey("a")));
-  assert.ok(profileAt >= 0 && profileAt < resultAt);
-  assert.ok(!writes[resultAt]?.includes(profileKey("a")));
+  const withProfile = writes.filter((keys) => keys.includes(profileKey("a")));
+  assert.equal(withProfile.length, 1);
+  assert.ok(withProfile[0]?.includes(resultKey("a")));
 });
 
-test("un profil qui ne s'enregistre pas n'empêche pas d'enregistrer le blocage", async () => {
+test("un profil qui ne s'enregistre pas n'empêche pas d'enregistrer le blocage, et l'ancien est oublié", async () => {
   store.seen = ["a"];
+  store[profileKey("a")] = { name: "Ancien titulaire", screenName: "A", avatar: null, bio: "" };
   x.routes[BLOCK] = () => PROFILE_REPLY;
-  spyWrites(profileKey("a"));
+  const writes = spyWrites(profileKey("a"));
   const warn = mock.method(console, "warn", () => {});
   await openTab();
   warn.mock.restore();
   assert.equal((await getState("1")).results.a?.state, "blocked");
   assert.equal(store[profileKey("a")], undefined);
   assert.deepEqual(x.posts(BLOCK), ["a"]);
+  // Le résultat est réécrit seul, après l'échec de l'écriture commune.
+  const withResult = writes.filter((keys) => keys.includes(resultKey("a")));
+  assert.deepEqual(withResult.map((keys) => keys.includes(profileKey("a"))), [true, false]);
 });
 
 test("une réponse de blocage sans profil lisible bloque quand même, et oublie l'ancien profil", async () => {

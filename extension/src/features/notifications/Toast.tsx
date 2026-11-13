@@ -5,8 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { clsx } from "clsx";
 import { BarrageMark } from "../../ui/BarrageMark.tsx";
 import { CORAL_BUTTON, CORAL_LINK } from "../../ui/classes.ts";
-import { xProfileUrl } from "../networks/networks.ts";
-import { ProfileCard } from "./ProfilePreview.tsx";
+import { ProfileCard, profileLink } from "./ProfilePreview.tsx";
 import { CloseButton, FOCUS, TOAST_CARD } from "./ToastParts.tsx";
 import { LEAVE_MS, TOAST_MS, type ToastItem, type ToastStore } from "./toasts.ts";
 
@@ -30,8 +29,10 @@ export function Toast({ toast, store }: { toast: ToastItem; store: ToastStore })
   const timer = useRef<HTMLSpanElement>(null);
   const close = useRef<HTMLButtonElement>(null);
   const countdown = useRef<Animation | null>(null);
-  /** « Annuler » activé au clavier : le focus, perdu avec le bouton, passe sur « Fermer ». */
-  const focusClose = useRef(false);
+  // Focus clavier dans la notification, lu avant que ce rendu ne touche à la
+  // page. Un nouvel état peut retirer l'élément qui le porte : « Annuler » une
+  // fois activé, ou la carte du profil quand la mise en page change.
+  const hadKeyboardFocus = !!root.current?.querySelector(":focus-visible");
   const pausable = content.pausable !== false;
 
   // Décompte suspendu tant que la souris ou le focus clavier sont dessus, pas
@@ -65,11 +66,10 @@ export function Toast({ toast, store }: { toast: ToastItem; store: ToastStore })
     animation.currentTime = 0;
     if (holdsCountdown()) animation.pause();
     else animation.play();
-    if (focusClose.current) {
-      focusClose.current = false;
-      close.current?.focus();
-    }
-  }, [revision, content.duration, holdsCountdown]);
+    // Le focus clavier, perdu avec son élément, passe sur « Fermer » au lieu de
+    // retomber sur la page.
+    if (hadKeyboardFocus && !root.current?.querySelector(":focus-visible")) close.current?.focus();
+  }, [revision, content.duration, holdsCountdown, hadKeyboardFocus]);
 
   // Sortie : retrait après l'animation, ou tout de suite si elle n'a pas lieu.
   useEffect(() => {
@@ -89,14 +89,7 @@ export function Toast({ toast, store }: { toast: ToastItem; store: ToastStore })
       {content.undo ? (
         <>
           {" · "}
-          <button
-            type="button"
-            className={clsx(CORAL_BUTTON, FOCUS)}
-            onClick={(event) => {
-              focusClose.current = event.currentTarget.matches(":focus-visible");
-              content.undo?.();
-            }}
-          >
+          <button type="button" className={clsx(CORAL_BUTTON, FOCUS)} onClick={() => content.undo?.()}>
             Annuler
           </button>
         </>
@@ -134,7 +127,8 @@ export function Toast({ toast, store }: { toast: ToastItem; store: ToastStore })
           <ProfileCard handle={handle} profile={profile} />
           <span className="flex items-center justify-between gap-3">
             {detail}
-            <a href={xProfileUrl(handle)} target="_blank" rel="noopener noreferrer" className={clsx(CORAL_LINK, "text-label", FOCUS)}>
+            {/* Même destination que la carte, pour la souris : un seul arrêt au clavier et au lecteur d'écran. */}
+            <a {...profileLink(handle)} tabIndex={-1} aria-hidden="true" className={clsx(CORAL_LINK, "text-label")}>
               Voir le profil&nbsp;→
             </a>
           </span>
@@ -150,9 +144,7 @@ export function Toast({ toast, store }: { toast: ToastItem; store: ToastStore })
             <span className="flex min-w-0 text-[16px] font-bold text-ink">
               {/* Le nom ouvre le profil dans un nouvel onglet. */}
               <a
-                href={xProfileUrl(handle)}
-                target="_blank"
-                rel="noopener noreferrer"
+                {...profileLink(handle)}
                 className={clsx(
                   "min-w-0 truncate font-bold text-coral-deep no-underline hover:underline hover:underline-offset-2",
                   FOCUS,
