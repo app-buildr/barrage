@@ -5,6 +5,7 @@ import { prefixFor, resultChanges, type StateChanges } from "../../core/state.ts
 import { write } from "../../core/write.ts";
 import { accountId } from "../x/session.ts";
 import { newlyBlocked, newlyUnblocked } from "../blocking/queue.ts";
+import { writtenProfile } from "../profiles/store.ts";
 import { CONFIRM_MS, type Content } from "./toasts.ts";
 
 const BLOCKED: Omit<Content, "undo"> = { kind: "blocked", title: " vient d'être bloqué ! ✊", detail: "par Barrage" };
@@ -61,8 +62,12 @@ export function createAnnouncer(show: (handle: string, content: Content) => void
     // « Annuler » coupe le blocage automatique du compte, ce qui le débloque. La
     // même notification confirme l'annulation.
     for (const handle of blocked) {
+      // Écrit avec le résultat du blocage, voir runner.ts : il est dans ces
+      // changements. Un compte bloqué autrement (hérité, restauré) n'en a pas.
+      const profile = writtenProfile(changes, handle);
       show(handle, {
         ...BLOCKED,
+        ...(profile ? { profile } : {}),
         undo: () => {
           // Extension rechargée : cet onglet orphelin ne peut plus écrire.
           if (!contextAlive()) return show(handle, UNDO_FAILED);

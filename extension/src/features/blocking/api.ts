@@ -1,6 +1,7 @@
 // Appels à l'API interne de X, celle qu'utilise le site lui-même.
 // C'est le point qui casse si X change son API : un seul fichier à relire.
 import { X_REQUEST_TIMEOUT_MS } from "../../core/config.ts";
+import { readProfile, type Profile } from "../profiles/profile.ts";
 import { readCsrfToken } from "../x/session.ts";
 import {
   classify,
@@ -57,32 +58,56 @@ async function call(path: string, init: RequestInit): Promise<{ outcome: Outcome
   return { outcome, body, quota: quotaEnd(response.headers.get("x-rate-limit-remaining"), reset, Date.now()) };
 }
 
-/** @param beforeLookup appelé avant la vérification d'une route disparue, une requête lookup de plus */
-async function post(path: string, handle: string, beforeLookup: () => Promise<unknown>): Promise<Outcome> {
+/**
+ * @param beforeLookup appelé avant la vérification d'une route disparue, une requête lookup de plus
+ * @param params paramètres de plus pour X
+ * @returns l'issue, et le corps de la réponse de X pour qui doit le lire
+ */
+async function post(
+  path: string,
+  handle: string,
+  beforeLookup: () => Promise<unknown>,
+  params: Record<string, string> = {},
+): Promise<{ outcome: Outcome; body?: unknown }> {
   const { outcome, body } = await call(path, {
     method: "POST",
-    body: new URLSearchParams({ screen_name: handle, skip_status: "1" }),
+    body: new URLSearchParams({ screen_name: handle, skip_status: "1", ...params }),
   });
-  if (!routeMaybeGone(body)) return outcome;
+  if (!routeMaybeGone(body)) return { outcome, body };
   // Un compte qui existe encore prouve que c'est la route qui a disparu : sans
   // cette vérification, un déblocage serait noté fait sans avoir eu lieu.
   await beforeLookup();
   const reply = await lookupBlocking([handle]);
-  if ("kind" in reply) return reply.kind === "failed" ? { kind: "broken", ...failureOf(reply) } : reply;
-  return reply.found.has(handle) ? { kind: "broken", code: "route_gone" } : outcome;
+  if ("kind" in reply) return { outcome: reply.kind === "failed" ? { kind: "broken", ...failureOf(reply) } : reply };
+  return { outcome: reply.found.has(handle) ? { kind: "broken", code: "route_gone" } : outcome };
 }
 
 const noCount = async (): Promise<void> => {};
 
-export const blockUser = (handle: string, beforeLookup: () => Promise<unknown> = noCount): Promise<Outcome> =>
-  post(BLOCK_PATH, handle, beforeLookup);
+/** Blocage abouti, avec le profil du compte que X renvoie, ou null s'il est illisible. */
+export type Blocked = { kind: "ok"; profile: Profile | null };
+
+/**
+ * Sans ce paramètre, le compte renvoyé ne porte que le badge historique : la
+ * certification par abonnement manquerait à l'aperçu, voir readProfile.
+ */
+const PROFILE_PARAMS = { include_ext_is_blue_verified: "1" };
+
+/** Bloque un compte. En cas de succès, son profil vient avec, sans requête de plus. */
+export async function blockUser(
+  handle: string,
+  beforeLookup: () => Promise<unknown> = noCount,
+): Promise<Blocked | Exclude<Outcome, { kind: "ok" }>> {
+  const { outcome, body } = await post(BLOCK_PATH, handle, beforeLookup, PROFILE_PARAMS);
+  return outcome.kind === "ok" ? { kind: "ok", profile: readProfile(body, handle) } : outcome;
+}
 
 /**
  * Débloque un compte. Issue "ok" : le compte est débloqué. Issue "not_found" :
  * compte disparu, rien à débloquer.
  */
-export const unblockUser = (handle: string, beforeLookup: () => Promise<unknown> = noCount): Promise<Outcome> =>
-  post(UNBLOCK_PATH, handle, beforeLookup);
+export const unblockUser = async (handle: string, beforeLookup: () => Promise<unknown> = noCount): Promise<Outcome> =>
+  (await post(UNBLOCK_PATH, handle, beforeLookup)).outcome;
 
 export type LookupReply = Lookup | Exclude<Outcome, { kind: "ok" }>;
 

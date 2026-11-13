@@ -78,9 +78,15 @@ export const clearedValues = ({ error, failures, strikes }: Cleared): AccountVal
  * Enregistre des résultats en une écriture, avec d'autres champs à écrire en
  * même temps. Seules les clés de ces comptes sont écrites.
  * @param prefix préfixe des clés du compte X, voir State.prefix
+ * @param shared clés communes à tous les comptes X, écrites telles quelles
  */
-export async function setResults(prefix: string, entries: Results, extra: AccountValues = {}): Promise<void> {
-  await chrome.storage.local.set({ ...resultEntries(entries, prefix), ...scoped(prefix, extra) });
+export async function setResults(
+  prefix: string,
+  entries: Results,
+  extra: AccountValues = {},
+  shared: Record<string, unknown> = {},
+): Promise<void> {
+  await chrome.storage.local.set({ ...resultEntries(entries, prefix), ...scoped(prefix, extra), ...shared });
 }
 
 /** Comptes vérifiés avant blocage : déjà bloqués ou introuvables. */

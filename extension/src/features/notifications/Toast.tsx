@@ -1,10 +1,11 @@
 // Une notification : icône, « @nom » et titre, détail avec « Annuler », bouton
-// « Fermer » et barre du temps restant.
+// « Fermer » et barre du temps restant. Un blocage dont le profil est connu
+// montre en plus l'aperçu du compte, voir ProfilePreview.tsx.
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { clsx } from "clsx";
 import { BarrageMark } from "../../ui/BarrageMark.tsx";
-import { CORAL_BUTTON } from "../../ui/classes.ts";
-import { xProfileUrl } from "../networks/networks.ts";
+import { CORAL_BUTTON, CORAL_LINK } from "../../ui/classes.ts";
+import { ProfileCard, profileLink } from "./ProfilePreview.tsx";
 import { CloseButton, FOCUS, TOAST_CARD } from "./ToastParts.tsx";
 import { LEAVE_MS, TOAST_MS, type ToastItem, type ToastStore } from "./toasts.ts";
 
@@ -28,8 +29,10 @@ export function Toast({ toast, store }: { toast: ToastItem; store: ToastStore })
   const timer = useRef<HTMLSpanElement>(null);
   const close = useRef<HTMLButtonElement>(null);
   const countdown = useRef<Animation | null>(null);
-  /** « Annuler » activé au clavier : le focus, perdu avec le bouton, passe sur « Fermer ». */
-  const focusClose = useRef(false);
+  // Focus clavier dans la notification, lu avant que ce rendu ne touche à la
+  // page. Un nouvel état peut retirer l'élément qui le porte : « Annuler » une
+  // fois activé, ou la carte du profil quand la mise en page change.
+  const hadKeyboardFocus = !!root.current?.querySelector(":focus-visible");
   const pausable = content.pausable !== false;
 
   // Décompte suspendu tant que la souris ou le focus clavier sont dessus, pas
@@ -63,11 +66,10 @@ export function Toast({ toast, store }: { toast: ToastItem; store: ToastStore })
     animation.currentTime = 0;
     if (holdsCountdown()) animation.pause();
     else animation.play();
-    if (focusClose.current) {
-      focusClose.current = false;
-      close.current?.focus();
-    }
-  }, [revision, content.duration, holdsCountdown]);
+    // Le focus clavier, perdu avec son élément, passe sur « Fermer » au lieu de
+    // retomber sur la page.
+    if (hadKeyboardFocus && !root.current?.querySelector(":focus-visible")) close.current?.focus();
+  }, [revision, content.duration, holdsCountdown, hadKeyboardFocus]);
 
   // Sortie : retrait après l'animation, ou tout de suite si elle n'a pas lieu.
   useEffect(() => {
@@ -80,6 +82,23 @@ export function Toast({ toast, store }: { toast: ToastItem; store: ToastStore })
     if (!holdsCountdown()) countdown.current?.play();
   };
 
+  /** « par Barrage · Annuler » : le détail, et le bouton si l'annulation est possible. */
+  const detail = (
+    <span className="text-label text-muted-ink">
+      {content.detail}
+      {content.undo ? (
+        <>
+          {" · "}
+          <button type="button" className={clsx(CORAL_BUTTON, FOCUS)} onClick={() => content.undo?.()}>
+            Annuler
+          </button>
+        </>
+      ) : null}
+    </span>
+  );
+  const closeButton = <CloseButton buttonRef={close} onClick={() => store.leave(id)} />;
+  const profile = content.kind === "blocked" ? content.profile : undefined;
+
   return (
     <div
       ref={root}
@@ -91,49 +110,55 @@ export function Toast({ toast, store }: { toast: ToastItem; store: ToastStore })
       style={{ transitionDuration: `${LEAVE_MS}ms` }}
       className={clsx(
         TOAST_CARD,
-        "flex items-center gap-3.5 overflow-hidden pt-3.5 pr-3.5 pb-4 pl-4 text-[14px] leading-[1.35] text-ink",
+        "overflow-hidden text-[14px] leading-[1.35] text-ink",
+        profile ? "flex flex-col gap-3 pt-3 pr-3 pb-4.5 pl-4" : "flex items-center gap-3.5 pt-3.5 pr-3.5 pb-4 pl-4",
         "[transition-property:opacity,transform] motion-reduce:[transition:none]",
         leaving && "opacity-0 [transform:translateX(16px)]",
       )}
     >
-      <span className="block size-10 flex-none">{content.kind === "blocked" ? <BarrageMark className="block size-full" /> : <UndoIcon />}</span>
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        {/* Le titre tient sur une ligne : seul le nom est raccourci, jamais la fin de la phrase. */}
-        <span className="flex min-w-0 text-[16px] font-bold text-ink">
-          {/* Le nom ouvre le profil dans un nouvel onglet. */}
-          <a
-            href={xProfileUrl(handle)}
-            target="_blank"
-            rel="noopener"
-            className={clsx(
-              "min-w-0 truncate font-bold text-coral-deep no-underline hover:underline hover:underline-offset-2",
-              FOCUS,
-            )}
-          >
-            @{handle}
-          </a>
-          <span className="flex-none whitespace-pre">{content.title}</span>
-        </span>
-        <span className="text-label text-muted-ink">
-          {content.detail}
-          {content.undo ? (
-            <>
-              {" · "}
-              <button
-                type="button"
-                className={clsx(CORAL_BUTTON, FOCUS)}
-                onClick={(event) => {
-                  focusClose.current = event.currentTarget.matches(":focus-visible");
-                  content.undo?.();
-                }}
+      {profile ? (
+        // Maquette 06b : titre, carte du profil, puis « Annuler » et « Voir le profil ».
+        <>
+          <span className="flex items-center gap-2.5">
+            <BarrageMark className="block size-6 flex-none" />
+            <span className="min-w-0 flex-1 font-bold text-coral-deep">Vient d'être bloqué&nbsp;!&nbsp;✊</span>
+            {closeButton}
+          </span>
+          <ProfileCard handle={handle} profile={profile} />
+          <span className="flex items-center justify-between gap-3">
+            {detail}
+            {/* Même destination que la carte, pour la souris : un seul arrêt au clavier et au lecteur d'écran. */}
+            <a {...profileLink(handle)} tabIndex={-1} aria-hidden="true" className={clsx(CORAL_LINK, "text-label")}>
+              Voir le profil&nbsp;→
+            </a>
+          </span>
+        </>
+      ) : (
+        // Maquette 06 : sans profil connu, après « Annuler », et pour un déblocage.
+        <>
+          <span className="block size-10 flex-none">
+            {content.kind === "blocked" ? <BarrageMark className="block size-full" /> : <UndoIcon />}
+          </span>
+          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+            {/* Le titre tient sur une ligne : seul le nom est raccourci, jamais la fin de la phrase. */}
+            <span className="flex min-w-0 text-[16px] font-bold text-ink">
+              {/* Le nom ouvre le profil dans un nouvel onglet. */}
+              <a
+                {...profileLink(handle)}
+                className={clsx(
+                  "min-w-0 truncate font-bold text-coral-deep no-underline hover:underline hover:underline-offset-2",
+                  FOCUS,
+                )}
               >
-                Annuler
-              </button>
-            </>
-          ) : null}
-        </span>
-      </span>
-      <CloseButton buttonRef={close} onClick={() => store.leave(id)} />
+                @{handle}
+              </a>
+              <span className="flex-none whitespace-pre">{content.title}</span>
+            </span>
+            {detail}
+          </span>
+          {closeButton}
+        </>
+      )}
       {/* Temps d'affichage restant : barre qui se vide vers la gauche, sur une piste pâle.
           Sans animation voulue, elle tourne quand même, invisible : elle donne le rythme. */}
       <span className="absolute inset-x-0 bottom-0 h-1 bg-line motion-reduce:opacity-0" />

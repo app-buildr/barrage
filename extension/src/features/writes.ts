@@ -2,6 +2,7 @@
 // les demander, et ce que valent leurs arguments. Un onglet x.com est moins sûr
 // que les options : il n'a accès qu'aux écritures marquées `content`, celles du
 // traitement et du fil. Fonctions de contrôle testées dans tests/writer.test.ts.
+import { isRecord } from "../core/state.ts";
 import type { WriteEntry } from "../core/writer.ts";
 import { restoreBackup } from "./backup/store.ts";
 import { dismissBadge, recordBlockSuccess, syncBadges } from "./badges/store.ts";
@@ -42,9 +43,6 @@ type Check = (value: unknown) => boolean;
 const isString: Check = (value) => typeof value === "string";
 const isBoolean: Check = (value) => typeof value === "boolean";
 const isNumber: Check = (value) => typeof value === "number" && Number.isFinite(value);
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const orNull = (check: Check): Check => (value) => value === null || check(value);
 

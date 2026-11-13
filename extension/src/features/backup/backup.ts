@@ -5,6 +5,7 @@
 // de plus, et les listes en ligne repassent par leurs gardes.
 import { LIST_MAX_SIZE } from "../../core/config.ts";
 import { plural } from "../../core/format.ts";
+import { isRecord } from "../../core/state.ts";
 import { isResult } from "../blocking/queue.ts";
 import { parseHandle } from "../lists/handles.ts";
 import { validateListUrl } from "../lists/import.ts";
@@ -36,9 +37,6 @@ export function createBackup(stored: Record<string, unknown>, version: string, n
 
 export const backupFileName = (now: number): string =>
   `barrage-sauvegarde-${new Date(now).toISOString().slice(0, 10)}.json`;
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const isCount = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value) && value >= 0;

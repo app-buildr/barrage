@@ -65,6 +65,14 @@ test("les réponses globales passent telles quelles", async () => {
   }
 });
 
+test("un blocage abouti rapporte le profil renvoyé par X, sans requête de plus", async () => {
+  x.routes[BLOCK] = () => ({ json: { screen_name: "Nom", name: "Le Nom", description: "" } });
+  const reply = await blockUser("nom");
+  assert.equal(reply.kind, "ok");
+  assert.equal(reply.kind === "ok" ? reply.profile?.name : null, "Le Nom");
+  assert.equal(x.requests.length, 1);
+});
+
 test("sans cookie ct0, aucune requête ne part", async () => {
   delete x.cookies.ct0;
   assert.equal((await blockUser("a")).kind, "auth");
@@ -82,9 +90,11 @@ test("un POST porte la session, le jeton et le compte visé", async () => {
   assert.equal((await blockUser("nom")).kind, "ok");
   assert.equal((await unblockUser("nom")).kind, "ok");
   assert.deepEqual(x.requests.map((r) => r.path), [BLOCK, UNBLOCK]);
-  const [request] = x.requests;
+  const [request, unblock] = x.requests;
   assert.equal(request?.method, "POST");
-  assert.equal(request?.body, "screen_name=nom&skip_status=1");
+  // Seul le blocage lit le compte renvoyé : lui seul demande la certification par abonnement.
+  assert.equal(request?.body, "screen_name=nom&skip_status=1&include_ext_is_blue_verified=1");
+  assert.equal(unblock?.body, "screen_name=nom&skip_status=1");
   assert.equal(request?.headers["x-csrf-token"], "jeton");
   assert.equal(request?.headers["x-twitter-auth-type"], "OAuth2Session");
   assert.match(request?.headers.authorization ?? "", /^Bearer /);
